@@ -7,6 +7,7 @@ FastAPI 应用入口
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from loguru import logger
 
 from app.core.config import settings
@@ -55,6 +56,9 @@ async def lifespan(app: FastAPI):
     
     yield
     
+    # ==================== Graceful Shutdown ====================
+    logger.info("Backend Core shutting down...")
+    
     # 停止实时价格流
     await price_stream.stop()
     logger.info("Price Stream stopped")
@@ -63,7 +67,16 @@ async def lifespan(app: FastAPI):
     await market_collector.stop()
     logger.info("Market Collector stopped")
     
-    logger.info("Backend Core shutting down...")
+    # 关闭 Redis 连接
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(settings.redis_url)
+        await r.close()
+        logger.info("Redis connection closed")
+    except Exception:
+        pass
+    
+    logger.info("All resources released. Goodbye!")
 
 
 # 创建 FastAPI 应用
@@ -74,14 +87,29 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS 配置
+# CORS 配置 (生产环境白名单)
+allowed_origins = [
+    "http://localhost:5173",     # Vite dev server
+    "http://localhost:3000",     # 备用端口
+    "http://127.0.0.1:5173",
+]
+# 生产环境: 从 CORS_ORIGINS 环境变量读取
+if hasattr(settings, 'cors_origins') and settings.cors_origins:
+    allowed_origins = [o.strip() for o in settings.cors_origins.split(',')]
+elif settings.env_type == 'production':
+    # 生产环境默认只允许同源 + 前端 Nginx 代理的请求
+    allowed_origins = ["*"]  # Docker 内部通过 Nginx 代理，允许所有
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应限制
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 📦 Gzip 压缩 (K线数据等大响应受益明显)
+app.add_middleware(GZipMiddleware, minimum_size=500)  # >500B 才压缩
 
 # 🔥 全局错误处理
 setup_error_handlers(app)

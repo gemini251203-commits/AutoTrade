@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     # 日志
     log_level: str = "INFO"
     
+    # CORS 白名单 (逗号分隔, 如 "http://example.com,https://app.example.com")
+    cors_origins: str = ""
+    
     # Pydantic v2 配置
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE),  # 使用绝对路径

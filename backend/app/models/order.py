@@ -20,7 +20,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import String, Integer, Numeric, DateTime, Boolean, ForeignKey, Enum as SQLEnum, Text
+from sqlalchemy import String, Integer, Numeric, DateTime, Boolean, ForeignKey, Enum as SQLEnum, Text, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -265,6 +265,17 @@ class Order(Base):
     user: Mapped["User"] = relationship("User", back_populates="orders")
     task: Mapped["TaskTicket"] = relationship("TaskTicket", back_populates="orders")
     position: Mapped["Position"] = relationship("Position", foreign_keys=[position_id])
+    
+    # ============================================
+    # 复合索引
+    # ============================================
+    
+    __table_args__ = (
+        # 查询用户的订单列表 (高频)
+        Index('ix_order_user_status', 'user_id', 'status'),
+        # 查询用户某交易对的订单
+        Index('ix_order_user_symbol', 'user_id', 'symbol'),
+    )
     
     # ============================================
     # 计算属性

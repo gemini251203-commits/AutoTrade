@@ -21,6 +21,7 @@ from sqlalchemy import (
     ForeignKey,
     Enum as SQLEnum,
     CheckConstraint,
+    Index,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -206,6 +207,10 @@ class Position(Base):
         CheckConstraint("leverage >= 1 AND leverage <= 125", name="check_leverage_range"),
         # 保证金必须为正
         CheckConstraint("margin > 0", name="check_margin_positive"),
+        # 复合索引: 查询用户的活跃仓位 (高频查询)
+        Index('ix_position_user_status', 'user_id', 'status'),
+        # 复合索引: 查询用户某交易对的仓位
+        Index('ix_position_user_symbol_status', 'user_id', 'symbol', 'status'),
     )
     
     # ============================================
