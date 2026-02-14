@@ -46,7 +46,7 @@ class MarketCollector:
         "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT",
         "LTCUSDT", "DOGEUSDT", "ASTERUSDT", "XAUUSDT"
     ]
-    INTERVALS = ["1m", "5m", "15m", "1h", "4h", "1d"]
+    INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
     
     # 采集频率 (秒)
     FETCH_INTERVAL = 60  # 每分钟采集一次
@@ -192,7 +192,7 @@ class MarketCollector:
         from sqlalchemy import select, func
         from app.models.market import Kline
         
-        async with self._session_factory() as db:
+        async with AsyncSessionLocal() as db:
             result = await db.execute(
                 select(func.min(Kline.open_time)).where(
                     Kline.symbol == symbol,
