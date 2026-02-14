@@ -43,6 +43,7 @@ router = APIRouter(tags=["Authentication"])
 class Token(BaseModel):
     """OAuth2 Token Response"""
     access_token: str
+    refresh_token: str = ""
     token_type: str = "bearer"
 
 
