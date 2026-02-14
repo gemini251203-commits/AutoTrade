@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from app.core.config import settings
+from app.core.log_config import setup_logging
 from app.db.session import init_db
 from app.api import auth, wallet, order, task, market, ai, position, risk, grid, user_config, admin, ws
 from app.middleware.error_handler import setup_error_handlers
@@ -21,6 +22,9 @@ from app.core.startup_validator import validate_startup_config
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
+    # 📋 初始化日志系统 (最先执行)
+    setup_logging()
+    
     logger.info("=" * 50)
     logger.info("AutoTrade Backend Core Starting...")
     logger.info(f"Environment: {settings.env_type}")

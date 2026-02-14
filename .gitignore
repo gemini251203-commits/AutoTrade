@@ -33,6 +33,7 @@ frontend/.vite/
 # 🐳 Docker volumes & logs
 *.log
 *.log.*
+logs/
 
 # 🧪 Test & Coverage
 .coverage
