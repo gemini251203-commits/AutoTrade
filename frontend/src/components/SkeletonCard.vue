@@ -47,8 +47,8 @@ const wrapperStyle = computed(() => ({
 
 function lineWidth(index: number): string {
   // 不同行不同宽度，看起来更自然
-  const widths = ['100%', '85%', '70%', '90%', '60%']
-  return widths[(index - 1) % widths.length]
+  const widths: string[] = ['100%', '85%', '70%', '90%', '60%']
+  return widths[(index - 1) % widths.length] ?? '100%'
 }
 </script>
 

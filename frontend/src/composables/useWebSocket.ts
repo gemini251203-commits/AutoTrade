@@ -60,7 +60,10 @@ function connect() {
           const p = data.prices
           for (const symbol in p) {
             if (Object.prototype.hasOwnProperty.call(p, symbol)) {
-              prices.value[symbol] = parseFloat(p[symbol])
+              const val = p[symbol]
+              if (val !== undefined) {
+                prices.value[symbol] = parseFloat(val)
+              }
             }
           }
         }
