@@ -76,6 +76,7 @@ class TaskResponse(BaseModel):
     trigger_price: Optional[Decimal] = None
     max_deviation_pct: Optional[Decimal] = None
     confirm_interval: Optional[ConfirmInterval] = None
+    confirm_count: Optional[int] = None
     timeout_hours: Optional[int] = None
     expires_at: Optional[datetime] = None
     

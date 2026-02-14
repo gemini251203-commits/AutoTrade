@@ -78,15 +78,11 @@ export const useWalletStore = defineStore('wallet', () => {
    * GET /wallet/balance
    */
   async function fetchBalance(): Promise<void> {
-    console.log('[WalletStore] 🚀 开始请求余额...')
     loading.value = true
     error.value = null
     
     try {
       const response = await request.get<WalletAPIResponse>('/wallet/balance')
-      
-      // 🔍 调试日志: 打印 API 原始响应
-      console.log('[WalletStore] 📦 API 响应数据:', response.data)
       
       const data = response.data
       
@@ -96,17 +92,8 @@ export const useWalletStore = defineStore('wallet', () => {
       totalEquity.value = parseFloat(String(data.total_equity)) || 0
       totalPnl.value = parseFloat(String(data.total_pnl)) || 0
       
-      // 🔍 调试日志: 打印更新后的 Store 状态
-      console.log('[WalletStore] ✅ 更新 Store 状态:', {
-        available: available.value,
-        frozen: frozen.value,
-        totalEquity: totalEquity.value,
-        totalPnl: totalPnl.value,
-      })
-      
     } catch (e: any) {
       error.value = e.response?.data?.detail || 'Failed to fetch balance'
-      console.error('[WalletStore] ❌ 请求失败:', error.value)
     } finally {
       loading.value = false
     }
@@ -117,7 +104,6 @@ export const useWalletStore = defineStore('wallet', () => {
    * POST /wallet/initialize
    */
   async function initializeWallet(): Promise<void> {
-    console.log('[WalletStore] 🔄 初始化钱包...')
     loading.value = true
     
     try {
@@ -125,7 +111,6 @@ export const useWalletStore = defineStore('wallet', () => {
       await fetchBalance()
     } catch (e: any) {
       error.value = e.response?.data?.detail || 'Failed to initialize wallet'
-      console.error('[WalletStore] ❌ 初始化失败:', error.value)
     } finally {
       loading.value = false
     }
@@ -135,7 +120,6 @@ export const useWalletStore = defineStore('wallet', () => {
    * Reset store state
    */
   function reset(): void {
-    console.log('[WalletStore] 🔄 重置状态')
     available.value = 0
     frozen.value = 0
     totalEquity.value = 0

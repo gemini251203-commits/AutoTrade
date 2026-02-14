@@ -15,13 +15,13 @@ import request from '@/utils/request'
 // ==================== Types ====================
 
 /** 任务来源 */
-export type TaskSource = 'user' | 'ai' | 'strategy' | 'grid'
+export type TaskSource = 'user' | 'ai' | 'strategy'
 
 /** 任务类型 */
 export type TaskType = 'buy' | 'sell' | 'close' | 'adjust'
 
 /** 任务状态 */
-export type TaskStatus = 'pending' | 'approved' | 'rejected' | 'executing' | 'completed' | 'failed'
+export type TaskStatus = 'pending' | 'approved' | 'monitoring' | 'executing' | 'completed' | 'rejected' | 'failed' | 'cancelled' | 'expired'
 
 /** 任务响应 */
 export interface TaskResponse {
@@ -44,6 +44,7 @@ export interface TaskResponse {
   max_deviation_pct: string | null
   confirm_interval: string | null
   timeout_hours: number | null
+  confirm_count: number | null
   expires_at: string | null
   
   // 🔥 两阶段条件参数

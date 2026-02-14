@@ -54,9 +54,6 @@ request.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = getAuthToken()
     
-    // 🔍 调试日志 - 生产环境可移除
-    console.log('[Request] 🔑', config.method?.toUpperCase(), config.url, token ? `Token: ${token.slice(0, 20)}...` : 'No Token')
-    
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
     }
