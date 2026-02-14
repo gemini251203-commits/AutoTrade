@@ -1,0 +1,72 @@
+/* AutoTrade - Global Styles (TailwindCSS v4) */
+@import "tailwindcss";
+
+/* Custom theme variables */
+@theme {
+  --color-cyber-purple: #8a2be2;
+  --color-cyber-blue: #00d4ff;
+  --color-cyber-pink: #ff00ff;
+  --color-cyber-green: #00ff88;
+  --color-dark-bg: #0a0a0f;
+  --color-dark-card: #141420;
+  --color-dark-border: #2a2a3a;
+  
+  --font-family-sans: 'Inter', system-ui, sans-serif;
+  --font-family-mono: 'JetBrains Mono', monospace;
+}
+
+/* Base styles */
+body {
+  background-color: var(--color-dark-bg);
+  color: #f3f4f6;
+  font-family: var(--font-family-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-dark-card);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(138, 43, 226, 0.5);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-cyber-purple);
+}
+
+/* Glowing card effect */
+.card-glow {
+  background: var(--color-dark-card);
+  border: 1px solid var(--color-dark-border);
+  border-radius: 12px;
+  transition: all 0.3s;
+}
+
+.card-glow:hover {
+  border-color: rgba(138, 43, 226, 0.5);
+  box-shadow: 0 0 20px rgba(138, 43, 226, 0.2);
+}
+
+/* Neon text effect */
+.text-neon {
+  text-shadow: 0 0 10px var(--color-cyber-purple), 0 0 20px var(--color-cyber-purple);
+}
+
+/* Glow animation */
+@keyframes glow {
+  0% { box-shadow: 0 0 5px var(--color-cyber-purple), 0 0 10px var(--color-cyber-purple); }
+  100% { box-shadow: 0 0 10px var(--color-cyber-purple), 0 0 20px var(--color-cyber-purple), 0 0 30px var(--color-cyber-purple); }
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite alternate;
+}

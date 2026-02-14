@@ -1,0 +1,118 @@
+# ==========================================
+# AutoTrade Docker Compose
+# ==========================================
+# Production-ready multi-service setup
+
+services:
+  # ==========================================
+  # PostgreSQL Database
+  # ==========================================
+  db:
+    image: postgres:15-alpine
+    container_name: autotrade-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: autotrade
+      POSTGRES_PASSWORD: autotrade_secret_2026
+      POSTGRES_DB: autotrade
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autotrade -d autotrade"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+    networks:
+      - autotrade-network
+
+  # ==========================================
+  # Redis Cache
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: autotrade-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "6379:6379"
+    networks:
+      - autotrade-network
+
+  # ==========================================
+  # Backend API (FastAPI)
+  # ==========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: autotrade-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Database
+      DATABASE_URL: postgresql+asyncpg://autotrade:autotrade_secret_2026@db:5432/autotrade
+      
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      
+      # JWT
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY:-your-production-secret-change-me}"
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 1440
+      
+      # Trading
+      TRADING_MODE: simulation
+      SIMULATION_INITIAL_BALANCE: 100
+      
+      # Environment
+      ENV_TYPE: production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - autotrade-network
+
+  # ==========================================
+  # Frontend (Nginx + Vue)
+  # ==========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: autotrade-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    networks:
+      - autotrade-network
+
+# ==========================================
+# Networks
+# ==========================================
+networks:
+  autotrade-network:
+    driver: bridge
+
+# ==========================================
+# Volumes
+# ==========================================
+volumes:
+  postgres_data:
+  redis_data:

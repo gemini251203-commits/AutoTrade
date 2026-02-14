@@ -1,0 +1,45 @@
+# Backend Core Dependencies
+# ==========================
+
+# Web Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+
+# Database
+sqlalchemy[asyncio]>=2.0.0
+asyncpg>=0.29.0
+aiosqlite>=0.19.0
+alembic>=1.13.0
+
+# Redis
+redis>=5.0.0
+
+# HTTP Client
+httpx>=0.25.0
+websockets>=12.0
+python-socks[asyncio]>=2.4.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Validation & Settings
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+
+# Security (using argon2 for Python 3.13 compatibility)
+python-jose[cryptography]>=3.3.0
+passlib>=1.7.4
+argon2-cffi>=23.1.0
+
+# AI
+ollama>=0.1.6
+
+# Logging
+loguru>=0.7.0
+
+# Utils
+python-dateutil>=2.8.2
+psycopg2-binary
