@@ -79,6 +79,8 @@ services:
       
       # Environment
       ENV_TYPE: production
+    volumes:
+      - ./data_engine:/app/data_engine
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

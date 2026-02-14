@@ -25,9 +25,13 @@ from decimal import Decimal
 from datetime import datetime, timezone
 from pathlib import Path
 
-# 添加项目根目录到 Python 路径
+# 添加项目根目录到 Python 路径 (兼容本地和 Docker)
 PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / "backend"))
+backend_path = PROJECT_ROOT / "backend"
+if backend_path.exists():
+    sys.path.insert(0, str(backend_path))  # 本地: D:\AutoTrade\backend
+else:
+    sys.path.insert(0, str(PROJECT_ROOT))  # Docker: /app
 
 import httpx
 from loguru import logger

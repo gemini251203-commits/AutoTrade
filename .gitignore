@@ -84,3 +84,6 @@ backend/*.txt
 
 # .htpasswd (has passwords)
 .htpasswd
+
+# 📂 External reference files (not part of this project)
+_reference/
