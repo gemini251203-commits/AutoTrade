@@ -154,6 +154,13 @@ async def root():
     }
 
 
+@app.get("/metrics")
+async def get_metrics():
+    """应用指标 — 请求/缓存/WS/断路器统计"""
+    from app.core.metrics import metrics as app_metrics
+    return app_metrics.snapshot()
+
+
 @app.get("/health")
 async def health_check():
     """详细健康检查 — 实际测试 DB + Redis 连通性"""

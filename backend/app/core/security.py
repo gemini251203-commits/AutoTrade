@@ -27,6 +27,7 @@ from app.core.config import settings
 class Token(BaseModel):
     """OAuth2 Token Response"""
     access_token: str
+    refresh_token: str = ""
     token_type: str = "bearer"
 
 
@@ -42,6 +43,7 @@ class TokenData(BaseModel):
 SECRET_KEY = settings.jwt_secret_key
 ALGORITHM = settings.jwt_algorithm
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
+REFRESH_TOKEN_EXPIRE_DAYS = 7  # refresh token 7天过期
 
 # Password hashing context (Argon2 - Python 3.13 compatible)
 # ✅ argon2 replaces bcrypt for better compatibility
@@ -83,6 +85,20 @@ def create_access_token(
         "iat": datetime.utcnow(),
     })
     
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_refresh_token(
+    data: dict[str, Any],
+) -> str:
+    """创建 JWT refresh token (7天有效期)"""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({
+        "exp": expire,
+        "iat": datetime.utcnow(),
+        "type": "refresh",  # 区分 access vs refresh
+    })
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 

@@ -26,6 +26,7 @@ interface User {
 // Session interface
 interface Session {
   token: string
+  refreshToken: string
   user: User
 }
 
@@ -123,6 +124,7 @@ export const useAuthStore = defineStore('auth', () => {
       
       const data = await response.json()
       const newToken = data.access_token
+      const newRefreshToken = data.refresh_token || ''
       
       // Fetch user info with new token
       const userResponse = await request.get<User>('/auth/me', {
@@ -138,11 +140,11 @@ export const useAuthStore = defineStore('auth', () => {
       
       if (existingIndex >= 0) {
         // Update existing session
-        sessions.value[existingIndex] = { token: newToken, user: userData }
+        sessions.value[existingIndex] = { token: newToken, refreshToken: newRefreshToken, user: userData }
         activeIndex.value = existingIndex
       } else {
         // Add new session
-        sessions.value.push({ token: newToken, user: userData })
+        sessions.value.push({ token: newToken, refreshToken: newRefreshToken, user: userData })
         activeIndex.value = sessions.value.length - 1
       }
       
@@ -231,6 +233,41 @@ export const useAuthStore = defineStore('auth', () => {
   }
   
   // ============================================
+  // Token Refresh
+  // ============================================
+  
+  /**
+   * Refresh access token using refresh token
+   * 自动续期，无需重新登录
+   */
+  async function refreshAccessToken(): Promise<boolean> {
+    const session = currentSession.value
+    if (!session || !session.refreshToken) return false
+    
+    try {
+      const response = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: session.refreshToken }),
+      })
+      
+      if (!response.ok) return false
+      
+      const data = await response.json()
+      // 更新当前会话的 token
+      sessions.value[activeIndex.value] = {
+        ...session,
+        token: data.access_token,
+        refreshToken: data.refresh_token || session.refreshToken,
+      }
+      saveToStorage()
+      return true
+    } catch {
+      return false
+    }
+  }
+  
+  // ============================================
   // Return
   // ============================================
   
@@ -259,5 +296,6 @@ export const useAuthStore = defineStore('auth', () => {
     switchAccount,
     fetchUser,
     initialize,
+    refreshAccessToken,
   }
 })

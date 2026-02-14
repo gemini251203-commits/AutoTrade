@@ -78,6 +78,10 @@ class AccessLoggerMiddleware(BaseHTTPMiddleware):
         elapsed_ms = (time.perf_counter() - start) * 1000
         status_code = response.status_code
         
+        # 📊 记录指标
+        from app.core.metrics import metrics as app_metrics
+        app_metrics.record_request(status_code, is_slow=(elapsed_ms >= self.slow_threshold_ms))
+        
         # 构建日志
         if elapsed_ms >= self.slow_threshold_ms:
             # 慢请求

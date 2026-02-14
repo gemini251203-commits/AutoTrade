@@ -44,11 +44,15 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
+        from app.core.metrics import metrics as app_metrics
+        app_metrics.ws_connect()
         logger.info(f"[WS] Client connected, total={len(self.active_connections)}")
     
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
+        from app.core.metrics import metrics as app_metrics
+        app_metrics.ws_disconnect()
         logger.info(f"[WS] Client disconnected, total={len(self.active_connections)}")
     
     async def broadcast(self, message: dict):

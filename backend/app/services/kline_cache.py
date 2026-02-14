@@ -75,9 +75,13 @@ class KlineCache:
             
             if data:
                 logger.debug(f"[KlineCache] HIT {symbol} {interval} x{limit}")
+                from app.core.metrics import metrics as app_metrics
+                app_metrics.record_cache_hit()
                 return json.loads(data)
             
             logger.debug(f"[KlineCache] MISS {symbol} {interval} x{limit}")
+            from app.core.metrics import metrics as app_metrics
+            app_metrics.record_cache_miss()
             return None
             
         except Exception as e:

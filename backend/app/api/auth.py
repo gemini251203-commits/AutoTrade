@@ -25,6 +25,8 @@ from app.core.security import (
     verify_password,
     get_password_hash,
     create_access_token,
+    create_refresh_token,
+    decode_access_token,
     ACCESS_TOKEN_EXPIRE_MINUTES,
 )
 from app.api.deps import get_db, get_current_user, DbSession, CurrentUser
@@ -169,10 +171,63 @@ async def login_for_access_token(
         data={"sub": user.username},
         expires_delta=access_token_expires,
     )
+    refresh_token = create_refresh_token(
+        data={"sub": user.username},
+    )
     
     logger.info(f"[Auth] User logged in: {user.username}")
     
-    return Token(access_token=access_token, token_type="bearer")
+    return Token(access_token=access_token, refresh_token=refresh_token, token_type="bearer")
+
+
+class RefreshRequest(BaseModel):
+    """Refresh token request body"""
+    refresh_token: str
+
+
+@router.post("/refresh", response_model=Token)
+async def refresh_access_token(
+    body: RefreshRequest,
+):
+    """
+    Refresh access token using a valid refresh token.
+    
+    不需要用户名密码，只需要有效的 refresh_token 即可获取新的 access_token。
+    """
+    payload = decode_access_token(body.refresh_token)
+    
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+    
+    # 验证是 refresh token 类型
+    if payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type",
+        )
+    
+    username = payload.get("sub")
+    if not username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token payload",
+        )
+    
+    # 签发新的 access token
+    access_token = create_access_token(
+        data={"sub": username},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    # 也刷新 refresh token
+    new_refresh_token = create_refresh_token(
+        data={"sub": username},
+    )
+    
+    logger.info(f"[Auth] Token refreshed for: {username}")
+    return Token(access_token=access_token, refresh_token=new_refresh_token, token_type="bearer")
 
 
 @router.get("/me", response_model=UserResponse)
