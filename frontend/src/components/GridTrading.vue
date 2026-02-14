@@ -25,7 +25,7 @@ interface GridBot {
   symbol: string
   grid_type: 'arithmetic' | 'geometric'
   direction: 'long' | 'short' | 'neutral'
-  status: 'created' | 'running' | 'stopped' | 'error'
+  status: 'created' | 'running' | 'paused' | 'stopped' | 'completed' | 'error'
   upper_price: string
   lower_price: string
   grid_count: number

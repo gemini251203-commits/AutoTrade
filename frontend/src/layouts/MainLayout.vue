@@ -44,14 +44,14 @@ function handleNav(item: typeof navItems[0]) {
 
 // 🔍 调试: 组件挂载时加载钱包数据
 onMounted(async () => {
-  console.log('[MainLayout] 🚀 组件已挂载, 正在调用 fetchBalance...')
+
   await walletStore.fetchBalance()
-  console.log('[MainLayout] ✅ fetchBalance 完成, 当前余额:', walletStore.available)
+
 })
 
 // Handle logout
 function handleLogout() {
-  console.log('[MainLayout] 🔓 用户登出')
+
   authStore.logout()
   walletStore.reset()
   router.push('/login')

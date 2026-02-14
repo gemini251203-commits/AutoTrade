@@ -107,7 +107,7 @@ async function fetchKlines(interval: string = '1h', limit?: number): Promise<Can
       isPositive.value = priceChange.value >= 0
     }
     
-    console.log(`[TradingChart] ✅ 获取到 ${klines.length} 条 K 线数据`)
+
     return klines
     
   } catch (error) {
@@ -122,7 +122,7 @@ async function fetchKlines(interval: string = '1h', limit?: number): Promise<Can
 async function initChart() {
   if (!chartContainer.value) return
   
-  console.log('[TradingChart] 🚀 初始化 K 线图...')
+
   
   try {
     chart = createChart(chartContainer.value, {
@@ -184,7 +184,7 @@ async function initChart() {
     if (klines.length > 0) {
       candlestickSeries.setData(klines)
       chart?.timeScale().fitContent()
-      console.log('[TradingChart] ✅ K 线图初始化成功 (真实数据)')
+
     } else {
       console.warn('[TradingChart] ⚠️ 没有获取到数据，请运行 binance_spider.py')
     }
@@ -270,7 +270,7 @@ function startLiveUpdates() {
 }
 
 onMounted(() => {
-  console.log('[TradingChart] 📊 组件已挂载')
+
   isDestroyed = false
   initChart()
   startLiveUpdates()
@@ -278,7 +278,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  console.log('[TradingChart] 🔄 组件卸载')
+
   isDestroyed = true  // 设置销毁标志
   if (updateInterval) {
     clearInterval(updateInterval)

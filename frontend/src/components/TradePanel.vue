@@ -253,11 +253,7 @@ async function openPosition(side: 'long' | 'short') {
       stop_loss: enableTpSl.value && stopLoss.value ? stopLoss.value.toString() : null,
     }
     
-    console.log('[TradePanel] 开仓请求:', payload)
-    
     const resp = await request.post('/position/open', payload)
-    
-    console.log('[TradePanel] 开仓成功:', resp.data)
     message.success(`${side === 'long' ? '开多' : '开空'} 成功!`)
     
     await walletStore.fetchBalance()
@@ -345,7 +341,7 @@ watch(
 // 🔥 监听交易对变化，重新获取价格和仓位
 watch(() => symbolStore.currentSymbol, async (newSymbol, oldSymbol) => {
   if (newSymbol !== oldSymbol) {
-    console.log(`[TradePanel] 交易对切换: ${oldSymbol} -> ${newSymbol}`)
+
     // 重置价格
     currentPrice.value = 0
     price.value = null

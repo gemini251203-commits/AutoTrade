@@ -268,8 +268,6 @@ async function handleConfirm() {
         take_profit_price: parsedSignal.value.take_profit || null,
       }
       
-      console.log('[SignalAssistant] 创建网格机器人:', gridParams)
-      
       // 1. 创建网格机器人
       const createResp = await request.post('/grid/', gridParams)
       const botId = createResp.data.id

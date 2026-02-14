@@ -53,7 +53,7 @@ export const useSymbolStore = defineStore('symbol', () => {
   // 设置当前交易对
   function setSymbol(symbol: string) {
     if (currentSymbol.value !== symbol) {
-      console.log(`[SymbolStore] 切换交易对: ${currentSymbol.value} -> ${symbol}`)
+
       currentSymbol.value = symbol
       // 重置价格，等待新数据
       currentPrice.value = 0

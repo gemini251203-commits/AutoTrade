@@ -12,9 +12,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-
-// API base URL
-const API_BASE = '/api'
+import request from '@/utils/request'
 
 // User interface - matches backend UserResponse exactly
 interface User {
@@ -110,7 +108,7 @@ export const useAuthStore = defineStore('auth', () => {
       formData.append('username', username)
       formData.append('password', password)
       
-      const response = await fetch(`${API_BASE}/auth/token`, {
+      const response = await fetch('/api/auth/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -127,17 +125,13 @@ export const useAuthStore = defineStore('auth', () => {
       const newToken = data.access_token
       
       // Fetch user info with new token
-      const userResponse = await fetch(`${API_BASE}/auth/me`, {
+      const userResponse = await request.get<User>('/auth/me', {
         headers: {
           'Authorization': `Bearer ${newToken}`,
         },
       })
       
-      if (!userResponse.ok) {
-        throw new Error('Failed to fetch user info')
-      }
-      
-      const userData: User = await userResponse.json()
+      const userData: User = userResponse.data
       
       // Check if user already has a session
       const existingIndex = sessions.value.findIndex(s => s.user.id === userData.id)
@@ -212,21 +206,9 @@ export const useAuthStore = defineStore('auth', () => {
     if (!token.value) return
     
     try {
-      const response = await fetch(`${API_BASE}/auth/me`, {
-        headers: {
-          'Authorization': `Bearer ${token.value}`,
-        },
-      })
+      const response = await request.get<User>('/auth/me')
       
-      if (!response.ok) {
-        if (response.status === 401) {
-          // Token invalid, remove this session
-          logoutCurrent()
-        }
-        return
-      }
-      
-      const userData = await response.json()
+      const userData = response.data
       
       // Update current session user info
       if (currentSession.value) {
