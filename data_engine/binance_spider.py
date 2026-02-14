@@ -50,16 +50,17 @@ logger.add(
 # 币安合约 API
 BINANCE_FAPI_BASE = "https://fapi.binance.com"
 BINANCE_KLINES_ENDPOINT = "/fapi/v1/klines"
+BINANCE_MAX_LIMIT = 1500  # 币安单次最多返回 1500 根 K 线
 
-# 支持的时间周期及对应的回填数量
-INTERVALS = {
-    "1m": 500,   # 500 根 1 分钟 K 线 ≈ 8.3 小时
-    "5m": 500,   # 500 根 5 分钟 K 线 ≈ 41.6 小时
-    "15m": 500,  # 500 根 15 分钟 K 线 ≈ 5.2 天
-    "30m": 500,  # 500 根 30 分钟 K 线 ≈ 10.4 天
-    "1h": 720,   # 720 根 1 小时 K 线 ≈ 30 天
-    "4h": 720,   # 720 根 4 小时 K 线 ≈ 120 天
-    "1d": 1095,  # 1095 根日 K 线 ≈ 3 年
+# 深度回填配置: 每个周期要回填多少天的历史数据
+BACKFILL_DEPTH_DAYS = {
+    "1m": 1,      # 1 天 ≈ 1,440 根
+    "5m": 7,      # 7 天 ≈ 2,016 根
+    "15m": 60,    # 60 天 ≈ 5,760 根
+    "30m": 60,    # 60 天 ≈ 2,880 根
+    "1h": 365,    # 1 年 ≈ 8,760 根
+    "4h": 365,    # 1 年 ≈ 2,190 根
+    "1d": 1095,   # 3 年 ≈ 1,095 根
 }
 
 # 默认交易对
@@ -104,22 +105,30 @@ class BinanceSpider:
         self, 
         symbol: str, 
         interval: str, 
-        limit: int = 500
+        limit: int = 500,
+        start_time: int = None,
     ) -> list[dict]:
         """
         获取 K 线数据
         
+        Args:
+            start_time: 起始时间戳 (毫秒), 用于分页获取
+        
         Returns:
-            List of kline dicts with keys: open_time, open, high, low, close, volume, ...
+            List of kline dicts
         """
         try:
+            params = {
+                "symbol": symbol,
+                "interval": interval,
+                "limit": limit,
+            }
+            if start_time is not None:
+                params["startTime"] = start_time
+            
             response = await self.client.get(
                 BINANCE_KLINES_ENDPOINT,
-                params={
-                    "symbol": symbol,
-                    "interval": interval,
-                    "limit": limit,
-                }
+                params=params,
             )
             response.raise_for_status()
             raw_data = response.json()
@@ -211,32 +220,65 @@ class BinanceSpider:
                 return 0
     
     async def backfill(self):
-        """历史数据回填"""
-        logger.info("[Spider] ========== 开始历史数据回填 ==========")
+        """
+        深度分页回填历史数据
         
+        使用 startTime 参数分页获取，每次最多 1500 根，
+        循环直到获取到当前时间的数据。
+        """
+        logger.info("[Spider] ========== 开始深度历史数据回填 ==========")
+        
+        now_ms = int(time.time() * 1000)
         total_inserted = 0
         
         for symbol in self.symbols:
-            for interval, limit in INTERVALS.items():
-                logger.info(f"[Spider] 回填 {symbol} {interval} (最近 {limit} 根)...")
+            for interval, depth_days in BACKFILL_DEPTH_DAYS.items():
+                # 计算起始时间 (从 N 天前开始)
+                start_ms = now_ms - (depth_days * 24 * 60 * 60 * 1000)
+                page = 0
+                interval_total = 0
                 
-                klines = await self.fetch_klines(symbol, interval, limit)
+                logger.info(
+                    f"[Spider] 🔄 回填 {symbol} {interval} "
+                    f"(最近 {depth_days} 天, 起始 {datetime.fromtimestamp(start_ms/1000, tz=timezone.utc).strftime('%Y-%m-%d')})"
+                )
                 
-                if klines:
-                    count = await self.upsert_klines(klines)
-                    total_inserted += count
-                    latest = klines[-1]
-                    logger.info(
-                        f"[Spider] ✅ {symbol} {interval}: {count} 条, "
-                        f"最新价 ${float(latest['close']):,.2f}"
+                while start_ms < now_ms:
+                    page += 1
+                    klines = await self.fetch_klines(
+                        symbol, interval,
+                        limit=BINANCE_MAX_LIMIT,
+                        start_time=start_ms,
                     )
-                else:
-                    logger.warning(f"[Spider] ⚠️ {symbol} {interval}: 无数据")
+                    
+                    if not klines:
+                        break  # 没有更多数据
+                    
+                    count = await self.upsert_klines(klines)
+                    interval_total += count
+                    
+                    # 下一页: 从最后一根 K 线的 close_time + 1ms 开始
+                    start_ms = klines[-1]["close_time"] + 1
+                    
+                    logger.info(
+                        f"[Spider]   📄 第 {page} 页: +{count} 条 "
+                        f"(至 {datetime.fromtimestamp(klines[-1]['close_time']/1000, tz=timezone.utc).strftime('%Y-%m-%d %H:%M')})"
+                    )
+                    
+                    # 如果返回数量 < 请求数量，说明已到最新数据
+                    if len(klines) < BINANCE_MAX_LIMIT:
+                        break
+                    
+                    # 避免请求过快
+                    await asyncio.sleep(0.3)
                 
-                # 避免请求过快
+                total_inserted += interval_total
+                logger.info(f"[Spider] ✅ {symbol} {interval}: 共 {interval_total} 条 ({page} 页)")
+                
+                # 周期之间间隔
                 await asyncio.sleep(0.5)
         
-        logger.info(f"[Spider] ========== 回填完成, 共 {total_inserted} 条 ==========")
+        logger.info(f"[Spider] ========== 深度回填完成, 共 {total_inserted} 条 ==========")
     
     async def realtime_loop(self):
         """实时更新循环"""

@@ -105,6 +105,29 @@ services:
     networks:
       - autotrade-network
 
+  # ==========================================
+  # Data Spider (K-line Deep Backfill)
+  # ==========================================
+  spider:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: autotrade-spider
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://autotrade:autotrade_secret_2026@db:5432/autotrade
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./data_engine:/app/data_engine
+    command: ["python", "-m", "data_engine.binance_spider"]
+    restart: "no"
+    networks:
+      - autotrade-network
+
 # ==========================================
 # Networks
 # ==========================================
