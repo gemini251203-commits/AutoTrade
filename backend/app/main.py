@@ -12,6 +12,9 @@ from loguru import logger
 from app.core.config import settings
 from app.db.session import init_db
 from app.api import auth, wallet, order, task, market, ai, position, risk, grid, user_config, admin
+from app.middleware.error_handler import setup_error_handlers
+from app.core.rate_limit import RateLimitMiddleware
+from app.core.startup_validator import validate_startup_config
 
 
 @asynccontextmanager
@@ -21,6 +24,9 @@ async def lifespan(app: FastAPI):
     logger.info("AutoTrade Backend Core Starting...")
     logger.info(f"Environment: {settings.env_type}")
     logger.info("=" * 50)
+    
+    # 🔒 启动配置验证
+    await validate_startup_config()
     
     # 初始化数据库
     await init_db()
@@ -70,6 +76,17 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# 🔥 全局错误处理
+setup_error_handlers(app)
+
+# 🔒 速率限制 (120 req/min per IP)
+app.add_middleware(
+    RateLimitMiddleware,
+    requests_per_minute=120,
+    burst_size=20,
+    exclude_paths=["/health", "/", "/docs", "/openapi.json", "/api/market/"],
 )
 
 # 注册路由
