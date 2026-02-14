@@ -57,16 +57,24 @@ async def get_klines(
     获取 K 线数据
     
     按 open_time 倒序取最新 N 条，然后反转为正序返回（便于前端绘图）。
+    支持 Redis 缓存加速（cache-aside 模式）。
     
     Parameters:
     - symbol: 交易对 (如 BTCUSDT)
     - interval: 时间周期 (1m, 5m, 15m, 30m, 1h, 4h, 1d)
-    - limit: 返回数量 (1-1000)
+    - limit: 返回数量 (1-10000)
     
     Returns:
     - 按时间正序排列的 K 线数据
     """
-    # 查询最新 N 条 (倒序)
+    from app.services.kline_cache import kline_cache
+    
+    # 1. 尝试从 Redis 缓存获取
+    cached = await kline_cache.get(symbol, interval, limit)
+    if cached:
+        return KlineListResponse(**cached)
+    
+    # 2. 缓存未命中 → 查询数据库
     query = (
         select(Kline)
         .where(Kline.symbol == symbol)
@@ -96,12 +104,17 @@ async def get_klines(
         for k in klines
     ]
     
-    return KlineListResponse(
+    response = KlineListResponse(
         symbol=symbol,
         interval=interval,
         count=len(data),
         data=data,
     )
+    
+    # 3. 写入缓存 (异步，不阻塞响应)
+    await kline_cache.set(symbol, interval, limit, response.model_dump())
+    
+    return response
 
 
 @router.get("/klines/latest", response_model=KlineResponse)

@@ -11,8 +11,9 @@ from loguru import logger
 
 from app.core.config import settings
 from app.db.session import init_db
-from app.api import auth, wallet, order, task, market, ai, position, risk, grid, user_config, admin
+from app.api import auth, wallet, order, task, market, ai, position, risk, grid, user_config, admin, ws
 from app.middleware.error_handler import setup_error_handlers
+from app.middleware.access_logger import AccessLoggerMiddleware
 from app.core.rate_limit import RateLimitMiddleware
 from app.core.startup_validator import validate_startup_config
 
@@ -86,7 +87,14 @@ app.add_middleware(
     RateLimitMiddleware,
     requests_per_minute=120,
     burst_size=20,
-    exclude_paths=["/health", "/", "/docs", "/openapi.json", "/api/market/"],
+    exclude_paths=["/health", "/", "/docs", "/openapi.json", "/api/market/", "/api/ws/"],
+)
+
+# 📝 访问日志 (最外层，记录所有请求含被限流的)
+app.add_middleware(
+    AccessLoggerMiddleware,
+    exclude_paths=["/health", "/", "/docs", "/openapi.json", "/redoc"],
+    slow_threshold_ms=1000,
 )
 
 # 注册路由
@@ -101,6 +109,7 @@ app.include_router(risk.router, prefix="/api/risk", tags=["Risk"])
 app.include_router(grid.router, prefix="/api/grid", tags=["Grid"])
 app.include_router(user_config.router, prefix="/api/user", tags=["User Config"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
+app.include_router(ws.router, prefix="/api/ws", tags=["WebSocket"])
 
 
 @app.get("/")
