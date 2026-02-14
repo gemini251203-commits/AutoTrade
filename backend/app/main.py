@@ -124,9 +124,36 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """详细健康检查"""
+    """详细健康检查 — 实际测试 DB + Redis 连通性"""
+    from app.db.session import AsyncSessionLocal
+    from sqlalchemy import text
+    import redis.asyncio as aioredis
+    
+    checks = {}
+    overall = True
+    
+    # 检查数据库
+    try:
+        async with AsyncSessionLocal() as db:
+            await db.execute(text("SELECT 1"))
+        checks["database"] = "connected"
+    except Exception as e:
+        checks["database"] = f"error: {str(e)[:100]}"
+        overall = False
+    
+    # 检查 Redis
+    try:
+        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        await r.ping()
+        await r.close()
+        checks["redis"] = "connected"
+    except Exception as e:
+        checks["redis"] = f"error: {str(e)[:100]}"
+        overall = False
+    
     return {
-        "status": "healthy",
-        "database": "connected",
-        "redis": "connected",
+        "status": "healthy" if overall else "degraded",
+        **checks,
+        "environment": settings.env_type,
+        "trading_mode": settings.trading_mode,
     }

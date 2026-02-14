@@ -14,17 +14,19 @@
  * 
  * 币安规则: 同一交易对不能同时持有多单和空单
  */
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { NModal, NCheckbox, NSlider, useMessage } from 'naive-ui'
 import request from '@/utils/request'
 import { useWalletStore } from '@/stores/wallet'
 import { useSymbolStore } from '@/stores/symbol'
 import { previewTpSl, type TpSlPreviewResponse } from '@/api/order'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 
 const message = useMessage()
 const walletStore = useWalletStore()
 const symbolStore = useSymbolStore()
+const { getPrice, isConnected: wsConnected } = useWebSocket()
 
 // ==================== 基础状态 ====================
 // 🔥 从 store 获取当前交易对
@@ -352,11 +354,33 @@ watch(() => symbolStore.currentSymbol, async (newSymbol, oldSymbol) => {
 })
 
 // 初始化
+let priceCheckInterval: ReturnType<typeof setInterval> | null = null
+let positionInterval: ReturnType<typeof setInterval> | null = null
+
 onMounted(async () => {
   await fetchLatestPrice()
   await fetchExistingPosition()
-  setInterval(fetchLatestPrice, 1000)
-  setInterval(fetchExistingPosition, 5000)
+  
+  // 🔥 WebSocket 实时价格更新 (替代 setInterval 1s 轮询)
+  // 每 500ms 检查 WS 价格，比 HTTP 轮询节省大量请求
+  priceCheckInterval = setInterval(() => {
+    if (wsConnected.value) {
+      const wsPrice = getPrice(symbol.value)
+      if (wsPrice > 0) {
+        currentPrice.value = wsPrice
+        if (!price.value) {
+          price.value = wsPrice
+        }
+      }
+    }
+  }, 500)
+  
+  positionInterval = setInterval(fetchExistingPosition, 5000)
+})
+
+onUnmounted(() => {
+  if (priceCheckInterval) clearInterval(priceCheckInterval)
+  if (positionInterval) clearInterval(positionInterval)
 })
 </script>
 
