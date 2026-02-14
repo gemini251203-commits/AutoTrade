@@ -125,23 +125,37 @@ class OrderExecutor:
         
         # 2. 计算保证金 (只有开仓需要)
         margin_required = Decimal("0")
+        ref_price = price or trigger_price
+        
+        # 🔥 市价单: 必须获取实时价格
+        if ref_price is None:
+            from app.services.exchange import BinanceClient
+            client = BinanceClient()
+            try:
+                ticker = await client.get_ticker(symbol)
+                if ticker:
+                    ref_price = Decimal(ticker.get("lastPrice", "0"))
+                    logger.info(f"[OrderExecutor] Fetched market price for {symbol}: {ref_price}")
+            except Exception as e:
+                logger.warning(f"[OrderExecutor] Failed to get market price: {e}")
+        
+        if ref_price is None or ref_price <= 0:
+            raise OrderError(f"Cannot determine price for {symbol}. Market data unavailable.")
+        
         if not reduce_only:
-            # 使用限价/触发价/当前价计算
-            ref_price = price or trigger_price
-            if ref_price:
-                margin_required = OrderExecutor.calculate_required_margin(
-                    quantity, ref_price, leverage
+            margin_required = OrderExecutor.calculate_required_margin(
+                quantity, ref_price, leverage
+            )
+            
+            # 3. 冻结保证金
+            try:
+                await WalletManager.freeze_funds(db, user_id, margin_required)
+                logger.info(f"[OrderExecutor] Frozen margin: {margin_required} USDT")
+            except InsufficientFundsError as e:
+                raise OrderError(
+                    f"Insufficient funds: required={margin_required}, "
+                    f"available={e.available}"
                 )
-                
-                # 3. 冻结保证金
-                try:
-                    await WalletManager.freeze_funds(db, user_id, margin_required)
-                    logger.info(f"[OrderExecutor] Frozen margin: {margin_required} USDT")
-                except InsufficientFundsError as e:
-                    raise OrderError(
-                        f"Insufficient funds: required={margin_required}, "
-                        f"available={e.available}"
-                    )
         
         # 4. 创建订单
         order = Order(
@@ -168,7 +182,7 @@ class OrderExecutor:
         
         # 5. 市价单立即执行
         if order_type == OrderType.MARKET:
-            await OrderExecutor.execute_market_order(db, order, ref_price or Decimal("0"))
+            await OrderExecutor.execute_market_order(db, order, ref_price)
         elif order_type == OrderType.LIMIT:
             # 🔥 优化: 检查是否可以立即成交
             # 获取当前市场价格
