@@ -182,10 +182,14 @@ async def health_check():
     except Exception as e:
         checks["redis"] = f"error: {str(e)[:100]}"
         overall = False
+    # 断路器状态
+    from app.core.circuit_breaker import get_all_circuit_breaker_stats
+    cb_stats = get_all_circuit_breaker_stats()
     
     return {
         "status": "healthy" if overall else "degraded",
         **checks,
+        "circuit_breakers": cb_stats,
         "environment": settings.env_type,
         "trading_mode": settings.trading_mode,
     }

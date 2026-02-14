@@ -10,6 +10,7 @@ from typing import Optional, Dict, Any
 from loguru import logger
 
 from app.core.network import net_manager
+from app.core.circuit_breaker import CircuitBreakerInstance, CircuitBreakerError
 
 
 class BinanceClient:
@@ -20,6 +21,25 @@ class BinanceClient:
     """
     
     BASE_URL = "https://fapi.binance.com"  # 期货 API
+    
+    def __init__(self):
+        # 断路器: 5次连续失败后断开，30s 后尝试恢复
+        self._breaker = CircuitBreakerInstance(
+            name="binance_api",
+            failure_threshold=5,
+            reset_timeout=30.0,
+        )
+    
+    async def _request(self, method: str, url: str, timeout: float = 10.0, **kwargs) -> Any:
+        """通过断路器发起 HTTP 请求"""
+        async def _do_request():
+            async with net_manager.get_client(timeout=timeout) as client:
+                response = await client.request(method, url, **kwargs)
+                if response.status_code != 200:
+                    raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
+                return response.json()
+        
+        return await self._breaker.call(_do_request)
     
     async def get_ticker(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
@@ -39,24 +59,19 @@ class BinanceClient:
             - lowPrice: 24h最低价
         """
         try:
-            async with net_manager.get_client(timeout=5.0) as client:
-                url = f"{self.BASE_URL}/fapi/v1/ticker/24hr"
-                response = await client.get(url, params={"symbol": symbol.upper()})
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    return {
-                        "symbol": data.get("symbol"),
-                        "lastPrice": data.get("lastPrice", "0"),
-                        "priceChangePercent": data.get("priceChangePercent", "0"),
-                        "highPrice": data.get("highPrice", "0"),
-                        "lowPrice": data.get("lowPrice", "0"),
-                        "volume": data.get("volume", "0"),
-                    }
-                else:
-                    logger.warning(f"[BinanceClient] Failed to get ticker: {response.status_code}")
-                    return None
-                    
+            url = f"{self.BASE_URL}/fapi/v1/ticker/24hr"
+            data = await self._request("GET", url, timeout=5.0, params={"symbol": symbol.upper()})
+            return {
+                "symbol": data.get("symbol"),
+                "lastPrice": data.get("lastPrice", "0"),
+                "priceChangePercent": data.get("priceChangePercent", "0"),
+                "highPrice": data.get("highPrice", "0"),
+                "lowPrice": data.get("lowPrice", "0"),
+                "volume": data.get("volume", "0"),
+            }
+        except CircuitBreakerError as e:
+            logger.warning(f"[BinanceClient] {e}")
+            return None
         except Exception as e:
             logger.warning(f"[BinanceClient] Error fetching ticker for {symbol}: {e}")
             return None
@@ -114,46 +129,38 @@ class BinanceClient:
         ⚠️ 字段名使用下划线格式，与 Kline 模型一致
         """
         try:
-            async with net_manager.get_client(timeout=30.0) as client:
-                url = f"{self.BASE_URL}/fapi/v1/klines"
-                params = {
-                    "symbol": symbol.upper(),
-                    "interval": interval,
-                    "limit": min(limit, 1500),  # 币安最大 1500
-                }
-                if start_time:
-                    params["startTime"] = start_time
-                if end_time:
-                    params["endTime"] = end_time
-                
-                response = await client.get(url, params=params)
-                
-                if response.status_code == 200:
-                    raw_klines = response.json()
-                    
-                    # 转换为标准格式 (币安返回数组格式)
-                    # [open_time, open, high, low, close, volume, close_time, 
-                    #  quote_volume, trades, taker_buy_volume, taker_buy_quote_volume, ignore]
-                    result = []
-                    for k in raw_klines:
-                        result.append({
-                            "open_time": k[0],           # 开盘时间 (毫秒)
-                            "open": k[1],                # 开盘价
-                            "high": k[2],                # 最高价
-                            "low": k[3],                 # 最低价
-                            "close": k[4],               # 收盘价
-                            "volume": k[5],              # 成交量
-                            "close_time": k[6],          # 收盘时间
-                            "quote_volume": k[7],        # 成交额
-                            "trades": int(k[8]),         # 成交笔数
-                        })
-                    
-                    logger.debug(f"[BinanceClient] Fetched {len(result)} klines for {symbol} {interval}")
-                    return result
-                else:
-                    logger.warning(f"[BinanceClient] Failed to get klines: {response.status_code} - {response.text}")
-                    return []
-                    
+            url = f"{self.BASE_URL}/fapi/v1/klines"
+            params = {
+                "symbol": symbol.upper(),
+                "interval": interval,
+                "limit": min(limit, 1500),
+            }
+            if start_time:
+                params["startTime"] = start_time
+            if end_time:
+                params["endTime"] = end_time
+            
+            raw_klines = await self._request("GET", url, timeout=30.0, params=params)
+            
+            result = []
+            for k in raw_klines:
+                result.append({
+                    "open_time": k[0],
+                    "open": k[1],
+                    "high": k[2],
+                    "low": k[3],
+                    "close": k[4],
+                    "volume": k[5],
+                    "close_time": k[6],
+                    "quote_volume": k[7],
+                    "trades": int(k[8]),
+                })
+            
+            logger.debug(f"[BinanceClient] Fetched {len(result)} klines for {symbol} {interval}")
+            return result
+        except CircuitBreakerError as e:
+            logger.warning(f"[BinanceClient] {e}")
+            return []
         except Exception as e:
             logger.error(f"[BinanceClient] Error fetching klines for {symbol}: {e}")
             return []
