@@ -11,7 +11,6 @@ import {
   NForm,
   NFormItem,
   NInput,
-  NInputNumber,
   NButton,
   NSpace,
   NSpin,
@@ -54,9 +53,6 @@ const formData = ref({
   ollama_base_url: 'http://localhost:11434',
   ollama_model: 'deepseek-r1:14b',
   system_prompt: 'You are QuantaPro, a professional Crypto Quant Trader.',
-  max_leverage: 20,
-  max_position_percent: 50,
-  max_loss_percent: 5,
 })
 
 // 当前保存的 key 脱敏显示
@@ -84,9 +80,6 @@ async function loadConfig() {
     if (config.system_prompt) {
       formData.value.system_prompt = config.system_prompt
     }
-    formData.value.max_leverage = config.max_leverage
-    formData.value.max_position_percent = config.max_position_percent
-    formData.value.max_loss_percent = config.max_loss_percent
     
     // 保存脱敏后的 key
     savedKeyMasked.value = config.api_key_masked || ''
@@ -105,9 +98,6 @@ async function saveConfig() {
     const updateData: Record<string, unknown> = {
       provider: formData.value.provider,
       system_prompt: formData.value.system_prompt,
-      max_leverage: formData.value.max_leverage,
-      max_position_percent: formData.value.max_position_percent,
-      max_loss_percent: formData.value.max_loss_percent,
     }
     
     if (isCloudProvider.value) {
@@ -336,7 +326,7 @@ onMounted(() => {
 
             <!-- 系统提示词 -->
             <NCollapse arrow-placement="right">
-              <NCollapseItem title="高级设置 & 风险控制" name="advanced">
+              <NCollapseItem title="高级设置" name="advanced">
                 <div class="advanced-section">
                   <NFormItem label="系统提示词 (System Prompt)">
                     <NInput
@@ -347,37 +337,6 @@ onMounted(() => {
                       class="prompt-input"
                     />
                   </NFormItem>
-
-                  <div class="risk-grid">
-                    <NFormItem label="最大杠杆 (Leverage)">
-                      <NInputNumber
-                        v-model:value="formData.max_leverage"
-                        :min="1"
-                        :max="125"
-                        style="width: 100%"
-                      />
-                    </NFormItem>
-                    <NFormItem label="最大仓位 (Position %)">
-                      <NInputNumber
-                        v-model:value="formData.max_position_percent"
-                        :min="1"
-                        :max="100"
-                        style="width: 100%"
-                      >
-                         <template #suffix>%</template>
-                      </NInputNumber>
-                    </NFormItem>
-                    <NFormItem label="单笔止损 (Stop Loss %)">
-                      <NInputNumber
-                        v-model:value="formData.max_loss_percent"
-                        :min="1"
-                        :max="50"
-                        style="width: 100%"
-                      >
-                         <template #suffix>%</template>
-                      </NInputNumber>
-                    </NFormItem>
-                  </div>
                 </div>
               </NCollapseItem>
             </NCollapse>

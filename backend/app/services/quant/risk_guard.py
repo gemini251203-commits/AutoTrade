@@ -40,31 +40,31 @@ class RiskGuard:
     """
 
     # ==================== 系统级硬限制 ====================
-    # 这些值是绝对上限，用户策略中的设置不能超过这些
+    # 这些值是绝对上限，Autopilot 自动交易不能超过这些
 
     # 单笔仓位上限 (占总资金的百分比)
-    MAX_POSITION_PCT = 30.0
+    MAX_POSITION_PCT = 80.0
 
     # 总敞口上限 (所有仓位占总资金的百分比)  
-    MAX_TOTAL_EXPOSURE_PCT = 80.0
+    MAX_TOTAL_EXPOSURE_PCT = 200.0
 
     # 单日最大亏损 (占总资金的百分比) — 触发则当日停机
-    MAX_DAILY_LOSS_PCT = 5.0
+    MAX_DAILY_LOSS_PCT = 15.0
 
     # 单日最大交易次数
-    MAX_DAILY_TRADES = 20
+    MAX_DAILY_TRADES = 100
 
     # 同一交易对最大同时持仓数
-    MAX_SAME_SYMBOL_POSITIONS = 3
+    MAX_SAME_SYMBOL_POSITIONS = 10
 
     # 最大允许杠杆
-    MAX_LEVERAGE = 10
+    MAX_LEVERAGE = 50
 
     # 最小盈亏比 (take_profit / stop_loss)
-    MIN_RISK_REWARD_RATIO = 1.0
+    MIN_RISK_REWARD_RATIO = 0.5
 
     # 最小交易金额 (USDT)
-    MIN_TRADE_AMOUNT = 10.0
+    MIN_TRADE_AMOUNT = 5.0
 
     def check_all(
         self,
