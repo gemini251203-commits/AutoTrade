@@ -200,41 +200,13 @@ async def get_open_orders(db: AsyncSession, user_id: int) -> str:
 
 # ==================== 交易工具 ====================
 
-# Binance 合约最小名义价值 (USDT)
-MIN_NOTIONAL = {
-    "BTCUSDT": 100,
-    "ETHUSDT": 20,
-    "BNBUSDT": 20,
-    "SOLUSDT": 5,
-    "DOGEUSDT": 5,
-    "XRPUSDT": 5,
-    "ADAUSDT": 5,
-    "AVAXUSDT": 5,
-    "DOTUSDT": 5,
-    "LINKUSDT": 5,
-    "MATICUSDT": 5,
-    "NEARUSDT": 5,
-    "FTMUSDT": 5,
-    "ATOMUSDT": 5,
-    "OPUSDT": 5,
-    "ARBUSDT": 5,
-    "PEPEUSDT": 5,
-    "SHIBUSDT": 5,
-    "WIFUSDT": 5,
-    "SUIUSDT": 5,
-}
-DEFAULT_MIN_NOTIONAL = 5  # 其他币种默认
-
-# 数量精度 (最小下单步长)
-QUANTITY_PRECISION = {
-    "BTCUSDT": 3,    # 0.001
-    "ETHUSDT": 2,    # 0.01
-    "BNBUSDT": 2,    # 0.01
-    "SOLUSDT": 1,    # 0.1
-    "DOGEUSDT": 0,   # 1
-    "XRPUSDT": 1,    # 0.1
-}
-DEFAULT_QTY_PRECISION = 2  # 0.01
+# 完整交易规则从 exchange_rules 模块导入 (580 个交易对)
+from app.services.exchange_rules import (
+    get_min_notional,
+    get_qty_precision,
+    round_quantity_up,
+    validate_order as validate_exchange_rules,
+)
 
 
 @register_tool
@@ -254,8 +226,7 @@ async def place_order(
     try:
         symbol = symbol.upper()
 
-        # ==================== 预检验: Binance 最小名义价值 ====================
-        # 获取实时价格用于计算名义价值
+        # ==================== 预检验: Binance 交易规则 ====================
         from app.services.exchange import BinanceClient
         client = BinanceClient()
         try:
@@ -265,39 +236,18 @@ async def place_order(
             current_price = 0
 
         if current_price > 0:
-            notional = quantity * current_price  # 名义价值
-            min_notional = MIN_NOTIONAL.get(symbol, DEFAULT_MIN_NOTIONAL)
-            margin = notional / leverage if leverage > 0 else notional
-
-            if notional < min_notional:
-                # 计算建议: 满足最小名义所需的最小数量
-                qty_precision = QUANTITY_PRECISION.get(symbol, DEFAULT_QTY_PRECISION)
-                min_qty = min_notional / current_price
-                # 向上取整到精度
-                import math
-                factor = 10 ** qty_precision
-                suggested_qty = math.ceil(min_qty * factor) / factor
-                suggested_margin = (suggested_qty * current_price) / leverage
-
+            # 使用完整交易规则模块验证
+            validation = validate_exchange_rules(symbol, quantity, current_price, leverage)
+            if not validation["valid"]:
                 return json.dumps({
                     "success": False,
-                    "error": (
-                        f"名义价值不足: {quantity} × ${current_price:,.2f} = ${notional:,.2f}, "
-                        f"但 {symbol} 最小名义为 ${min_notional}。\n"
-                        f"建议: quantity={suggested_qty} (名义=${suggested_qty * current_price:,.2f}), "
-                        f"保证金约 ${suggested_margin:,.2f} ({leverage}x杠杆)。\n"
-                        f"或者提高杠杆 / 选择最小名义更低的币种 (如 SOLUSDT: $5)"
-                    ),
-                    "suggestion": {
-                        "symbol": symbol,
-                        "min_quantity": suggested_qty,
-                        "min_notional": min_notional,
-                        "suggested_margin": round(suggested_margin, 2),
-                        "current_price": current_price,
-                    }
+                    "error": validation["error"],
+                    "suggestion": validation["suggestion"],
                 }, ensure_ascii=False)
 
             # 检查保证金是否够
+            notional = quantity * current_price
+            margin = notional / leverage if leverage > 0 else notional
             wallet_result = await db.execute(
                 select(Wallet).where(Wallet.user_id == user_id)
             )
