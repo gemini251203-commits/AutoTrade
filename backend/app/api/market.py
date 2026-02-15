@@ -51,7 +51,7 @@ async def get_klines(
     db: DbSession,
     symbol: str = Query(default="BTCUSDT", description="交易对"),
     interval: str = Query(default="1m", description="时间周期"),
-    limit: int = Query(default=100, ge=1, le=10000, description="返回数量"),
+    limit: int = Query(default=500, ge=1, le=50000, description="返回数量"),
 ):
     """
     获取 K 线数据
