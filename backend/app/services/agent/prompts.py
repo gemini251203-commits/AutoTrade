@@ -28,14 +28,16 @@ TOOLS_DESCRIPTION = """
 3. get_positions() - 查询当前持仓
    示例: [TOOL_CALL: get_positions()]
 
-4. place_order(symbol, side, order_type, quantity, leverage, price) - 下单
+4. place_order(symbol, side, order_type, quantity, leverage, price, stop_loss, take_profit) - 下单
    - symbol: 交易对 (如 BTCUSDT)
    - side: buy 或 sell
    - order_type: market(市价) 或 limit(限价)
    - quantity: 数量
    - leverage: 杠杆倍数 (默认 1)
    - price: 限价单价格 (市价单不需要)
-   示例: [TOOL_CALL: place_order(symbol=BTCUSDT, side=buy, order_type=market, quantity=0.01, leverage=20)]
+   - stop_loss: 止损价格 (可选, 强烈建议设置)
+   - take_profit: 止盈价格 (可选)
+   示例: [TOOL_CALL: place_order(symbol=BTCUSDT, side=buy, order_type=market, quantity=0.008, leverage=20, stop_loss=67500, take_profit=70000)]
 
 5. close_position(position_id, close_price) - 平仓
    示例: [TOOL_CALL: close_position(position_id=1, close_price=98000)]

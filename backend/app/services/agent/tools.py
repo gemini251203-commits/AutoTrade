@@ -219,6 +219,8 @@ async def place_order(
     quantity: float = 0.01,
     leverage: int = 1,
     price: float = 0,
+    stop_loss: float = 0,
+    take_profit: float = 0,
 ) -> str:
     """下单 (含 Binance 规则预检验)"""
     from app.services.trading import OrderExecutor, OrderError
@@ -267,6 +269,10 @@ async def place_order(
         otype = OrderType(order_type.lower())
         order_price = Decimal(str(price)) if price and float(price) > 0 else None
 
+        # 止损止盈参数
+        sl = Decimal(str(stop_loss)) if stop_loss and float(stop_loss) > 0 else None
+        tp = Decimal(str(take_profit)) if take_profit and float(take_profit) > 0 else None
+
         order = await OrderExecutor.create_order(
             db=db,
             user_id=user_id,
@@ -276,6 +282,8 @@ async def place_order(
             quantity=Decimal(str(quantity)),
             price=order_price,
             leverage=int(leverage),
+            stop_loss=sl,
+            take_profit=tp,
         )
 
         return json.dumps({
@@ -288,6 +296,8 @@ async def place_order(
             "leverage": order.leverage,
             "status": order.status.value,
             "avg_fill_price": float(order.avg_fill_price) if order.avg_fill_price else None,
+            "stop_loss": float(order.stop_loss) if order.stop_loss else None,
+            "take_profit": float(order.take_profit) if order.take_profit else None,
             "message": f"{'市价' if otype == OrderType.MARKET else '限价'}单已{'成交' if order.status == OrderStatus.FILLED else '挂出'}",
         }, ensure_ascii=False)
 
