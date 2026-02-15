@@ -142,6 +142,7 @@ app.include_router(grid.router, prefix="/api/grid", tags=["Grid"])
 app.include_router(user_config.router, prefix="/api/user", tags=["User Config"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(ws.router, prefix="/api/ws", tags=["WebSocket"])
+app.include_router(strategy.router, prefix="/api/strategy", tags=["Strategy"])
 
 
 @app.get("/")
