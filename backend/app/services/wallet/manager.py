@@ -352,3 +352,39 @@ class WalletManager:
         )
         
         return wallet
+
+    @staticmethod
+    async def deduct_fee(
+        db: AsyncSession, 
+        user_id: int,
+        amount: Decimal,
+    ) -> Wallet:
+        """
+        扣除交易手续费
+        
+        从可用余额中直接扣除 (币安规则: 手续费从余额扣)
+        
+        Args:
+            db: 数据库会话
+            user_id: 用户 ID
+            amount: 手续费金额 (USDT)
+        
+        Returns:
+            更新后的 Wallet 实例
+        """
+        if amount <= 0:
+            return await WalletManager.get_wallet(db, user_id)
+        
+        wallet = await WalletManager.get_wallet(db, user_id, for_update=True)
+        
+        if wallet is None:
+            raise WalletNotFoundError(user_id)
+        
+        wallet.balance -= amount
+        
+        logger.info(
+            f"[WalletManager] User {user_id}: Fee deducted {amount}, "
+            f"balance -> {wallet.balance}"
+        )
+        
+        return wallet

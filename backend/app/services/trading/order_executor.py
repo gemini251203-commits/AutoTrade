@@ -28,6 +28,7 @@ from app.models.order import Order, OrderSide, OrderType, OrderStatus, PositionS
 from app.models.position import PositionSide, PositionStatus
 from app.services.trading import PositionManager, InsufficientMarginError
 from app.services.wallet import WalletManager, InsufficientFundsError
+from app.services.trading.fee_calculator import FeeCalculator
 
 
 class OrderError(Exception):
@@ -64,12 +65,30 @@ class OrderExecutor:
         leverage: int,
     ) -> Decimal:
         """
-        计算下单所需保证金
+        计算下单所需保证金 (不含手续费)
         
         保证金 = (数量 × 价格) / 杠杆
         """
         notional = quantity * price
         return notional / Decimal(leverage)
+    
+    @staticmethod
+    def calculate_open_cost(
+        quantity: Decimal,
+        price: Decimal,
+        leverage: int,
+        is_maker: bool = False,
+    ) -> tuple[Decimal, Decimal]:
+        """
+        计算开仓总成本 (含手续费)
+        
+        Cost = Initial Margin + Commission
+        币安公式: Notional = qty × price
+        
+        Returns:
+            (initial_margin, commission)
+        """
+        return FeeCalculator.calculate_open_cost(quantity, price, leverage, is_maker)
     
     @staticmethod
     async def create_order(
@@ -123,8 +142,9 @@ class OrderExecutor:
             f"price={price}, trigger={trigger_price}, leverage={leverage}x"
         )
         
-        # 2. 计算保证金 (只有开仓需要)
+        # 2. 计算保证金 + 手续费 (只有开仓需要)
         margin_required = Decimal("0")
+        commission_estimate = Decimal("0")
         ref_price = price or trigger_price
         
         # 🔥 市价单: 必须获取实时价格
@@ -142,18 +162,26 @@ class OrderExecutor:
         if ref_price is None or ref_price <= 0:
             raise OrderError(f"Cannot determine price for {symbol}. Market data unavailable.")
         
+        # 判断 Maker/Taker: 市价=Taker, 限价=Maker
+        is_maker = order_type in (OrderType.LIMIT, OrderType.STOP_LIMIT, OrderType.TAKE_PROFIT_LIMIT)
+        
         if not reduce_only:
-            margin_required = OrderExecutor.calculate_required_margin(
-                quantity, ref_price, leverage
+            margin_required, commission_estimate = OrderExecutor.calculate_open_cost(
+                quantity, ref_price, leverage, is_maker
             )
             
-            # 3. 冻结保证金
+            # 3. 冻结保证金 + 预扣手续费
+            total_freeze = margin_required + commission_estimate
             try:
-                await WalletManager.freeze_funds(db, user_id, margin_required)
-                logger.info(f"[OrderExecutor] Frozen margin: {margin_required} USDT")
+                await WalletManager.freeze_funds(db, user_id, total_freeze)
+                logger.info(
+                    f"[OrderExecutor] Frozen: margin={margin_required}, "
+                    f"commission={commission_estimate}, total={total_freeze} USDT"
+                )
             except InsufficientFundsError as e:
                 raise OrderError(
-                    f"Insufficient funds: required={margin_required}, "
+                    f"Insufficient funds: required={total_freeze} "
+                    f"(margin={margin_required} + fee={commission_estimate}), "
                     f"available={e.available}"
                 )
         
@@ -231,24 +259,52 @@ class OrderExecutor:
         """
         执行市价单
         
-        根据 reduce_only 标志决定开仓或平仓
+        流程:
+        1. 市价单应用滑点 → 实际成交价
+        2. 根据 reduce_only 决定开仓或平仓
+        3. 计算并记录手续费
         """
+        # 🔥 市价单应用滑点 (限价单不应用)
+        is_market = order.order_type == OrderType.MARKET
+        if is_market:
+            side_str = "buy" if order.side == OrderSide.BUY else "sell"
+            actual_price = FeeCalculator.apply_slippage(execution_price, side_str)
+            logger.info(
+                f"[OrderExecutor] Slippage applied: {execution_price} → {actual_price} "
+                f"({side_str})"
+            )
+        else:
+            actual_price = execution_price
+        
+        # 判断 Maker/Taker
+        is_maker = not is_market
+        
+        # 计算手续费
+        commission = FeeCalculator.calculate_commission(
+            order.quantity, actual_price, is_maker
+        )
+        
         logger.info(
-            f"[OrderExecutor] Executing market order: id={order.id}, "
-            f"price={execution_price}"
+            f"[OrderExecutor] Executing order: id={order.id}, "
+            f"price={actual_price}, commission={commission}"
         )
         
         if order.reduce_only:
             # 平仓
-            await OrderExecutor._execute_close_position(db, order, execution_price)
+            await OrderExecutor._execute_close_position(
+                db, order, actual_price, commission
+            )
         else:
             # 开仓
-            await OrderExecutor._execute_open_position(db, order, execution_price)
+            await OrderExecutor._execute_open_position(
+                db, order, actual_price, commission
+            )
         
         # 更新订单状态
         order.status = OrderStatus.FILLED
         order.filled_quantity = order.quantity
-        order.avg_fill_price = execution_price
+        order.avg_fill_price = actual_price
+        order.commission = commission
         order.filled_at = datetime.utcnow()
         
         return order
@@ -258,16 +314,22 @@ class OrderExecutor:
         db: AsyncSession,
         order: Order,
         price: Decimal,
+        commission: Decimal = Decimal("0"),
     ) -> None:
-        """执行开仓"""
+        """执行开仓 (含手续费扣除)"""
         # 确定仓位方向
         pos_side = PositionSide.LONG if order.side == OrderSide.BUY else PositionSide.SHORT
         
-        # 释放之前冻结的保证金 (PositionManager 会重新冻结)
+        # 释放之前冻结的保证金+手续费 (PositionManager 会重新冻结保证金部分)
         margin = OrderExecutor.calculate_required_margin(
             order.quantity, price, order.leverage
         )
-        await WalletManager.unfreeze_funds(db, order.user_id, margin)
+        total_frozen = margin + commission
+        await WalletManager.unfreeze_funds(db, order.user_id, total_frozen)
+        
+        # 🔥 扣除手续费 (从可用余额中直接扣除)
+        if commission > 0:
+            await WalletManager.deduct_fee(db, order.user_id, commission)
         
         # 确定交易来源 (从 order.note 解析)
         source = "manual"
@@ -299,18 +361,23 @@ class OrderExecutor:
             take_profit=order.take_profit,
             source=source,
             open_reason=open_reason,
+            commission=commission,
         )
         
         order.position_id = position.id
-        logger.info(f"[OrderExecutor] Position opened: id={position.id}")
+        logger.info(
+            f"[OrderExecutor] Position opened: id={position.id}, "
+            f"commission={commission}"
+        )
     
     @staticmethod
     async def _execute_close_position(
         db: AsyncSession,
         order: Order,
         price: Decimal,
+        commission: Decimal = Decimal("0"),
     ) -> None:
-        """执行平仓"""
+        """执行平仓 (含手续费扣除)"""
         # 查找用户的仓位
         pos_side = PositionSide.LONG if order.side == OrderSide.SELL else PositionSide.SHORT
         
@@ -321,17 +388,21 @@ class OrderExecutor:
         if not position:
             raise OrderError(f"No open position to close: {order.symbol} {pos_side.value}")
         
-        # 调用 PositionManager 平仓
+        # 调用 PositionManager 平仓 (含手续费)
         position, pnl = await PositionManager.close_position(
             db=db,
             position_id=position.id,
             close_price=price,
             close_quantity=order.quantity,
+            commission=commission,
         )
         
         order.position_id = position.id
         order.realized_pnl = pnl
-        logger.info(f"[OrderExecutor] Position closed: pnl={pnl}")
+        logger.info(
+            f"[OrderExecutor] Position closed: pnl={pnl}, "
+            f"commission={commission}"
+        )
     
     @staticmethod
     async def cancel_order(

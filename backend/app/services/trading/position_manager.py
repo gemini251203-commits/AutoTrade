@@ -189,6 +189,7 @@ class PositionManager:
         take_profit: Optional[Decimal] = None,
         source: str = "manual",
         open_reason: Optional[str] = None,
+        commission: Decimal = Decimal("0"),
     ) -> Position:
         """
         开仓
@@ -370,6 +371,7 @@ class PositionManager:
             take_profit=take_profit,
             source=source,
             open_reason=open_reason,
+            total_commission=commission,
         )
         
         db.add(position)
@@ -388,6 +390,7 @@ class PositionManager:
         position_id: int,
         close_price: Decimal,
         close_quantity: Optional[Decimal] = None,
+        commission: Decimal = Decimal("0"),
     ) -> tuple[Position, Decimal]:
         """
         平仓
@@ -395,17 +398,19 @@ class PositionManager:
         流程:
         1. 获取仓位 (加锁)
         2. 计算已实现盈亏
-        3. 释放保证金 + 结算盈亏
-        4. 更新仓位状态
+        3. 扣除手续费
+        4. 释放保证金 + 结算盈亏
+        5. 更新仓位状态
         
         Args:
             db: 数据库会话
             position_id: 仓位 ID
             close_price: 平仓价格
             close_quantity: 平仓数量 (None = 全平)
+            commission: 平仓手续费 (USDT)
         
         Returns:
-            (更新后的仓位, 已实现盈亏)
+            (更新后的仓位, 已实现盈亏 - 净值, 已扣手续费)
         """
         # 1. 获取仓位
         result = await db.execute(
@@ -428,11 +433,14 @@ class PositionManager:
         else:
             is_full_close = False
         
-        # 2. 计算已实现盈亏
-        pnl = position.calculate_unrealized_pnl(close_price)
+        # 2. 计算已实现盈亏 (原始, 不含手续费)
+        raw_pnl = position.calculate_unrealized_pnl(close_price)
         if not is_full_close:
             # 部分平仓: 按比例计算
-            pnl = pnl * (close_quantity / position.size)
+            raw_pnl = raw_pnl * (close_quantity / position.size)
+        
+        # 🔥 3. 扣除平仓手续费 → 净 P&L
+        pnl = raw_pnl - commission
         
         # 3. 计算释放的保证金
         if is_full_close:
@@ -443,10 +451,11 @@ class PositionManager:
         logger.info(
             f"[PositionManager] Closing position: id={position_id}, "
             f"quantity={close_quantity}, price={close_price}, "
-            f"pnl={pnl}, margin_release={margin_to_release}"
+            f"raw_pnl={raw_pnl}, commission={commission}, "
+            f"net_pnl={pnl}, margin_release={margin_to_release}"
         )
         
-        # 4. 结算资金
+        # 4. 结算资金 (用净 P&L)
         await WalletManager.settle_pnl(
             db, 
             position.user_id, 
@@ -455,6 +464,8 @@ class PositionManager:
         )
         
         # 5. 更新仓位
+        position.total_commission += commission
+        
         if is_full_close:
             position.status = PositionStatus.CLOSED
             position.closed_at = datetime.utcnow()

@@ -173,6 +173,13 @@ class Position(Base):
         comment="已实现盈亏",
     )
     
+    total_commission: Mapped[Decimal] = mapped_column(
+        Numeric(precision=20, scale=8),
+        default=Decimal("0"),
+        nullable=False,
+        comment="累计手续费 (开仓+平仓, USDT)",
+    )
+    
     # ============================================
     # 时间戳
     # ============================================
