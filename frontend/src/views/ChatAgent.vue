@@ -318,6 +318,7 @@ function formatTime(iso: string): string {
         <template v-if="!sidebarCollapsed">
           <!-- 新建会话 -->
           <div class="new-chat">
+            <div class="new-chat-label">选择 AI 角色</div>
             <n-select
               v-model:value="selectedPersona"
               :options="personas.map(p => ({ label: p.name, value: p.id }))"
@@ -332,8 +333,13 @@ function formatTime(iso: string): string {
               style="margin-top: 8px; width: 100%"
             >
               <template #icon><n-icon :component="AddOutline" /></template>
-              新建会话
+              + 新建会话
             </n-button>
+          </div>
+
+          <!-- 会话列表标题 -->
+          <div class="conv-list-header" v-if="conversations.length > 0">
+            <span>历史会话 ({{ conversations.length }})</span>
           </div>
 
           <!-- 会话列表 -->
@@ -349,11 +355,14 @@ function formatTime(iso: string): string {
               </div>
               <div class="conv-info">
                 <div class="conv-title">{{ conv.title }}</div>
-                <div class="conv-meta">{{ getPersonaName(conv.persona) }}</div>
+                <div class="conv-meta">
+                  <span class="persona-badge">{{ getPersonaName(conv.persona) }}</span>
+                </div>
               </div>
               <button
                 class="conv-delete"
                 @click.stop="handleDeleteConversation(conv.id)"
+                title="删除此会话"
               >
                 <n-icon :component="TrashOutline" :size="14" />
               </button>
@@ -379,7 +388,12 @@ function formatTime(iso: string): string {
         <div v-if="!activeConversationId" class="empty-state">
           <div class="empty-icon">🤖</div>
           <h2>AI 交易代理</h2>
-          <p>选择一个角色，开始与 AI 对话</p>
+          <p>在左侧选择一个 AI 角色，点击「新建会话」开始对话</p>
+          <div class="empty-roles">
+            <div class="role-tag" v-for="p in personas" :key="p.id" @click="selectedPersona = p.id; handleCreateConversation()">
+              {{ p.name }}
+            </div>
+          </div>
           <p class="empty-hint">AI 可以帮你查行情、下单、分析市场、查持仓 …</p>
         </div>
 
@@ -538,6 +552,24 @@ function renderMarkdown(text: string): string {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.new-chat-label {
+  font-size: 11px;
+  color: #a78bfa;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.conv-list-header {
+  padding: 10px 16px 4px;
+  font-size: 11px;
+  color: #666;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
 .conversation-list {
   flex: 1;
   overflow-y: auto;
@@ -588,6 +620,16 @@ function renderMarkdown(text: string): string {
   margin-top: 2px;
 }
 
+.persona-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(167, 139, 250, 0.1);
+  color: #a78bfa;
+  font-size: 10px;
+  font-weight: 500;
+}
+
 .conv-delete {
   background: none;
   border: none;
@@ -595,8 +637,9 @@ function renderMarkdown(text: string): string {
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
-  opacity: 0;
+  opacity: 0.5;
   transition: all 0.2s;
+  flex-shrink: 0;
 }
 
 .conversation-item:hover .conv-delete {
@@ -791,6 +834,33 @@ function renderMarkdown(text: string): string {
 .empty-hint {
   color: #555;
   font-size: 13px !important;
+}
+
+.empty-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+  justify-content: center;
+}
+
+.role-tag {
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: rgba(167, 139, 250, 0.1);
+  border: 1px solid rgba(167, 139, 250, 0.25);
+  color: #a78bfa;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.role-tag:hover {
+  background: rgba(167, 139, 250, 0.2);
+  border-color: rgba(167, 139, 250, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(167, 139, 250, 0.2);
 }
 
 .loading-state {

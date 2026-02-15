@@ -84,13 +84,17 @@ const router = createRouter({
 // Navigation Guards
 // ============================================
 
+// Track whether we've loaded from storage
+let storageLoaded = false
+
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
   const requiresAuth = to.meta.requiresAuth !== false
   
-  // Initialize auth state on first load
-  if (!authStore.user && authStore.token) {
+  // Always ensure localStorage is loaded (sync, fast)
+  if (!storageLoaded) {
     await authStore.initialize()
+    storageLoaded = true
   }
   
   // Check authentication
