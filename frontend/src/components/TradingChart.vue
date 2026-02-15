@@ -182,10 +182,12 @@ async function initChart() {
     // 从后端获取真实数据
     const klines = await fetchKlines(selectedTimeframe.value)
     
+    // 防止组件销毁后继续操作
+    if (isDestroyed || !candlestickSeries || !chart) return
+    
     if (klines.length > 0) {
       candlestickSeries.setData(klines)
-      chart?.timeScale().fitContent()
-
+      chart.timeScale().fitContent()
     } else {
       console.warn('[TradingChart] ⚠️ 没有获取到数据，请运行 binance_spider.py')
     }
@@ -198,9 +200,9 @@ async function initChart() {
 // 切换时间周期
 async function changeTimeframe(tf: string) {
   selectedTimeframe.value = tf
-  if (candlestickSeries) {
+  if (candlestickSeries && !isDestroyed) {
     const klines = await fetchKlines(tf)
-    if (klines.length > 0) {
+    if (klines.length > 0 && candlestickSeries && !isDestroyed) {
       candlestickSeries.setData(klines)
       chart?.timeScale().fitContent()
     }
