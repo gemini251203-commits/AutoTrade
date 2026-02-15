@@ -312,12 +312,14 @@ function formatTime(iso: string): string {
           <!-- 新建会话 -->
           <div class="new-chat">
             <div class="new-chat-label">选择 AI 角色</div>
-            <n-select
-              v-model:value="selectedPersona"
-              :options="personas.map(p => ({ label: p.name, value: p.id }))"
-              size="small"
-              placeholder="选择角色"
-            />
+            <select
+              v-model="selectedPersona"
+              class="persona-select"
+            >
+              <option v-for="p in personas" :key="p.id" :value="p.id">
+                {{ p.name }}
+              </option>
+            </select>
             <button
               class="create-chat-btn"
               @click="handleCreateConversation"
@@ -354,7 +356,7 @@ function formatTime(iso: string): string {
                 @click.stop="handleDeleteConversation(conv.id)"
                 title="删除此会话"
               >
-                <n-icon :component="TrashOutline" :size="14" />
+                ✕
               </button>
             </div>
           </div>
@@ -542,6 +544,30 @@ function renderMarkdown(text: string): string {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.persona-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(138, 43, 226, 0.4);
+  border-radius: 8px;
+  background: rgba(20, 20, 32, 0.8);
+  color: #d8b4fe;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+  appearance: auto;
+  -webkit-appearance: auto;
+}
+
+.persona-select:focus {
+  border-color: rgba(138, 43, 226, 0.8);
+  box-shadow: 0 0 8px rgba(138, 43, 226, 0.2);
+}
+
+.persona-select option {
+  background: #1a1a2e;
+  color: #e0e0e0;
+}
+
 .new-chat-label {
   font-size: 11px;
   color: #a78bfa;
@@ -655,13 +681,16 @@ function renderMarkdown(text: string): string {
 .conv-delete {
   background: none;
   border: none;
-  color: #666;
+  color: #ef4444;
   cursor: pointer;
-  padding: 4px;
+  padding: 4px 6px;
   border-radius: 4px;
-  opacity: 0.5;
+  opacity: 0.6;
   transition: all 0.2s;
   flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .conversation-item:hover .conv-delete {
