@@ -284,22 +284,53 @@ class BinanceSpider:
         logger.info(f"[Spider] ========== 深度回填完成, 共 {total_inserted} 条 ==========")
     
     async def realtime_loop(self):
-        """实时更新循环"""
+        """实时更新循环 - 更新所有周期"""
         logger.info("[Spider] ========== 进入实时更新模式 ==========")
+        
+        # 每个周期的更新间隔 (秒)
+        INTERVAL_UPDATE_SECONDS = {
+            "1m": 2,
+            "5m": 30,
+            "15m": 120,
+            "30m": 120,
+            "1h": 300,
+            "4h": 900,
+            "1d": 1800,
+        }
+        
+        # 记录每个周期的上次更新时间
+        last_update: dict[str, float] = {iv: 0.0 for iv in INTERVAL_UPDATE_SECONDS}
         
         while True:
             try:
-                for symbol in self.symbols:
-                    # 只更新 1m K 线 (最快频率)
-                    klines = await self.fetch_klines(symbol, "1m", limit=1)
+                now = time.time()
+                
+                for interval, update_every in INTERVAL_UPDATE_SECONDS.items():
+                    # 检查是否到了更新时间
+                    if now - last_update[interval] < update_every:
+                        continue
                     
-                    if klines:
-                        await self.upsert_klines(klines)
-                        latest = klines[-1]
-                        logger.info(
-                            f"[Spider] {symbol} 1m 更新: ${float(latest['close']):,.2f} "
-                            f"(H:{float(latest['high']):,.2f} L:{float(latest['low']):,.2f})"
-                        )
+                    for symbol in self.symbols:
+                        klines = await self.fetch_klines(symbol, interval, limit=2)
+                        
+                        if klines:
+                            await self.upsert_klines(klines)
+                    
+                    last_update[interval] = now
+                    
+                    if interval == "1m":
+                        # 1m 更新时打印价格
+                        for symbol in self.symbols:
+                            klines = await self.fetch_klines(symbol, "1m", limit=1)
+                            if klines:
+                                latest = klines[-1]
+                                logger.info(
+                                    f"[Spider] {symbol} 1m: ${float(latest['close']):,.2f} "
+                                    f"(H:{float(latest['high']):,.2f} L:{float(latest['low']):,.2f})"
+                                )
+                                break  # 只打印第一个交易对
+                    else:
+                        logger.info(f"[Spider] 📊 {interval} 周期已更新 ({len(self.symbols)} 交易对)")
                 
                 await asyncio.sleep(2)
                 
