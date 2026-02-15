@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { NConfigProvider, darkTheme, NGlobalStyle } from 'naive-ui'
+import { NConfigProvider, NMessageProvider, NDialogProvider, darkTheme, NGlobalStyle } from 'naive-ui'
 import { RouterView } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 
@@ -58,8 +58,12 @@ const themeOverrides = {
 
 <template>
   <NConfigProvider :theme="darkTheme" :theme-overrides="themeOverrides">
-    <NGlobalStyle />
-    <RouterView />
+    <NMessageProvider>
+      <NDialogProvider>
+        <NGlobalStyle />
+        <RouterView />
+      </NDialogProvider>
+    </NMessageProvider>
   </NConfigProvider>
 </template>
 
