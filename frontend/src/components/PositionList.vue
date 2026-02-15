@@ -268,7 +268,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="p-4" style="background: #0a0a0a; min-height: 200px;">
+  <div class="p-4" style="background: transparent; min-height: 200px;">
     <div class="flex items-center justify-between mb-4">
       <h3 class="text-white text-sm font-medium">当前仓位</h3>
       <NButton 
@@ -291,7 +291,7 @@ onUnmounted(() => {
       :single-line="false"
       style="background: transparent;"
       :theme-overrides="{
-        thColor: '#18181b',
+        thColor: 'rgba(255,255,255,0.02)',
         tdColor: 'transparent',
         thTextColor: '#9ca3af',
         tdTextColor: '#e5e7eb',

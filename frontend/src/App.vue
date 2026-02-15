@@ -23,13 +23,13 @@ const themeOverrides = {
     errorColorHover: '#ff6b7a',
     borderRadius: '8px',
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    inputColor: '#0f0f18',
-    inputColorDisabled: '#1a1a25',
-    tableColor: '#111',
-    cardColor: '#111',
-    modalColor: '#0f0f18',
-    bodyColor: '#0a0a0a',
-    popoverColor: '#111',
+    inputColor: 'rgba(20, 20, 30, 0.6)',
+    inputColorDisabled: 'rgba(20, 20, 30, 0.3)',
+    tableColor: 'rgba(20, 20, 30, 0.4)',
+    cardColor: 'rgba(20, 20, 30, 0.6)',
+    modalColor: 'rgba(20, 20, 30, 0.8)',
+    bodyColor: '#0a0a0f',
+    popoverColor: 'rgba(20, 20, 30, 0.9)',
     textColor1: '#ffffff',
     textColor2: '#9ca3af',
     textColor3: '#6b7280',
@@ -61,7 +61,11 @@ const themeOverrides = {
     <NMessageProvider>
       <NDialogProvider>
         <NGlobalStyle />
-        <RouterView />
+        <RouterView v-slot="{ Component }">
+          <transition name="fade" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </RouterView>
       </NDialogProvider>
     </NMessageProvider>
   </NConfigProvider>
@@ -71,5 +75,17 @@ const themeOverrides = {
 /* Global anti-flash styles */
 html, body, #app {
   background: #0a0a0a !important;
+  height: 100%;
+  margin: 0;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

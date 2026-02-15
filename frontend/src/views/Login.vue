@@ -113,22 +113,20 @@ function handleKeydown(e: KeyboardEvent) {
   >
     <!-- Background Grid Effect -->
     <div 
-      class="absolute inset-0 opacity-[0.02]"
+      class="absolute inset-0 opacity-[0.03] animate-pulse"
       style="
         background-image: linear-gradient(rgba(138,43,226,0.3) 1px, transparent 1px),
                           linear-gradient(90deg, rgba(138,43,226,0.3) 1px, transparent 1px);
         background-size: 50px 50px;
+        animation-duration: 4s;
       "
     ></div>
     
     <!-- Login/Register Card -->
     <div 
-      class="relative w-full max-w-md rounded-2xl p-8"
+      class="relative w-full max-w-md rounded-2xl p-8 glass-panel fade-in slide-up"
       style="
-        background: rgba(24, 24, 27, 0.8);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(20px);
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        transition: all 0.5s ease;
       "
     >
       <!-- Logo -->

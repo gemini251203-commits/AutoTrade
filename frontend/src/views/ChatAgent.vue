@@ -487,8 +487,10 @@ function renderMarkdown(text: string): string {
 .sidebar {
   width: 280px;
   min-width: 280px;
-  background: rgba(15, 15, 25, 0.95);
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(15, 15, 25, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -617,8 +619,9 @@ function renderMarkdown(text: string): string {
 .chat-header {
   padding: 12px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(15, 15, 25, 0.8);
+  background: rgba(15, 15, 25, 0.6);
   backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .header-info {
@@ -684,7 +687,9 @@ function renderMarkdown(text: string): string {
 }
 
 .message.assistant .msg-bubble {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-bottom-left-radius: 4px;
 }

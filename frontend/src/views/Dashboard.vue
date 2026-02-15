@@ -75,16 +75,15 @@ function stopResize() {
         <div class="grid grid-cols-12 gap-3 flex-1 min-h-0">
           <!-- Chart Area (9 columns) -->
           <div 
-            class="col-span-9 rounded-lg overflow-hidden"
-            style="background: #18181b; border: 1px solid rgba(255,255,255,0.05);"
+            class="col-span-9 rounded-lg overflow-hidden glass-card"
           >
             <TradingChart />
           </div>
           
           <!-- Trade Panel (3 columns) -->
           <div 
-            class="col-span-3 rounded-lg overflow-hidden overflow-y-auto"
-            style="background: #0e0e10; border: 1px solid rgba(255,255,255,0.05); max-height: 600px;"
+            class="col-span-3 rounded-lg overflow-hidden overflow-y-auto glass-card"
+            style="max-height: 600px;"
           >
             <TradePanel />
           </div>
@@ -92,10 +91,8 @@ function stopResize() {
         
         <!-- Bottom Section: Tabs Panel (Resizable) -->
         <div 
-          class="rounded-lg overflow-hidden flex flex-col relative"
+          class="rounded-lg overflow-hidden flex flex-col relative glass-panel"
           :style="{ 
-            background: '#18181b', 
-            border: '1px solid rgba(255,255,255,0.05)', 
             height: bottomHeight + 'px',
             transition: isResizing ? 'none' : 'height 0.2s ease'
           }"
@@ -143,7 +140,7 @@ function stopResize() {
   display: flex;
   gap: 0;
   border-bottom: 1px solid rgba(255,255,255,0.05);
-  background: #0e0e10;
+  background: rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
 }
 
@@ -198,7 +195,7 @@ function stopResize() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #18181b; /* match container */
+  background: rgba(0, 0, 0, 0.2);
   border-bottom: 1px solid rgba(255,255,255,0.02);
   transition: background 0.2s;
 }

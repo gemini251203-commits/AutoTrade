@@ -77,3 +77,60 @@ export async function getLeverageInfo(params: LeverageInfoRequest): Promise<Leve
   const response = await request.post<LeverageInfoResponse>('/order/leverage-info', params)
   return response.data
 }
+
+// ==================== CRUD Functions ====================
+
+/**
+ * 创建订单
+ * POST /order/
+ */
+export interface OrderCreateRequest {
+  symbol: string
+  side: string         // 'buy' | 'sell'
+  order_type: string   // 'market' | 'limit' | ...
+  quantity: string
+  price?: string
+  trigger_price?: string
+  leverage?: number
+  reduce_only?: boolean
+  stop_loss?: string
+  take_profit?: string
+  note?: string
+}
+
+export interface OrderResponse {
+  id: number
+  symbol: string
+  side: string
+  order_type: string
+  status: string
+  quantity: string
+  price: string | null
+  filled_quantity: string
+  avg_fill_price: string | null
+  leverage: number
+  created_at: string
+}
+
+export async function createOrder(data: OrderCreateRequest): Promise<OrderResponse> {
+  const response = await request.post<OrderResponse>('/order/', data)
+  return response.data
+}
+
+/**
+ * 获取订单列表
+ * GET /order/
+ */
+export async function listOrders(params?: { status?: string, symbol?: string }): Promise<OrderResponse[]> {
+  const response = await request.get<OrderResponse[]>('/order/', { params })
+  return response.data
+}
+
+/**
+ * 取消订单
+ * POST /order/{id}/cancel
+ */
+export async function cancelOrder(id: number): Promise<OrderResponse> {
+  const response = await request.post<OrderResponse>(`/order/${id}/cancel`)
+  return response.data
+}

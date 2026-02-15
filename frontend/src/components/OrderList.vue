@@ -6,23 +6,12 @@
  */
 import { ref, onMounted, computed, h } from 'vue'
 import { NDataTable, NTag, NButton, NTabs, NTabPane, useMessage, NPopconfirm } from 'naive-ui'
-import request from '@/utils/request'
+import { listOrders, cancelOrder as apiCancelOrder, type OrderResponse } from '@/api/order'
 
 const message = useMessage()
 
-interface Order {
-  id: number
-  symbol: string
-  side: string
-  order_type: string
-  status: string
-  quantity: string
-  price: string | null
-  filled_quantity: string
-  avg_fill_price: string | null
-  leverage: number
-  created_at: string
-}
+// 使用统一的 OrderResponse 类型
+type Order = OrderResponse
 
 const orders = ref<Order[]>([])
 const loading = ref(false)
@@ -33,8 +22,7 @@ const activeTab = ref<'open' | 'all'>('open')
 async function fetchOrders() {
   loading.value = true
   try {
-    const resp = await request.get('/order/')
-    orders.value = resp.data
+    orders.value = await listOrders()
   } catch (e) {
     console.error('[OrderList] 获取订单失败:', e)
   } finally {
@@ -47,7 +35,7 @@ async function cancelOrder(orderId: number) {
   cancelingId.value = orderId
   
   try {
-    await request.post(`/order/${orderId}/cancel`)
+    await apiCancelOrder(orderId)
     message.success('订单已取消')
     await fetchOrders()
   } catch (e: any) {
@@ -201,7 +189,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-4" style="background: #0a0a0a; min-height: 200px;">
+  <div class="p-4" style="background: transparent; min-height: 200px;">
     <div class="flex items-center justify-between mb-4">
       <NTabs v-model:value="activeTab" type="segment" size="small">
         <NTabPane name="open" tab="挂单" />
@@ -225,7 +213,7 @@ onMounted(() => {
       size="small"
       :bordered="false"
       :theme-overrides="{
-        thColor: '#18181b',
+        thColor: 'rgba(255,255,255,0.02)',
         tdColor: 'transparent',
         thTextColor: '#9ca3af',
         tdTextColor: '#e5e7eb',

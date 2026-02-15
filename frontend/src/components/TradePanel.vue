@@ -19,7 +19,7 @@ import { NModal, NCheckbox, NSlider, useMessage } from 'naive-ui'
 import request from '@/utils/request'
 import { useWalletStore } from '@/stores/wallet'
 import { useSymbolStore } from '@/stores/symbol'
-import { previewTpSl, type TpSlPreviewResponse } from '@/api/order'
+import { previewTpSl, createOrder, type TpSlPreviewResponse } from '@/api/order'
 import { useWebSocket } from '@/composables/useWebSocket'
 
 
@@ -243,20 +243,41 @@ async function openPosition(side: 'long' | 'short') {
   loading.value = true
   
   try {
-    const payload = {
+    // 构造通用参数
+    const commonParams = {
       symbol: symbol.value,
       side: side,
       quantity: qty.toFixed(5),
-      entry_price: entryPrice.toString(),
       leverage: leverage.value,
-      margin_mode: marginMode.value,
-      reduce_only: reduceOnly.value,  // 只减仓
-      take_profit: enableTpSl.value && takeProfit.value ? takeProfit.value.toString() : null,
-      stop_loss: enableTpSl.value && stopLoss.value ? stopLoss.value.toString() : null,
+      reduce_only: reduceOnly.value,
+      take_profit: enableTpSl.value && takeProfit.value ? takeProfit.value.toString() : undefined,
+      stop_loss: enableTpSl.value && stopLoss.value ? stopLoss.value.toString() : undefined,
     }
-    
-    const resp = await request.post('/position/open', payload)
-    message.success(`${side === 'long' ? '开多' : '开空'} 成功!`)
+
+    if (orderTypeTab.value === 'limit') {
+      // ========== 限价单 (使用 Order API) ==========
+      // ⚠️ 注意: 后端 Order 系统目前不支持 margin_mode 参数，限价单将默认为 ISOLATED (逐仓)
+      if (marginMode.value === 'cross') {
+        message.warning('即将在逐仓模式下创建限价单 (系统限制)')
+      }
+      
+      await createOrder({
+        ...commonParams,
+        order_type: 'limit',
+        price: entryPrice.toString(),
+      })
+      message.success('限价单已创建')
+    } else {
+      // ========== 市价单 (使用 Position API) ==========
+      // 使用 /position/open 接口以支持 margin_mode (全仓/逐仓)
+      const payload = {
+        ...commonParams,
+        entry_price: entryPrice.toString(),
+        margin_mode: marginMode.value,
+      }
+      await request.post('/position/open', payload)
+      message.success(`${side === 'long' ? '开多' : '开空'} 成功!`)
+    }
     
     await walletStore.fetchBalance()
     await fetchExistingPosition()
@@ -267,7 +288,7 @@ async function openPosition(side: 'long' | 'short') {
     
   } catch (e: any) {
     console.error('[TradePanel] 开仓失败:', e)
-    const detail = e.response?.data?.detail || '开仓失败'
+    const detail = e.response?.data?.detail || '下单失败'
     
     // 409 Conflict = 仓位冲突
     if (e.response?.status === 409) {
@@ -608,12 +629,12 @@ onUnmounted(() => {
 <style scoped>
 .trade-panel {
   padding: 12px;
-  background: #0e0e10;
+  background: transparent;
   height: 100%;
   display: flex;
   flex-direction: column;
   font-size: 12px;
-  color: #9ca3af;
+  color: #a1a1aa;
 }
 
 /* 顶部栏 */
@@ -639,16 +660,18 @@ onUnmounted(() => {
 .leverage-btn {
   flex: 1;
   padding: 8px 12px;
-  background: #1e1e22;
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;
   color: #f5f5f5;
   font-weight: 600;
   cursor: pointer;
+  transition: all 0.2s;
 }
 
 .leverage-btn:hover {
-  background: #2a2a30;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* 现有仓位提示 */
@@ -725,11 +748,17 @@ onUnmounted(() => {
 .input-group {
   display: flex;
   align-items: center;
-  background: #18181b;
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 4px;
   margin-bottom: 8px;
   padding: 0 8px;
+  transition: border-color 0.2s;
+}
+
+.input-group:focus-within {
+  border-color: rgba(138, 43, 226, 0.5);
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .input-group .input {
