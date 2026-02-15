@@ -256,8 +256,8 @@ async def trigger_risk_check(
         risk = RiskEngine.calculate_position_risk(position, mark_price)
         
         if risk.should_liquidate:
-            async with db.begin():
-                await RiskEngine.execute_liquidation(db, position.id)
+            await RiskEngine.execute_liquidation(db, position.id)
+            await db.commit()
             liquidated_count += 1
             details.append(
                 f"Liquidated: {position.symbol} {position.side.value} "

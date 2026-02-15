@@ -137,24 +137,24 @@ async def create_order(
     ⚠️ 资金原子性: 冻结保证金和创建订单在同一事务中完成
     """
     try:
-        async with db.begin():
-            order = await OrderExecutor.create_order(
-                db=db,
-                user_id=current_user.id,
-                symbol=request.symbol,
-                side=request.side,
-                order_type=request.order_type,
-                quantity=request.quantity,
-                price=request.price,
-                trigger_price=request.trigger_price,
-                leverage=request.leverage,
-                position_side=request.position_side,
-                reduce_only=request.reduce_only,
-                stop_loss=request.stop_loss,
-                take_profit=request.take_profit,
-                note=request.note,
-            )
+        order = await OrderExecutor.create_order(
+            db=db,
+            user_id=current_user.id,
+            symbol=request.symbol,
+            side=request.side,
+            order_type=request.order_type,
+            quantity=request.quantity,
+            price=request.price,
+            trigger_price=request.trigger_price,
+            leverage=request.leverage,
+            position_side=request.position_side,
+            reduce_only=request.reduce_only,
+            stop_loss=request.stop_loss,
+            take_profit=request.take_profit,
+            note=request.note,
+        )
         
+        await db.commit()
         await db.refresh(order)
         
         return OrderResponse(
@@ -200,13 +200,13 @@ async def cancel_order(
     取消后会释放冻结的保证金
     """
     try:
-        async with db.begin():
-            order = await OrderExecutor.cancel_order(
-                db=db,
-                order_id=order_id,
-                user_id=current_user.id,
-            )
+        order = await OrderExecutor.cancel_order(
+            db=db,
+            order_id=order_id,
+            user_id=current_user.id,
+        )
         
+        await db.commit()
         await db.refresh(order)
         
         return OrderResponse(
