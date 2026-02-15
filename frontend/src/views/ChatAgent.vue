@@ -73,9 +73,10 @@ const activeConversation = computed(() =>
 )
 
 const activePersonaName = computed(() => {
-  if (!activeConversation.value) return ''
-  const p = personas.value.find((p) => p.id === activeConversation.value!.persona)
-  return p?.name || activeConversation.value!.persona
+  const conv = activeConversation.value
+  if (!conv) return ''
+  const p = personas.value.find((item: Persona) => item.id === conv.persona)
+  return p?.name || conv.persona
 })
 
 const displayMessages = computed(() => {
@@ -121,7 +122,8 @@ async function loadConversations() {
     conversations.value = await listConversations()
     // 如果有会话且没有选中的，自动选中第一个
     if (conversations.value.length > 0 && !activeConversationId.value) {
-      await selectConversation(conversations.value[0].id)
+      const first = conversations.value[0]
+      if (first) await selectConversation(first.id)
     }
   } catch (e) {
     console.error('Failed to load conversations:', e)
