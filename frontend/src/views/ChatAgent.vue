@@ -13,7 +13,7 @@
  */
 
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
-import { useMessage, useDialog } from 'naive-ui'
+import { useMessage } from 'naive-ui'
 import {
   ChatboxEllipsesOutline,
   AddOutline,
@@ -42,7 +42,6 @@ import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
 const message = useMessage()
-const dialog = useDialog()
 
 // 会话
 const conversations = ref<Conversation[]>([])
@@ -161,29 +160,23 @@ async function loadMessages(conversationId: number) {
 }
 
 async function handleDeleteConversation(id: number) {
-  dialog.warning({
-    title: '删除会话',
-    content: '确定要删除这个会话及其所有消息吗？',
-    positiveText: '删除',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        await deleteConversation(id)
-        conversations.value = conversations.value.filter((c) => c.id !== id)
-        if (activeConversationId.value === id) {
-          activeConversationId.value = conversations.value[0]?.id || null
-          if (activeConversationId.value) {
-            await loadMessages(activeConversationId.value)
-          } else {
-            messages.value = []
-          }
-        }
-        message.success('会话已删除')
-      } catch (e) {
-        message.error('删除失败')
+  if (!confirm('确定要删除这个会话及其所有消息吗？')) return
+  
+  try {
+    await deleteConversation(id)
+    conversations.value = conversations.value.filter((c) => c.id !== id)
+    if (activeConversationId.value === id) {
+      activeConversationId.value = conversations.value[0]?.id || null
+      if (activeConversationId.value) {
+        await loadMessages(activeConversationId.value)
+      } else {
+        messages.value = []
       }
-    },
-  })
+    }
+    message.success('会话已删除')
+  } catch (e) {
+    message.error('删除失败')
+  }
 }
 
 async function handleSendMessage() {
@@ -325,16 +318,13 @@ function formatTime(iso: string): string {
               size="small"
               placeholder="选择角色"
             />
-            <n-button
-              type="primary"
-              size="small"
+            <button
+              class="create-chat-btn"
               @click="handleCreateConversation"
-              :loading="loadingConversations"
-              style="margin-top: 8px; width: 100%"
+              :disabled="loadingConversations"
             >
-              <template #icon><n-icon :component="AddOutline" /></template>
               + 新建会话
-            </n-button>
+            </button>
           </div>
 
           <!-- 会话列表标题 -->
@@ -559,6 +549,38 @@ function renderMarkdown(text: string): string {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 8px;
+}
+
+.create-chat-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 16px;
+  border: 1px solid rgba(138, 43, 226, 0.5);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.3), rgba(90, 24, 154, 0.3));
+  color: #d8b4fe;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.5px;
+}
+
+.create-chat-btn:hover {
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.5), rgba(90, 24, 154, 0.5));
+  border-color: rgba(138, 43, 226, 0.8);
+  box-shadow: 0 0 16px rgba(138, 43, 226, 0.3);
+  transform: translateY(-1px);
+}
+
+.create-chat-btn:active {
+  transform: translateY(0);
+}
+
+.create-chat-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .conv-list-header {

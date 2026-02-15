@@ -62,9 +62,9 @@ const themeOverrides = {
       <NDialogProvider>
         <NGlobalStyle />
         <RouterView v-slot="{ Component }">
-          <transition name="fade" mode="out-in">
+          <Suspense>
             <component :is="Component" />
-          </transition>
+          </Suspense>
         </RouterView>
       </NDialogProvider>
     </NMessageProvider>
