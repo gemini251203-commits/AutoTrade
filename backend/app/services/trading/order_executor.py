@@ -269,6 +269,23 @@ class OrderExecutor:
         )
         await WalletManager.unfreeze_funds(db, order.user_id, margin)
         
+        # 确定交易来源 (从 order.note 解析)
+        source = "manual"
+        open_reason = None
+        if order.note:
+            note = order.note
+            if note.startswith("[Agent]"):
+                source = "agent"
+                open_reason = note[7:].strip()
+            elif note.startswith("[AutoPilot]"):
+                source = "quant"
+                open_reason = note[11:].strip()
+            elif note.startswith("[Signal]"):
+                source = "signal"
+                open_reason = note[8:].strip()
+            else:
+                open_reason = note
+        
         # 调用 PositionManager 开仓
         position = await PositionManager.open_position(
             db=db,
@@ -280,6 +297,8 @@ class OrderExecutor:
             leverage=order.leverage,
             stop_loss=order.stop_loss,
             take_profit=order.take_profit,
+            source=source,
+            open_reason=open_reason,
         )
         
         order.position_id = position.id

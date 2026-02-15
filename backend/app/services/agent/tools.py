@@ -284,6 +284,7 @@ async def place_order(
             leverage=int(leverage),
             stop_loss=sl,
             take_profit=tp,
+            note=f"[Agent] AI Agent 下单",
         )
 
         return json.dumps({
@@ -438,7 +439,7 @@ async def query_memories(
     user_id: int,
     symbol: str = "BTCUSDT",
 ) -> str:
-    """查询交易记忆"""
+    """查询交易记忆 (所有来源: 手动/AI/信号/量化)"""
     result = await db.execute(
         select(TradeMemory)
         .where(
@@ -456,16 +457,31 @@ async def query_memories(
             "message": f"暂无 {symbol} 的交易记忆",
         }, ensure_ascii=False)
 
+    source_labels = {
+        "manual": "手动", "agent": "AI Agent",
+        "signal": "信号助手", "quant": "量化策略",
+    }
+
     data = [
         {
             "symbol": m.symbol,
-            "strategy_name": m.strategy_name,
+            "source": source_labels.get(m.source, m.source) if m.source else "未知",
+            "side": m.side,
+            "entry_price": m.entry_price,
+            "exit_price": m.exit_price,
+            "leverage": m.leverage,
             "trade_result": m.trade_result,
             "pnl_pct": m.pnl_pct,
+            "pnl_usdt": m.pnl_usdt,
+            "duration_min": m.duration_minutes,
+            "close_reason": m.close_reason,
+            "had_stop_loss": m.had_stop_loss,
+            "had_take_profit": m.had_take_profit,
+            "open_reason": m.open_reason,
             "lesson": m.lesson,
-            "situation": m.situation,
             "created_at": m.created_at.isoformat() if m.created_at else "",
         }
         for m in memories
     ]
-    return json.dumps({"memories": data}, ensure_ascii=False)
+    return json.dumps({"memories": data, "total": len(data)}, ensure_ascii=False)
+

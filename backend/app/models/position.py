@@ -197,6 +197,23 @@ class Position(Base):
     )
     
     # ============================================
+    # 来源追踪 (统一记忆系统)
+    # ============================================
+    
+    source: Mapped[str] = mapped_column(
+        String(20),
+        default="manual",
+        nullable=False,
+        comment="交易来源: manual/agent/signal/quant",
+    )
+    
+    open_reason: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="开仓理由 (AI分析/策略信号/手动备注)",
+    )
+    
+    # ============================================
     # 约束
     # ============================================
     

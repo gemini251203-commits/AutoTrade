@@ -187,6 +187,8 @@ class PositionManager:
         margin_mode: MarginMode = MarginMode.ISOLATED,
         stop_loss: Optional[Decimal] = None,
         take_profit: Optional[Decimal] = None,
+        source: str = "manual",
+        open_reason: Optional[str] = None,
     ) -> Position:
         """
         开仓
@@ -366,6 +368,8 @@ class PositionManager:
             liquidation_price=liquidation_price,
             stop_loss=stop_loss,
             take_profit=take_profit,
+            source=source,
+            open_reason=open_reason,
         )
         
         db.add(position)
@@ -455,6 +459,19 @@ class PositionManager:
             position.status = PositionStatus.CLOSED
             position.closed_at = datetime.utcnow()
             position.realized_pnl = pnl
+            
+            # 🔥 统一记忆: 平仓时自动生成交易记忆
+            try:
+                from app.services.trade_journal import TradeJournal
+                await TradeJournal.record_close(
+                    db=db,
+                    position=position,
+                    pnl=pnl,
+                    close_price=close_price,
+                    close_reason="manual",
+                )
+            except Exception as e:
+                logger.warning(f"[PositionManager] TradeJournal 记录失败 (不影响平仓): {e}")
         else:
             position.size -= close_quantity
             position.margin -= margin_to_release

@@ -14,7 +14,7 @@ from typing import Optional
 
 from sqlalchemy import (
     String, Integer, Float, Text, Boolean, DateTime,
-    ForeignKey, Index, Enum as SQLEnum,
+    ForeignKey, Index, Enum as SQLEnum, Numeric,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -198,10 +198,11 @@ class StrategyLog(Base):
 
 class TradeMemory(Base):
     """
-    交易反思记忆库
+    统一交易记忆库
     
-    AI 从每笔交易中总结的经验教训
-    下次决策时自动注入给 AI 审核员参考
+    记录所有来源 (手动/AI Agent/信号助手/量化策略) 的交易记录
+    平仓时由 TradeJournal 自动生成
+    AI 查询时注入上下文参考
     """
     __tablename__ = "trade_memories"
 
@@ -211,34 +212,111 @@ class TradeMemory(Base):
         index=True,
     )
     
+    # ============ 交易标识 ============
     symbol: Mapped[str] = mapped_column(
         String(20),
         index=True,
         comment="交易对",
     )
+    source: Mapped[str] = mapped_column(
+        String(20),
+        default="manual",
+        comment="来源: manual/agent/signal/quant",
+    )
     strategy_name: Mapped[Optional[str]] = mapped_column(
         String(100),
         nullable=True,
-        comment="策略名称",
+        comment="策略名称 (量化策略/AI角色等)",
+    )
+    position_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="关联仓位 ID",
     )
     
-    # 交易结果
+    # ============ 交易参数 ============
+    side: Mapped[Optional[str]] = mapped_column(
+        String(10),
+        nullable=True,
+        comment="方向: long/short",
+    )
+    entry_price: Mapped[Optional[float]] = mapped_column(
+        Float,
+        nullable=True,
+        comment="开仓价格",
+    )
+    exit_price: Mapped[Optional[float]] = mapped_column(
+        Float,
+        nullable=True,
+        comment="平仓价格",
+    )
+    leverage: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="杠杆倍数",
+    )
+    margin_used: Mapped[Optional[float]] = mapped_column(
+        Float,
+        nullable=True,
+        comment="使用保证金 (USDT)",
+    )
+    
+    # ============ 交易结果 ============
     trade_result: Mapped[str] = mapped_column(
         String(10),
-        comment="win / loss",
+        comment="win / loss / breakeven",
     )
     pnl_pct: Mapped[float] = mapped_column(
         Float,
-        comment="盈亏百分比",
+        comment="盈亏百分比 (ROE)",
+    )
+    pnl_usdt: Mapped[Optional[float]] = mapped_column(
+        Float,
+        nullable=True,
+        comment="盈亏金额 (USDT)",
+    )
+    duration_minutes: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="持仓时长 (分钟)",
+    )
+    close_reason: Mapped[Optional[str]] = mapped_column(
+        String(30),
+        nullable=True,
+        comment="平仓原因: manual/tp_hit/sl_hit/liquidated/signal/strategy",
     )
     
-    # 反思内容  
-    situation: Mapped[str] = mapped_column(
+    # ============ 风控记录 ============
+    had_stop_loss: Mapped[Optional[bool]] = mapped_column(
+        Boolean,
+        nullable=True,
+        comment="是否设置了止损",
+    )
+    had_take_profit: Mapped[Optional[bool]] = mapped_column(
+        Boolean,
+        nullable=True,
+        comment="是否设置了止盈",
+    )
+    
+    # ============ 上下文 & 反思 ============
+    open_reason: Mapped[Optional[str]] = mapped_column(
         Text,
+        nullable=True,
+        comment="开仓理由 (AI分析/策略信号)",
+    )
+    indicators_snapshot: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="开仓时指标快照 (JSON)",
+    )
+    situation: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
         comment="当时的市场环境摘要",
     )
-    lesson: Mapped[str] = mapped_column(
+    lesson: Mapped[Optional[str]] = mapped_column(
         Text,
+        nullable=True,
         comment="经验教训 (核心记忆)",
     )
     what_went_right: Mapped[Optional[str]] = mapped_column(
@@ -257,8 +335,11 @@ class TradeMemory(Base):
 
     __table_args__ = (
         Index("ix_trade_memories_symbol", "user_id", "symbol"),
+        Index("ix_trade_memories_source", "user_id", "source"),
     )
 
     def __repr__(self):
         emoji = "✅" if self.trade_result == "win" else "❌"
-        return f"<TradeMemory {emoji} {self.symbol} {self.pnl_pct:+.1f}%>"
+        src = f"[{self.source}]" if self.source else ""
+        return f"<TradeMemory {emoji} {src} {self.symbol} {self.pnl_pct:+.1f}%>"
+
