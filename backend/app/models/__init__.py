@@ -13,6 +13,7 @@ from .market import Kline
 from .position import Position, PositionSide, PositionStatus, MarginMode
 from .grid_bot import GridBot, GridType, GridStatus, GridDirection
 from .user_ai_config import UserAIConfig, AIProvider
+from .agent import ChatConversation, ChatMessage
 
 __all__ = [
     "User",
@@ -35,5 +36,7 @@ __all__ = [
     "GridDirection",
     "UserAIConfig",
     "AIProvider",
+    "ChatConversation",
+    "ChatMessage",
 ]
 

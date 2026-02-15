@@ -15,6 +15,7 @@ const SignalAssistant = () => import('@/views/SignalAssistant.vue')
 const Wallet = () => import('@/views/Wallet.vue')
 const Admin = () => import('@/views/Admin.vue')
 const StrategyManager = () => import('@/views/StrategyManager.vue')
+const ChatAgent = () => import('@/views/ChatAgent.vue')
 
 // Route definitions
 const routes: RouteRecordRaw[] = [
@@ -58,6 +59,12 @@ const routes: RouteRecordRaw[] = [
     path: '/strategy',
     name: 'StrategyManager',
     component: StrategyManager,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/chat',
+    name: 'ChatAgent',
+    component: ChatAgent,
     meta: { requiresAuth: true },
   },
   // Catch-all redirect to dashboard

@@ -13,7 +13,7 @@ from loguru import logger
 from app.core.config import settings
 from app.core.log_config import setup_logging
 from app.db.session import init_db
-from app.api import auth, wallet, order, task, market, ai, position, risk, grid, user_config, admin, ws, strategy
+from app.api import auth, wallet, order, task, market, ai, position, risk, grid, user_config, admin, ws, strategy, agent
 from app.middleware.error_handler import setup_error_handlers
 from app.middleware.access_logger import AccessLoggerMiddleware
 from app.core.rate_limit import RateLimitMiddleware
@@ -143,6 +143,7 @@ app.include_router(user_config.router, prefix="/api/user", tags=["User Config"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(ws.router, prefix="/api/ws", tags=["WebSocket"])
 app.include_router(strategy.router, prefix="/api/strategy", tags=["Strategy"])
+app.include_router(agent.router, prefix="/api/agent", tags=["Agent"])
 
 
 @app.get("/")
