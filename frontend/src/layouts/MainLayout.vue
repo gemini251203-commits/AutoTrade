@@ -10,6 +10,7 @@ import {
   ChevronDownOutline,
   NotificationsOutline,
   LogOutOutline,
+  AnalyticsOutline,
 } from '@vicons/ionicons5'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
@@ -24,6 +25,7 @@ const walletStore = useWalletStore()
 const navItems = [
   { key: 'dashboard', label: 'Dashboard', icon: SpeedometerOutline, route: '/' },
   { key: 'signal', label: 'AI 信号助手', icon: HardwareChipOutline, route: '/signal' },
+  { key: 'strategy', label: '量化策略', icon: AnalyticsOutline, route: '/strategy' },
   { key: 'wallet', label: '钱包', icon: WalletOutline, route: '/wallet' },
   { key: 'settings', label: 'Settings', icon: SettingsOutline, route: '/settings' },
 ]
@@ -32,6 +34,7 @@ const navItems = [
 const activeNavKey = computed(() => {
   const path = route.path
   if (path === '/signal') return 'signal'
+  if (path === '/strategy') return 'strategy'
   if (path === '/settings') return 'settings'
   if (path === '/wallet') return 'wallet'
   return 'dashboard'
@@ -132,7 +135,7 @@ function handleLogout() {
           <!-- Logo Text -->
           <div class="flex items-center gap-2">
             <div class="w-2 h-2 rounded-full" style="background: #8a2be2;"></div>
-            <span class="text-white font-semibold tracking-tight">TradeTest</span>
+            <span class="text-white font-semibold tracking-tight">AutoTrade</span>
           </div>
           
           <!-- Divider -->

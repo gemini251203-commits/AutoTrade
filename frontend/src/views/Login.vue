@@ -135,7 +135,7 @@ function handleKeydown(e: KeyboardEvent) {
       <div class="text-center mb-8">
         <div class="flex items-center justify-center gap-2 mb-2">
           <div class="w-3 h-3 rounded-full" style="background: #8a2be2;"></div>
-          <span class="text-2xl font-bold text-white tracking-tight">TradeTest</span>
+          <span class="text-2xl font-bold text-white tracking-tight">AutoTrade</span>
           <span class="text-xs px-2 py-0.5 rounded" style="background: rgba(138, 43, 226, 0.2); color: #a855f7;">
             PRO
           </span>
