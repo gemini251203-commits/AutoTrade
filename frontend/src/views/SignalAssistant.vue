@@ -11,6 +11,7 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
+import MainLayout from '@/layouts/MainLayout.vue'
 import {
   NCard,
   NInput,
@@ -37,7 +38,6 @@ import {
   NAvatar,
 } from 'naive-ui'
 import { 
-  ArrowBack, 
   Send, 
   CheckmarkCircle, 
   CloseCircle, 
@@ -389,9 +389,7 @@ async function handleCancelTask(taskId: number) {
   }
 }
 
-function goBack() {
-  router.push('/')
-}
+// Removed goBack - MainLayout handles navigation
 
 function formatPrice(price: number | null): string {
   if (price === null || price === undefined) return '-'
@@ -407,17 +405,12 @@ onMounted(() => {
 </script>
 
 <template>
+  <MainLayout>
   <div class="signal-page">
     <div class="bg-glow"></div>
     
     <!-- Header -->
     <div class="page-header">
-      <NButton text @click="goBack" class="back-btn">
-        <template #icon>
-          <NIcon :component="ArrowBack" />
-        </template>
-        返回
-      </NButton>
       <div class="title-section">
         <h1 class="page-title">AI 信号助手</h1>
         <NTag size="small" type="primary" round class="ml-2">Command Center</NTag>
@@ -1087,13 +1080,13 @@ onMounted(() => {
       </NCard>
     </NModal>
   </div>
+  </MainLayout>
 </template>
 
 <style scoped>
 .signal-page {
-  min-height: 100vh;
-  background: #09090b; /* Zinc 950 */
-  padding: 32px;
+  min-height: calc(100vh - 56px);
+  padding: 24px;
   position: relative;
   overflow-x: hidden;
 }

@@ -6,6 +6,7 @@
  */
 
 import { ref, onMounted, computed } from 'vue'
+import MainLayout from '@/layouts/MainLayout.vue'
 import {
   NCard,
   NForm,
@@ -24,7 +25,7 @@ import {
   NDivider,
   NTag,
 } from 'naive-ui'
-import { ArrowBack, CloudOutline, LaptopOutline, CheckmarkCircle, AlertCircle } from '@vicons/ionicons5'
+import { CloudOutline, LaptopOutline, CheckmarkCircle, AlertCircle } from '@vicons/ionicons5'
 import { useRouter } from 'vue-router'
 import {
   getAIConfig,
@@ -157,9 +158,6 @@ async function testConnection() {
   }
 }
 
-function goBack() {
-  router.push('/')
-}
 
 // ==================== Lifecycle ====================
 
@@ -169,15 +167,10 @@ onMounted(() => {
 </script>
 
 <template>
+  <MainLayout>
   <div class="settings-page">
     <!-- Header -->
     <div class="page-header">
-      <NButton text @click="goBack">
-        <template #icon>
-          <NIcon :component="ArrowBack" />
-        </template>
-        返回
-      </NButton>
       <h1 class="page-title">设置</h1>
     </div>
 
@@ -359,13 +352,13 @@ onMounted(() => {
       </div>
     </NSpin>
   </div>
+  </MainLayout>
 </template>
 
 <style scoped>
 .settings-page {
-  min-height: 100vh;
-  background: #0a0a0a;
-  padding: 32px;
+  min-height: calc(100vh - 56px);
+  padding: 24px;
 }
 
 .page-header {
