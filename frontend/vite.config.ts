@@ -35,6 +35,7 @@ export default defineConfig({
         manualChunks: {
           'naive-ui': ['naive-ui'],
           'vendor': ['vue', 'vue-router', 'pinia'],
+          'charts': ['lightweight-charts'],
         },
       },
     },
