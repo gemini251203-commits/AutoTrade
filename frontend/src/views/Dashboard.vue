@@ -75,15 +75,16 @@ function stopResize() {
         <div class="grid grid-cols-12 gap-3 flex-1 min-h-0">
           <!-- Chart Area (9 columns) -->
           <div 
-            class="col-span-9 rounded-lg overflow-hidden glass-card"
+            class="col-span-9 rounded-xl overflow-hidden glass-panel"
+            style="background: rgba(0, 0, 0, 0.4);"
           >
             <TradingChart />
           </div>
           
           <!-- Trade Panel (3 columns) -->
           <div 
-            class="col-span-3 rounded-lg overflow-hidden overflow-y-auto glass-card"
-            style="max-height: 600px;"
+            class="col-span-3 rounded-xl overflow-hidden overflow-y-auto glass-panel"
+            style="max-height: 600px; background: rgba(0, 0, 0, 0.4);"
           >
             <TradePanel />
           </div>
@@ -91,7 +92,8 @@ function stopResize() {
         
         <!-- Bottom Section: Tabs Panel (Resizable) -->
         <div 
-          class="rounded-lg overflow-hidden flex flex-col relative glass-panel"
+          class="rounded-xl overflow-hidden flex flex-col relative glass-panel"
+          style="background: rgba(0, 0, 0, 0.4);"
           :style="{ 
             height: bottomHeight + 'px',
             transition: isResizing ? 'none' : 'height 0.2s ease'
@@ -140,7 +142,7 @@ function stopResize() {
   display: flex;
   gap: 0;
   border-bottom: 1px solid rgba(255,255,255,0.05);
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.02);
   flex-shrink: 0;
 }
 
@@ -153,14 +155,17 @@ function stopResize() {
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
+  font-weight: 500;
 }
 
 .bottom-tab:hover {
-  color: #9ca3af;
+  color: #d1d5db;
+  background: rgba(255,255,255,0.03);
 }
 
 .bottom-tab.active {
-  color: #f5f5f5;
+  color: #ffffff;
+  background: rgba(255,255,255,0.05);
 }
 
 .bottom-tab.highlight {
@@ -178,24 +183,25 @@ function stopResize() {
   left: 0;
   right: 0;
   height: 2px;
-  background: #f97316;
+  background: #8a2be2;
+  box-shadow: 0 -2px 5px rgba(138, 43, 226, 0.5);
 }
 
 .tab-content {
   /* min-height removed, handled by flex container */
   position: relative;
-  background: #09090b;
+  background: transparent; /* Changed from #09090b to transparent */
 }
 
 /* Resize Handle */
 .resize-handle {
-  height: 6px;
+  height: 8px;
   width: 100%;
   cursor: row-resize;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.02);
   border-bottom: 1px solid rgba(255,255,255,0.02);
   transition: background 0.2s;
 }
@@ -212,7 +218,7 @@ function stopResize() {
 }
 
 .resize-handle:hover .handle-bar {
-  background: rgba(255,255,255,0.3);
+  background: #8a2be2;
 }
 
 /* Custom Scrollbar for content */

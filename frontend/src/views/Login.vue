@@ -108,125 +108,150 @@ function handleKeydown(e: KeyboardEvent) {
 
 <template>
   <div 
-    class="min-h-screen flex items-center justify-center p-4"
-    style="background: #0a0a0a;"
+    class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+    style="background: black;"
   >
-    <!-- Background Grid Effect -->
-    <div 
-      class="absolute inset-0 opacity-[0.03] animate-pulse"
-      style="
-        background-image: linear-gradient(rgba(138,43,226,0.3) 1px, transparent 1px),
-                          linear-gradient(90deg, rgba(138,43,226,0.3) 1px, transparent 1px);
-        background-size: 50px 50px;
-        animation-duration: 4s;
-      "
-    ></div>
+    <!-- Background Effects -->
+    <div class="absolute inset-0 overflow-hidden pointer-events-none">
+      <div 
+        class="absolute top-0 left-1/4 w-[500px] h-[500px] rounded-full opacity-20 blur-[100px] animate-pulse"
+        style="background: #8a2be2; animation-duration: 8s;"
+      ></div>
+      <div 
+        class="absolute bottom-0 right-1/4 w-[600px] h-[600px] rounded-full opacity-10 blur-[120px] animate-pulse"
+        style="background: #00e676; animation-duration: 12s; animation-delay: 2s;"
+      ></div>
+      
+      <!-- Grid Mesh -->
+      <div 
+        class="absolute inset-0 opacity-[0.05]"
+        style="
+          background-image: linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+                            linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+          background-size: 40px 40px;
+          mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+          -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+        "
+      ></div>
+    </div>
     
     <!-- Login/Register Card -->
     <div 
-      class="relative w-full max-w-md rounded-2xl p-8 glass-panel fade-in slide-up"
+      class="relative w-full max-w-md p-8 glass-panel-heavy rounded-2xl fade-in slide-up backdrop-blur-xl shadow-2xl"
       style="
-        transition: all 0.5s ease;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.08);
       "
     >
       <!-- Logo -->
-      <div class="text-center mb-8">
-        <div class="flex items-center justify-center gap-2 mb-2">
-          <div class="w-3 h-3 rounded-full" style="background: #8a2be2;"></div>
-          <span class="text-2xl font-bold text-white tracking-tight">AutoTrade</span>
-          <span class="text-xs px-2 py-0.5 rounded" style="background: rgba(138, 43, 226, 0.2); color: #a855f7;">
-            PRO
+      <div class="text-center mb-10">
+        <div class="flex items-center justify-center gap-3 mb-3">
+          <div 
+            class="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transform rotate-3"
+            style="background: linear-gradient(135deg, #8a2be2 0%, #6d28d9 100%); box-shadow: 0 0 20px rgba(138, 43, 226, 0.4);"
+          >
+            <NIcon size="24" color="white">
+              <LogInOutline />
+            </NIcon>
+          </div>
+          <span class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 tracking-tight">AutoTrade</span>
+          <span 
+            class="text-[10px] px-1.5 py-0.5 rounded border font-mono tracking-widest uppercase" 
+            style="background: rgba(138, 43, 226, 0.1); border-color: rgba(138, 43, 226, 0.3); color: #d8b4fe;"
+          >
+            Pro
           </span>
         </div>
-        <p class="text-sm text-gray-500">{{ isLogin ? 'AI-Powered Trading Terminal' : '创建新账户' }}</p>
+        <p class="text-sm text-gray-400 font-medium tracking-wide">AI DRIVEN TRADING TERMINAL</p>
       </div>
       
       <!-- Error Message -->
       <div 
         v-if="showError && errorMessage"
-        class="mb-6 p-3 rounded-lg text-sm"
-        style="background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.2); color: #ef4444;"
+        class="mb-6 p-4 rounded-xl text-sm flex items-center gap-3 animate-shake"
+        style="background: rgba(255, 23, 68, 0.1); border: 1px solid rgba(255, 23, 68, 0.2); color: #ff5252;"
       >
+        <div class="w-1.5 h-1.5 rounded-full bg-red-500"></div>
         {{ errorMessage }}
       </div>
       
       <!-- Form -->
-      <div class="space-y-4">
+      <div class="space-y-5">
         <!-- Username -->
-        <div>
-          <label class="block text-xs text-gray-500 mb-2">用户名</label>
+        <div class="group">
+          <label class="block text-xs font-semibold text-gray-400 mb-2 ml-1 uppercase tracking-wider">Username</label>
           <div 
-            class="flex items-center gap-3 rounded-lg px-4 py-3 transition-all"
-            style="background: #0f0f14; border: 1px solid rgba(255, 255, 255, 0.1);"
+            class="flex items-center gap-3 rounded-xl px-4 py-3.5 transition-all duration-300 group-focus-within:bg-white/5"
+            style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);"
           >
-            <NIcon size="18" style="color: #6b7280;">
+            <NIcon size="20" style="color: #71717a; transition: color 0.3s;" class="group-focus-within:text-purple-400">
               <PersonOutline />
             </NIcon>
             <input
               v-model="username"
               type="text"
-              placeholder="请输入用户名"
-              class="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-gray-600"
+              placeholder="Enter your username"
+              class="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-gray-600 font-medium"
               @keydown="handleKeydown"
             />
           </div>
         </div>
         
         <!-- Email (Register only) -->
-        <div v-if="!isLogin">
-          <label class="block text-xs text-gray-500 mb-2">邮箱</label>
+        <div v-if="!isLogin" class="group">
+          <label class="block text-xs font-semibold text-gray-400 mb-2 ml-1 uppercase tracking-wider">Email</label>
           <div 
-            class="flex items-center gap-3 rounded-lg px-4 py-3 transition-all"
-            style="background: #0f0f14; border: 1px solid rgba(255, 255, 255, 0.1);"
+            class="flex items-center gap-3 rounded-xl px-4 py-3.5 transition-all duration-300 group-focus-within:bg-white/5"
+            style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);"
           >
-            <NIcon size="18" style="color: #6b7280;">
+            <NIcon size="20" style="color: #71717a; transition: color 0.3s;" class="group-focus-within:text-purple-400">
               <MailOutline />
             </NIcon>
             <input
               v-model="email"
               type="email"
-              placeholder="请输入邮箱"
-              class="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-gray-600"
+              placeholder="Enter your email"
+              class="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-gray-600 font-medium"
               @keydown="handleKeydown"
             />
           </div>
         </div>
         
         <!-- Password -->
-        <div>
-          <label class="block text-xs text-gray-500 mb-2">密码</label>
+        <div class="group">
+          <label class="block text-xs font-semibold text-gray-400 mb-2 ml-1 uppercase tracking-wider">Password</label>
           <div 
-            class="flex items-center gap-3 rounded-lg px-4 py-3 transition-all"
-            style="background: #0f0f14; border: 1px solid rgba(255, 255, 255, 0.1);"
+            class="flex items-center gap-3 rounded-xl px-4 py-3.5 transition-all duration-300 group-focus-within:bg-white/5"
+            style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);"
           >
-            <NIcon size="18" style="color: #6b7280;">
+            <NIcon size="20" style="color: #71717a; transition: color 0.3s;" class="group-focus-within:text-purple-400">
               <LockClosedOutline />
             </NIcon>
             <input
               v-model="password"
               type="password"
-              placeholder="请输入密码"
-              class="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-gray-600"
+              placeholder="Enter your password"
+              class="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-gray-600 font-medium"
               @keydown="handleKeydown"
             />
           </div>
         </div>
         
         <!-- Confirm Password (Register only) -->
-        <div v-if="!isLogin">
-          <label class="block text-xs text-gray-500 mb-2">确认密码</label>
+        <div v-if="!isLogin" class="group">
+          <label class="block text-xs font-semibold text-gray-400 mb-2 ml-1 uppercase tracking-wider">Confirm Password</label>
           <div 
-            class="flex items-center gap-3 rounded-lg px-4 py-3 transition-all"
-            style="background: #0f0f14; border: 1px solid rgba(255, 255, 255, 0.1);"
+            class="flex items-center gap-3 rounded-xl px-4 py-3.5 transition-all duration-300 group-focus-within:bg-white/5"
+            style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);"
           >
-            <NIcon size="18" style="color: #6b7280;">
+            <NIcon size="20" style="color: #71717a; transition: color 0.3s;" class="group-focus-within:text-purple-400">
               <LockClosedOutline />
             </NIcon>
             <input
               v-model="confirmPassword"
               type="password"
-              placeholder="再次输入密码"
-              class="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-gray-600"
+              placeholder="Confirm your password"
+              class="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-gray-600 font-medium"
               @keydown="handleKeydown"
             />
           </div>
@@ -236,65 +261,69 @@ function handleKeydown(e: KeyboardEvent) {
         <button
           @click="handleSubmit"
           :disabled="authStore.loading || loading"
-          class="w-full py-3.5 rounded-lg font-medium text-white flex items-center justify-center gap-2 transition-all mt-6"
+          class="w-full py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all mt-8 relative overflow-hidden group"
           :style="{
-            background: (authStore.loading || loading) ? '#5a189a' : 'linear-gradient(135deg, #8a2be2 0%, #5a189a 100%)',
-            boxShadow: (authStore.loading || loading) ? 'none' : '0 4px 20px rgba(138, 43, 226, 0.4)',
+            background: (authStore.loading || loading) ? '#3f3f46' : 'linear-gradient(135deg, #8a2be2 0%, #7c3aed 100%)',
+            boxShadow: (authStore.loading || loading) ? 'none' : '0 10px 30px -10px rgba(138, 43, 226, 0.6)',
             cursor: (authStore.loading || loading) ? 'not-allowed' : 'pointer',
+            opacity: (authStore.loading || loading) ? '0.7' : '1',
           }"
         >
-          <NSpin v-if="authStore.loading || loading" size="small" />
+          <!-- Shiny Effect -->
+          <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+          
+          <NSpin v-if="authStore.loading || loading" size="small" stroke="#ffffff" />
           <template v-else>
-            <NIcon size="18">
+            <span class="tracking-wide">{{ isLogin ? 'LOGIN' : 'CREATE ACCOUNT' }}</span>
+            <NIcon size="18" class="group-hover:translate-x-1 transition-transform">
               <component :is="isLogin ? LogInOutline : PersonAddOutline" />
             </NIcon>
-            {{ isLogin ? '登录' : '注册账户' }}
           </template>
         </button>
       </div>
       
       <!-- Toggle Mode -->
-      <div class="mt-6 text-center">
+      <div class="mt-8 text-center">
         <button 
           @click="toggleMode"
-          class="text-sm text-gray-500 hover:text-purple-400 transition-colors"
+          class="text-sm text-gray-500 hover:text-white transition-colors duration-300 flex items-center justify-center gap-2 mx-auto"
         >
-          {{ isLogin ? '没有账户？点击注册' : '已有账户？点击登录' }}
+          {{ isLogin ? 'New to AutoTrade?' : 'Already have an account?' }}
+          <span class="text-purple-400 font-medium">{{ isLogin ? 'Register Now' : 'Sign In' }}</span>
         </button>
       </div>
       
       <!-- Footer -->
-      <div v-if="isLogin" class="mt-8 text-center">
-        <p class="text-xs text-gray-600">
-          默认账户: <span class="text-gray-500">admin / admin</span>
+      <div v-if="isLogin" class="mt-8 pt-6 border-t border-white/5 text-center">
+        <p class="text-[10px] text-gray-600 uppercase tracking-widest">
+          Default Access: <span class="text-gray-400 font-mono bg-white/5 px-2 py-1 rounded">admin / admin</span>
         </p>
       </div>
-      
-      <!-- Decorative Elements -->
-      <div 
-        class="absolute -top-20 -right-20 w-40 h-40 rounded-full opacity-20 blur-3xl"
-        style="background: #8a2be2;"
-      ></div>
-      <div 
-        class="absolute -bottom-20 -left-20 w-40 h-40 rounded-full opacity-10 blur-3xl"
-        style="background: #00d4ff;"
-      ></div>
     </div>
     
     <!-- Version -->
-    <div class="absolute bottom-4 text-xs font-mono text-gray-700">
-      v1.0.0 | Cyberpunk Finance Edition
+    <div class="fixed bottom-6 text-[10px] font-mono text-gray-700 tracking-widest opacity-50">
+      v1.0.0 • SYSTEM STATUS: ONLINE
     </div>
   </div>
 </template>
 
 <style scoped>
-/* Focus state for inputs */
-input:focus {
-  outline: none;
-}
-
+/* Scoped Focus styles */
 div:has(> input:focus) {
   border-color: #8a2be2 !important;
+  background: rgba(138, 43, 226, 0.05) !important;
+  box-shadow: 0 0 0 1px rgba(138, 43, 226, 0.2);
+}
+
+.animate-shake {
+  animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@keyframes shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+  40%, 60% { transform: translate3d(4px, 0, 0); }
 }
 </style>

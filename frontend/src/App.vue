@@ -13,44 +13,52 @@ onMounted(() => {
 // Custom theme overrides for cyberpunk style
 const themeOverrides = {
   common: {
-    primaryColor: '#8a2be2',
-    primaryColorHover: '#9d4ede',
+    primaryColor: '#8a2be2', // Electric Purple
+    primaryColorHover: '#a855f7',
     primaryColorPressed: '#7025c2',
     primaryColorSuppl: '#8a2be2',
-    successColor: '#00c853',
-    successColorHover: '#00e676',
-    errorColor: '#ff4757',
-    errorColorHover: '#ff6b7a',
-    borderRadius: '8px',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    inputColor: 'rgba(20, 20, 30, 0.6)',
-    inputColorDisabled: 'rgba(20, 20, 30, 0.3)',
-    tableColor: 'rgba(20, 20, 30, 0.4)',
-    cardColor: 'rgba(20, 20, 30, 0.6)',
-    modalColor: 'rgba(20, 20, 30, 0.8)',
-    bodyColor: '#0a0a0f',
-    popoverColor: 'rgba(20, 20, 30, 0.9)',
+    successColor: '#00e676', // Neo Green
+    successColorHover: '#69f0ae',
+    warningColor: '#ffeb3b',
+    errorColor: '#ff1744', // Neo Red
+    errorColorHover: '#ff5252',
     textColor1: '#ffffff',
-    textColor2: '#9ca3af',
-    textColor3: '#6b7280',
+    textColor2: '#a1a1aa', // Zinc 400
+    textColor3: '#52525b', // Zinc 600
+    bodyColor: '#000000', // Pitch Black
+    cardColor: '#18181b', // Zinc 900
+    modalColor: '#18181b',
+    popoverColor: '#18181b',
+    borderRadius: '12px',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    inputColor: 'rgba(255, 255, 255, 0.03)',
+    inputColorDisabled: 'rgba(255, 255, 255, 0.01)',
   },
   Button: {
     textColorPrimary: '#ffffff',
-    textColorSuccess: '#ffffff',
+    textColorSuccess: '#000000',
     textColorError: '#ffffff',
+    borderRadiusMedium: '8px',
+    fontWeight: '600',
   },
   Input: {
-    color: '#0f0f18',
-    colorFocus: '#0f0f18',
-    border: '1px solid rgba(255,255,255,0.1)',
+    color: 'rgba(255, 255, 255, 0.03)',
+    colorFocus: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
     borderFocus: '1px solid #8a2be2',
+    borderRadius: '8px',
     textColor: '#ffffff',
-    placeholderColor: '#4b5563',
+    placeholderColor: '#52525b',
+    boxShadowFocus: '0 0 0 2px rgba(138, 43, 226, 0.2)',
+  },
+  Card: {
+    color: 'rgba(24, 24, 27, 0.6)',
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   Tabs: {
-    tabTextColor: '#6b7280',
+    tabTextColor: '#71717a',
     tabTextColorActive: '#ffffff',
-    tabTextColorHover: '#9ca3af',
+    tabTextColorHover: '#a1a1aa',
     barColor: '#8a2be2',
   },
 }
@@ -72,13 +80,40 @@ const themeOverrides = {
 </template>
 
 <style>
-/* Global anti-flash styles */
+/* Global anti-flash and base styles */
 html, body, #app {
-  background: #0a0a0a !important;
+  background: #000000 !important;
   height: 100%;
   margin: 0;
+  color: #ffffff;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* Glassmorphism Utilities */
+.glass-panel {
+  background: rgba(24, 24, 27, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-panel-heavy {
+  background: rgba(24, 24, 27, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-light {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Transitions */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s ease;
@@ -87,5 +122,37 @@ html, body, #app {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Gradient Text */
+.text-gradient {
+  background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-primary {
+  background: linear-gradient(135deg, #ae69ff 0%, #8a2be2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 </style>

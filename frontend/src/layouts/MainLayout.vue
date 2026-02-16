@@ -58,14 +58,11 @@ function handleNav(item: typeof navItems[0]) {
 
 // 🔍 调试: 组件挂载时加载钱包数据
 onMounted(async () => {
-
   await walletStore.fetchBalance()
-
 })
 
 // Handle logout
 function handleLogout() {
-
   authStore.logout()
   walletStore.reset()
   router.push('/login')
@@ -73,166 +70,129 @@ function handleLogout() {
 </script>
 
 <template>
-  <div class="flex h-screen" style="background: #0b0b0f;">
+  <div class="flex h-screen overflow-hidden bg-black text-white selection:bg-purple-500/30">
+    <!-- Background Gradient Mesh -->
+    <div class="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+      <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-purple-900/20 blur-[120px]"></div>
+      <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-blue-900/10 blur-[120px]"></div>
+    </div>
+    
     <!-- Sidebar -->
     <aside 
-      class="flex flex-col w-16 py-4"
-      style="background: #0b0b0f; border-right: 1px solid rgba(255,255,255,0.05);"
+      class="relative z-20 flex flex-col w-20 py-6 items-center border-r border-white/5 bg-black/40 backdrop-blur-xl transition-all duration-300 hover:w-20"
     >
       <!-- Logo -->
-      <div class="flex items-center justify-center mb-8">
-        <div 
-          class="w-9 h-9 rounded-lg flex items-center justify-center"
-          style="background: linear-gradient(135deg, #8a2be2 0%, #5a189a 100%);"
-        >
-          <span class="text-white font-bold text-sm">AT</span>
-        </div>
+      <div class="mb-10 w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#8a2be2] to-[#6d28d9] shadow-[0_0_15px_rgba(138,43,226,0.5)]">
+        <span class="font-bold text-white text-sm">AT</span>
       </div>
       
-      <!-- Navigation Icons -->
-      <nav class="flex-1 flex flex-col items-center gap-1">
+      <!-- Nagivation -->
+      <nav class="flex-1 flex flex-col items-center gap-3 w-full px-2">
         <NTooltip 
           v-for="item in navItems" 
           :key="item.key"
           placement="right"
           :show-arrow="false"
+          trigger="hover"
         >
           <template #trigger>
             <button
               @click="handleNav(item)"
-              class="w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-150"
-              :style="{
-                background: activeNavKey === item.key ? 'rgba(138, 43, 226, 0.15)' : 'transparent',
-                color: activeNavKey === item.key ? '#a855f7' : '#6b7280',
-              }"
+              class="group relative w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300"
+              :class="activeNavKey === item.key ? 'bg-white/10 text-purple-400' : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'"
             >
-              <NIcon size="20">
+              <!-- Active Indicator Line -->
+              <div 
+                v-if="activeNavKey === item.key"
+                class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-purple-500 rounded-r-full shadow-[0_0_10px_#a855f7]"
+              ></div>
+              
+              <!-- Icon -->
+              <NIcon size="22" class="transition-transform group-hover:scale-110 group-active:scale-95">
                 <component :is="item.icon" />
               </NIcon>
             </button>
           </template>
-          <span class="text-xs">{{ item.label }}</span>
+          <span class="font-medium">{{ item.label }}</span>
         </NTooltip>
       </nav>
       
-      <!-- Bottom: Logout -->
-      <div class="flex flex-col items-center gap-2 mt-auto">
+      <!-- Bottom Actions -->
+      <div class="mt-auto flex flex-col gap-4 mb-2">
+        <div class="w-8 h-[1px] bg-white/10 mx-auto"></div>
         <NTooltip placement="right" :show-arrow="false">
           <template #trigger>
             <button 
               @click="handleLogout"
-              class="w-10 h-10 rounded-lg flex items-center justify-center transition-colors hover:bg-red-500/10"
-              style="color: #6b7280;"
+              class="w-12 h-12 rounded-xl flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
             >
-              <NIcon size="20">
+              <NIcon size="22">
                 <LogOutOutline />
               </NIcon>
             </button>
           </template>
-          <span class="text-xs">Logout</span>
+          <span>退出登录</span>
         </NTooltip>
       </div>
     </aside>
     
-    <!-- Main Content -->
-    <div class="flex-1 flex flex-col overflow-hidden">
+    <!-- Main Area -->
+    <div class="relative z-10 flex-1 flex flex-col h-full bg-transparent">
       <!-- Header -->
       <header 
-        class="flex items-center justify-between px-6 h-14"
-        style="background: transparent; border-bottom: 1px solid rgba(255,255,255,0.05);"
+        class="h-16 px-8 flex items-center justify-between border-b border-white/5 bg-black/20 backdrop-blur-md"
       >
-        <!-- Left: Logo & Equity -->
-        <div class="flex items-center gap-8">
-          <!-- Logo Text -->
-          <div class="flex items-center gap-2">
-            <div class="w-2 h-2 rounded-full" style="background: #8a2be2;"></div>
-            <span class="text-white font-semibold tracking-tight">AutoTrade</span>
+        <!-- Left: Branding & Equity -->
+        <div class="flex items-center gap-6">
+          <div class="flex flex-col">
+            <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">Total Equity</span>
+            <div class="text-xl font-bold font-mono text-white tracking-tight flex items-baseline gap-2">
+              {{ walletStore.formattedEquity }} <span class="text-sm text-gray-400 font-normal">USDT</span>
+            </div>
           </div>
           
-          <!-- Divider -->
-          <div class="w-px h-6" style="background: rgba(255,255,255,0.1);"></div>
+          <div class="h-8 w-[1px] bg-white/10"></div>
           
-          <!-- Total Equity (Real Data from Store) -->
-          <div class="flex items-center gap-6">
-            <div>
-              <div class="text-xs text-gray-500">Total Equity</div>
-              <div class="text-lg font-semibold font-mono text-white">
-                {{ walletStore.formattedEquity }} USDT
-              </div>
-            </div>
-            
-            <!-- Realized PnL (历史累计已实现盈亏) -->
-            <div>
-              <div class="text-xs text-gray-500">已实现盈亏</div>
-              <div class="flex items-center gap-2">
-                <span 
-                  class="font-mono text-sm"
-                  :style="{ color: walletStore.isPnlPositive ? '#22c55e' : '#ef4444' }"
-                >
-                  {{ walletStore.formattedPnl }} USDT
-                </span>
-                <span 
-                  class="text-xs px-1.5 py-0.5 rounded font-mono"
-                  :style="{ 
-                    background: walletStore.isPnlPositive ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                    color: walletStore.isPnlPositive ? '#22c55e' : '#ef4444',
-                  }"
-                >
-                  {{ walletStore.pnlPercent }}
-                </span>
-              </div>
-            </div>
-            
-            <!-- Available Balance (Real Data from Store) -->
-            <div>
-              <div class="text-xs text-gray-500">可用余额</div>
-              <div class="font-mono text-sm text-gray-300">
-                {{ walletStore.formattedBalance }} USDT
-              </div>
+          <!-- PnL -->
+          <div class="flex flex-col">
+            <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">Realized PnL</span>
+            <div class="flex items-center gap-2">
+              <span 
+                class="font-mono font-medium"
+                :class="walletStore.isPnlPositive ? 'text-[#00e676]' : 'text-[#ff1744]'"
+              >
+                {{ walletStore.formattedPnl }}
+              </span>
+              <span 
+                class="text-xs px-1.5 rounded font-mono font-bold"
+                :class="walletStore.isPnlPositive ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]'"
+              >
+                {{ walletStore.pnlPercent }}
+              </span>
             </div>
           </div>
         </div>
         
-        <!-- Right: Status & User -->
-        <div class="flex items-center gap-4">
-          <!-- Connection Status -->
-          <div class="flex items-center gap-2">
-            <span class="relative flex h-1.5 w-1.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style="background: #22c55e;"></span>
-              <span class="relative inline-flex rounded-full h-1.5 w-1.5" style="background: #22c55e;"></span>
-            </span>
-            <span class="text-xs text-gray-500">Connected</span>
-          </div>
-          
-          <!-- Network Selector -->
-          <button 
-            class="px-3 py-1.5 rounded-md text-xs flex items-center gap-2 transition-colors"
-            style="background: rgba(255,255,255,0.03); color: #9ca3af; border: 1px solid rgba(255,255,255,0.05);"
-          >
-            <span class="w-1.5 h-1.5 rounded-full" style="background: #f7931a;"></span>
-            Mainnet
-            <NIcon size="12" style="color: #6b7280;">
-              <ChevronDownOutline />
-            </NIcon>
-          </button>
-          
-          <!-- Notifications -->
-          <button 
-            class="w-8 h-8 rounded-md flex items-center justify-center transition-colors"
-            style="color: #6b7280;"
-          >
-            <NIcon size="18">
-              <NotificationsOutline />
-            </NIcon>
-          </button>
-          
-          <!-- Account Menu -->
-          <AccountMenu />
+        <!-- Right: Status -->
+        <div class="flex items-center gap-5">
+           <!-- Network Status -->
+           <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/5">
+             <div class="relative flex h-2 w-2">
+               <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+               <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+             </div>
+             <span class="text-xs font-medium text-gray-300">Live Connection</span>
+           </div>
+
+           <div class="h-6 w-[1px] bg-white/10"></div>
+           
+           <!-- Account -->
+           <AccountMenu />
         </div>
       </header>
       
-      <!-- Page Content -->
-      <main class="flex-1 overflow-auto p-4" style="background: #0b0b0f;">
+      <!-- Route Content -->
+      <main class="flex-1 overflow-auto p-6 scroll-smooth">
         <slot />
       </main>
     </div>
@@ -240,20 +200,17 @@ function handleLogout() {
 </template>
 
 <style scoped>
-/* Subtle scrollbar */
+/* Scoped Scrollbar */
 main::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
-
 main::-webkit-scrollbar-track {
   background: transparent;
 }
-
 main::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+  border-radius: 99px;
 }
-
 main::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
