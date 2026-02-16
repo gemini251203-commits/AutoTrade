@@ -113,32 +113,14 @@ def setup_logging():
     if settings.env_type == "production":
         logger.add(
             str(LOG_DIR / "app.json"),
-            format=_json_format,
             level="INFO",
             rotation="10 MB",
             retention="30 days",
             compression="gz",
             encoding="utf-8",
             enqueue=True,
+            serialize=True,  # loguru 内置 JSON 序列化
         )
     
     logger.info(f"[LogConfig] Logging initialized | dir={LOG_DIR} | env={settings.env_type}")
 
-
-def _json_format(record) -> str:
-    """生成 JSON 格式日志行（兼容 ELK/Loki）"""
-    import json
-    
-    log_entry = {
-        "timestamp": record["time"].strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-        "level": record["level"].name,
-        "module": record["name"],
-        "line": record["line"],
-        "message": record["message"],
-    }
-    
-    # 如果有异常信息
-    if record["exception"]:
-        log_entry["exception"] = str(record["exception"])
-    
-    return json.dumps(log_entry, ensure_ascii=False) + "\n"
