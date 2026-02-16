@@ -376,12 +376,44 @@ class AIBrain:
         except Exception as e:
             logger.warning(f"[AIBrain] Failed to get grids: {e}")
         
-        # 6. 获取技术指标
+        # 6. 获取技术指标 (直接从 Binance API 获取 K 线计算)
         try:
-            from app.services.indicator_service import indicator_service
-            indicators = await indicator_service.get_or_calculate(symbol, "1h")
-            context.indicators = indicators
-            logger.debug(f"[AIBrain] Loaded indicators for {symbol}")
+            from app.core.network import net_manager
+            async with net_manager.get_client(timeout=15.0) as http_client:
+                resp = await http_client.get(
+                    "https://fapi.binance.com/fapi/v1/klines",
+                    params={"symbol": symbol.upper(), "interval": "1h", "limit": 100},
+                )
+                if resp.status_code == 200:
+                    raw = resp.json()
+                    if raw and len(raw) >= 15:
+                        closes = [float(k[4]) for k in raw]
+
+                        # RSI(14)
+                        changes = [closes[i] - closes[i-1] for i in range(1, len(closes))]
+                        gains = [c if c > 0 else 0 for c in changes[-14:]]
+                        losses = [-c if c < 0 else 0 for c in changes[-14:]]
+                        avg_gain = sum(gains) / 14
+                        avg_loss = sum(losses) / 14
+                        rsi = round(100 - (100 / (1 + avg_gain / avg_loss)), 2) if avg_loss > 0 else 100.0
+
+                        # MA
+                        ma7 = round(sum(closes[-7:]) / 7, 2)
+                        ma25 = round(sum(closes[-25:]) / 25, 2) if len(closes) >= 25 else None
+
+                        current = closes[-1]
+                        trend = "neutral"
+                        if ma7 and ma25:
+                            if rsi > 50 and current > ma7 > ma25:
+                                trend = "bullish"
+                            elif rsi < 50 and current < ma7 < ma25:
+                                trend = "bearish"
+
+                        context.indicators = {
+                            "indicators": {"rsi": rsi, "ma7": ma7, "ma25": ma25},
+                            "trend": trend,
+                        }
+                        logger.info(f"[AIBrain] Indicators for {symbol}: RSI={rsi}, MA7={ma7}, trend={trend}")
         except Exception as e:
             logger.warning(f"[AIBrain] Failed to get indicators: {e}")
         
