@@ -255,13 +255,26 @@ async def place_order(
             )
             wallet = wallet_result.scalar_one_or_none()
             if wallet and margin > float(wallet.balance):
+                available = float(wallet.balance)
+                # 计算建议的修正参数
+                safe_margin = available * 0.3  # 使用30%可用余额
+                safe_notional = safe_margin * leverage
+                safe_qty = safe_notional / current_price
+                # 按步长取整
+                safe_qty = round_quantity_up(symbol, safe_qty)
                 return json.dumps({
                     "success": False, 
                     "error": (
                         f"保证金不足: 需要 ${margin:,.2f} (名义${notional:,.2f} / {leverage}x), "
-                        f"但可用余额仅 ${float(wallet.balance):,.2f}。\n"
-                        f"建议提高杠杆或减少数量。"
-                    )
+                        f"但可用余额仅 ${available:,.2f}。"
+                    ),
+                    "suggested_fix": {
+                        "quantity": safe_qty,
+                        "leverage": leverage,
+                        "margin": round(safe_margin, 2),
+                        "notional": round(safe_notional, 2),
+                    },
+                    "hint": f"建议使用 quantity={safe_qty}, leverage={leverage} 重试下单。",
                 }, ensure_ascii=False)
 
         # ==================== 通过预检验, 执行下单 ====================

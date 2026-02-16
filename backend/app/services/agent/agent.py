@@ -114,23 +114,15 @@ async def chat_stream(
     """
     处理用户消息并流式返回 AI 回复
 
-    这是 Agent 的主入口. 使用 SSE 格式返回事件:
-    - {"type": "text", "content": "..."}
-    - {"type": "tool_call", "tool": "...", "args": {...}}
-    - {"type": "tool_result", "tool": "...", "result": "..."}
-    - {"type": "done", "full_reply": "..."}
-    - {"type": "error", "message": "..."}
-
-    Args:
-        db: 数据库会话
-        user_id: 用户 ID
-        conversation_id: 对话 ID
-        user_message: 用户消息
-        persona: AI 角色
+    支持多轮工具调用 (最多 5 轮):
+    AI 可以连续调用多个工具完成复杂任务，如:
+    get_balance() → get_price() → place_order() → 失败后自动调整参数重试
 
     Yields:
         SSE 事件字典
     """
+    MAX_TOOL_ROUNDS = 5
+
     try:
         # 1. 保存用户消息
         await memory.save_message(db, conversation_id, "user", user_message)
@@ -153,72 +145,98 @@ async def chat_stream(
         # 6. 获取 AI Provider
         provider = await AIBrain.get_provider(db, user_id)
 
-        # 7. 第一轮: 发送消息给 AI
-        response = await provider.chat(
-            messages=messages,
-            temperature=0.7,
-            max_tokens=2000,
-        )
-        ai_content = response.content
+        # 7. 多轮工具调用循环
+        final_content = ""
+        tool_calls_log = []  # 记录所有工具调用
 
-        # 8. 检查是否包含工具调用
-        tool_match = TOOL_CALL_PATTERN.search(ai_content)
-
-        if tool_match:
-            tool_name = tool_match.group(1)
-            tool_args_str = tool_match.group(2)
-            tool_args = _parse_tool_args(tool_args_str)
-
-            # 发送工具调用事件
-            yield {"type": "tool_call", "tool": tool_name, "args": tool_args}
-
-            # 执行工具
-            tool_result = await execute_tool(tool_name, tool_args, db, user_id)
-
-            # 发送工具结果事件
-            yield {"type": "tool_result", "tool": tool_name, "result": tool_result}
-
-            # 保存工具调用记录
-            await memory.save_message(
-                db, conversation_id, "assistant", ai_content,
-                tool_name=tool_name,
-                tool_args=json.dumps(tool_args, ensure_ascii=False),
-                tool_result=tool_result,
-            )
-
-            # 9. 第二轮: 将工具结果反馈给 AI
-            messages.append(ProviderMessage(role="assistant", content=ai_content))
-            messages.append(ProviderMessage(
-                role="user",
-                content=f"[TOOL_RESULT: {tool_name}]\n{tool_result}\n[/TOOL_RESULT]\n\n请根据工具返回的结果，用自然语言回复用户。不要再调用工具。"
-            ))
-
-            response2 = await provider.chat(
+        for round_i in range(MAX_TOOL_ROUNDS + 1):
+            response = await provider.chat(
                 messages=messages,
                 temperature=0.7,
                 max_tokens=2000,
             )
-            final_content = response2.content
+            ai_content = response.content
 
-            # 清理可能残留的工具标记
-            final_content = TOOL_CALL_PATTERN.sub("", final_content).strip()
-        else:
-            final_content = ai_content
+            # 查找所有工具调用
+            tool_matches = TOOL_CALL_PATTERN.findall(ai_content)
 
-        # 10. 流式输出最终回复 (模拟打字机效果)
-        chunk_size = 3  # 每次发送 3 个字符
+            if not tool_matches:
+                # 没有工具调用 → 这就是最终回复
+                final_content = ai_content
+                break
+
+            if round_i >= MAX_TOOL_ROUNDS:
+                # 超过最大轮次，强制结束
+                final_content = TOOL_CALL_PATTERN.sub("", ai_content).strip()
+                if not final_content:
+                    final_content = "已达到最大操作轮次，请查看上方的工具执行结果。"
+                break
+
+            # 执行所有工具调用
+            results_text_parts = []
+            for tool_name, args_str in tool_matches:
+                tool_args = _parse_tool_args(args_str)
+
+                # 发送工具调用事件
+                yield {"type": "tool_call", "tool": tool_name, "args": tool_args}
+
+                # 执行工具
+                tool_result = await execute_tool(tool_name, tool_args, db, user_id)
+
+                # 发送工具结果事件
+                yield {"type": "tool_result", "tool": tool_name, "result": tool_result}
+
+                results_text_parts.append(
+                    f"[TOOL_RESULT: {tool_name}]\n{tool_result}\n[/TOOL_RESULT]"
+                )
+                tool_calls_log.append({
+                    "tool": tool_name,
+                    "args": tool_args,
+                    "result": tool_result,
+                })
+
+            # 将工具结果反馈给 AI，进入下一轮
+            messages.append(ProviderMessage(role="assistant", content=ai_content))
+            all_results = "\n\n".join(results_text_parts)
+            messages.append(ProviderMessage(
+                role="user",
+                content=(
+                    f"{all_results}\n\n"
+                    f"请根据以上工具结果继续。"
+                    f"如果需要额外操作（如下单），继续使用 [TOOL_CALL: ...] 调用工具。"
+                    f"如果所有操作已完成，直接用自然语言总结结果给用户。"
+                ),
+            ))
+
+        # 清理可能残留的工具标记
+        final_content = TOOL_CALL_PATTERN.sub("", final_content).strip()
+
+        # 保存工具调用记录 (第一次工具调用)
+        if tool_calls_log:
+            first = tool_calls_log[0]
+            await memory.save_message(
+                db, conversation_id, "assistant",
+                f"[执行了 {len(tool_calls_log)} 个操作]",
+                tool_name=first["tool"],
+                tool_args=json.dumps(first["args"], ensure_ascii=False),
+                tool_result=first["result"],
+            )
+
+        # 8. 流式输出最终回复 (模拟打字机效果)
+        chunk_size = 3
         for i in range(0, len(final_content), chunk_size):
             chunk = final_content[i:i + chunk_size]
             yield {"type": "text", "content": chunk}
 
-        # 11. 保存 AI 最终回复
+        # 9. 保存 AI 最终回复
         await memory.save_message(db, conversation_id, "assistant", final_content)
         await db.commit()
 
-        # 12. 完成
+        # 10. 完成
         yield {"type": "done", "full_reply": final_content}
 
     except Exception as e:
         logger.error(f"[Agent] chat_stream error: {e}")
         await db.rollback()
         yield {"type": "error", "message": f"AI 处理出错: {str(e)}"}
+
