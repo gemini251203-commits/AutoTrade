@@ -588,24 +588,23 @@ function renderMarkdown(text: string): string {
 
 .create-chat-btn {
   width: 100%;
-  margin-top: 8px;
-  padding: 8px 16px;
-  border: 1px solid rgba(138, 43, 226, 0.5);
-  border-radius: 8px;
-  background: linear-gradient(135deg, rgba(138, 43, 226, 0.3), rgba(90, 24, 154, 0.3));
-  color: #d8b4fe;
+  margin-top: 12px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  color: white;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   letter-spacing: 0.5px;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
 }
 
 .create-chat-btn:hover {
-  background: linear-gradient(135deg, rgba(138, 43, 226, 0.5), rgba(90, 24, 154, 0.5));
-  border-color: rgba(138, 43, 226, 0.8);
-  box-shadow: 0 0 16px rgba(138, 43, 226, 0.3);
-  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+  transform: translateY(-2px);
 }
 
 .create-chat-btn:active {
@@ -613,9 +612,10 @@ function renderMarkdown(text: string): string {
 }
 
 .create-chat-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+  filter: grayscale(100%);
 }
 
 .conv-list-header {
@@ -649,8 +649,9 @@ function renderMarkdown(text: string): string {
 }
 
 .conversation-item.active {
-  background: linear-gradient(135deg, rgba(167, 139, 250, 0.15), rgba(129, 140, 248, 0.1));
-  border: 1px solid rgba(167, 139, 250, 0.2);
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.1), rgba(139, 92, 246, 0.05));
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-left: 3px solid #8b5cf6;
 }
 
 .conv-icon {
@@ -765,15 +766,26 @@ function renderMarkdown(text: string): string {
 }
 
 .msg-avatar {
-  font-size: 24px;
+  font-size: 14px;
+  font-weight: 700;
   flex-shrink: 0;
   width: 36px;
   height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.avatar-user {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+}
+
+.avatar-ai {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
 }
 
 .msg-bubble {
@@ -784,17 +796,19 @@ function renderMarkdown(text: string): string {
 }
 
 .message.user .msg-bubble {
-  background: linear-gradient(135deg, #7c3aed, #6366f1);
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
   color: #fff;
-  border-bottom-right-radius: 4px;
+  border-top-right-radius: 4px;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
 }
 
 .message.assistant .msg-bubble {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-bottom-left-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top-left-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .msg-content {

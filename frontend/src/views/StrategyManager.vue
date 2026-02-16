@@ -235,31 +235,30 @@ onMounted(() => {
         </div>
         <button
           @click="openCreateModal()"
-          class="px-4 py-2 rounded-lg text-white text-sm font-medium flex items-center gap-2 transition-all"
-          style="background: linear-gradient(135deg, #8a2be2, #5a189a); box-shadow: 0 2px 12px rgba(138,43,226,0.3);"
+          class="create-btn"
         >
-          <NIcon size="16"><AddOutline /></NIcon>
+          <NIcon size="18"><AddOutline /></NIcon>
           新建策略
         </button>
       </div>
       
       <!-- Stats -->
-      <div class="grid grid-cols-4 gap-4">
-        <div class="rounded-xl p-4" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
-          <div class="text-xs text-gray-500 mb-1">运行中</div>
-          <div class="text-xl font-semibold font-mono" style="color: #22c55e;">{{ activeCount }}</div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">运行中</div>
+          <div class="stat-value text-green-500">{{ activeCount }}</div>
         </div>
-        <div class="rounded-xl p-4" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
-          <div class="text-xs text-gray-500 mb-1">累计交易</div>
-          <div class="text-xl font-semibold font-mono text-white">{{ totalTrades }}</div>
+        <div class="stat-card">
+          <div class="stat-label">累计交易</div>
+          <div class="stat-value">{{ totalTrades }}</div>
         </div>
-        <div class="rounded-xl p-4" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
-          <div class="text-xs text-gray-500 mb-1">胜率</div>
-          <div class="text-xl font-semibold font-mono text-white">{{ winRate }}%</div>
+        <div class="stat-card">
+          <div class="stat-label">胜率</div>
+          <div class="stat-value">{{ winRate }}%</div>
         </div>
-        <div class="rounded-xl p-4" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
-          <div class="text-xs text-gray-500 mb-1">累计盈亏</div>
-          <div class="text-xl font-semibold font-mono" :style="{ color: pnlColor(totalPnl) }">
+        <div class="stat-card">
+          <div class="stat-label">累计盈亏</div>
+          <div class="stat-value" :style="{ color: pnlColor(totalPnl) }">
             {{ totalPnl >= 0 ? '+' : '' }}{{ totalPnl.toFixed(2) }}
           </div>
         </div>
@@ -314,8 +313,7 @@ onMounted(() => {
               v-for="tmpl in templates"
               :key="tmpl.name"
               @click="openCreateModal(tmpl)"
-              class="rounded-lg p-3 text-left transition-all hover:scale-[1.02]"
-              style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);"
+              class="template-card"
             >
               <div class="text-sm text-white font-medium truncate">{{ tmpl.name }}</div>
               <div class="text-xs text-gray-500 mt-1 line-clamp-2">{{ tmpl.symbol }} · {{ tmpl.interval }}</div>
@@ -333,8 +331,7 @@ onMounted(() => {
           <div
             v-for="s in strategies"
             :key="s.id"
-            class="rounded-xl p-5 transition-all"
-            style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);"
+            class="strategy-card"
           >
             <div class="flex items-center justify-between">
               <!-- Left: Info -->
@@ -441,8 +438,7 @@ onMounted(() => {
           <div
             v-for="m in memories"
             :key="m.id"
-            class="rounded-xl p-4"
-            style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);"
+            class="memory-card"
           >
             <div class="flex items-center justify-between mb-2">
               <div class="flex items-center gap-2">
@@ -620,5 +616,90 @@ onMounted(() => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* ==== New Styles ==== */
+.create-btn {
+  padding: 8px 16px;
+  border-radius: 12px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  transition: all 0.3s ease;
+}
+
+.create-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.stat-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 20px;
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  font-family: var(--font-family-mono);
+  color: #f0f0f0;
+}
+
+.template-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 12px;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.template-card:hover {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.3);
+  transform: translateY(-2px);
+}
+
+.strategy-card, .memory-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 20px;
+  transition: all 0.3s ease;
+}
+
+.strategy-card:hover, .memory-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  transform: translateX(4px);
 }
 </style>

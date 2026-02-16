@@ -79,7 +79,7 @@ function handleLogout() {
     
     <!-- Sidebar -->
     <aside 
-      class="relative z-20 flex flex-col w-20 py-6 items-center border-r border-white/5 bg-black/40 backdrop-blur-xl transition-all duration-300 hover:w-20"
+      class="group relative z-20 flex flex-col w-20 py-6 items-center border-r border-white/5 bg-black/40 backdrop-blur-xl transition-all duration-300 hover:w-64 overflow-hidden"
     >
       <!-- Logo -->
       <div class="mb-10 w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#8a2be2] to-[#6d28d9] shadow-[0_0_15px_rgba(138,43,226,0.5)]">
@@ -98,7 +98,7 @@ function handleLogout() {
           <template #trigger>
             <button
               @click="handleNav(item)"
-              class="group relative w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300"
+              class="group/btn relative w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:w-full group-hover:justify-start group-hover:px-4 mx-auto group-hover:mx-2"
               :class="activeNavKey === item.key ? 'bg-white/10 text-purple-400' : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'"
             >
               <!-- Active Indicator Line -->
@@ -108,9 +108,14 @@ function handleLogout() {
               ></div>
               
               <!-- Icon -->
-              <NIcon size="22" class="transition-transform group-hover:scale-110 group-active:scale-95">
+              <NIcon size="22" class="transition-transform group-hover/btn:scale-110 group-active/btn:scale-95 flex-shrink-0">
                 <component :is="item.icon" />
               </NIcon>
+
+              <!-- Label (Visible on expand) -->
+              <span class="ml-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap font-medium text-sm delay-75">
+                {{ item.label }}
+              </span>
             </button>
           </template>
           <span class="font-medium">{{ item.label }}</span>
@@ -158,7 +163,7 @@ function handleLogout() {
             <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">Realized PnL</span>
             <div class="flex items-center gap-2">
               <span 
-                class="font-mono font-medium"
+                class="font-mono font-medium transition-colors duration-500"
                 :class="walletStore.isPnlPositive ? 'text-[#00e676]' : 'text-[#ff1744]'"
               >
                 {{ walletStore.formattedPnl }}
@@ -178,8 +183,8 @@ function handleLogout() {
            <!-- Network Status -->
            <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/5">
              <div class="relative flex h-2 w-2">
-               <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-               <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+               <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75 duration-1000"></span>
+               <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500 shadow-[0_0_8px_#22c55e]"></span>
              </div>
              <span class="text-xs font-medium text-gray-300">Live Connection</span>
            </div>
