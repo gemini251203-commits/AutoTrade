@@ -401,22 +401,30 @@ async def get_indicators(
     """获取技术指标"""
     try:
         from app.services.indicator_service import indicator_service
-        indicators = await indicator_service.get_or_calculate(symbol.upper(), interval)
+        result = await indicator_service.get_or_calculate(symbol.upper(), interval)
 
-        if indicators:
-            # 只返回关键指标，避免 token 过多
+        if result and result.get("indicators"):
+            ind = result["indicators"]
+            # 提取关键指标
             summary = {}
-            for key in ["rsi", "macd", "macd_signal", "macd_histogram",
-                         "ema_20", "ema_50", "sma_20",
-                         "bollinger_upper", "bollinger_middle", "bollinger_lower",
-                         "atr", "volume_ratio", "close"]:
-                if key in indicators and indicators[key] is not None:
-                    val = indicators[key]
+            for key in ["rsi", "atr", "volume_ratio",
+                         "ma7", "ma25", "ma99"]:
+                if key in ind and ind[key] is not None:
+                    val = ind[key]
                     summary[key] = round(float(val), 4) if isinstance(val, (int, float)) else val
+
+            # MACD 是嵌套 dict
+            if isinstance(ind.get("macd"), dict):
+                macd = ind["macd"]
+                summary["macd"] = macd.get("macd")
+                summary["macd_signal"] = macd.get("signal")
+                summary["macd_histogram"] = macd.get("histogram")
 
             return json.dumps({
                 "symbol": symbol.upper(),
                 "interval": interval,
+                "current_price": result.get("current_price"),
+                "trend": result.get("trend"),
                 "indicators": summary,
             }, ensure_ascii=False)
     except Exception as e:
