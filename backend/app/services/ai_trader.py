@@ -617,7 +617,7 @@ class AITrader:
                 config.max_leverage
             )
 
-            results = self.risk_guard.check_all(
+            all_passed, results = self.risk_guard.check_all(
                 signal_side=side,
                 symbol=decision.get("symbol", "BTCUSDT"),
                 position_pct=position_pct,
@@ -630,8 +630,8 @@ class AITrader:
                 today_pnl=account_data.get("today_pnl", 0),
             )
 
-            failed = [r for r in results if not r.passed]
-            if failed:
+            if not all_passed:
+                failed = [r for r in results if not r.passed]
                 reasons = "; ".join([f"{r.rule}: {r.reason}" for r in failed])
                 return False, reasons
 
@@ -750,7 +750,6 @@ class AITrader:
                     db=db,
                     position_id=pos["id"],
                     close_price=close_price,
-                    reason=f"[AITrader] AI decision: {decision.get('reasoning', '')[:100]}",
                 )
                 return pos["id"]
 

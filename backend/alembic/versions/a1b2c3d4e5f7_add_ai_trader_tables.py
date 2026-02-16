@@ -1,7 +1,7 @@
 """add ai_trader tables
 
 Revision ID: a1b2c3d4e5f7
-Revises: d5e6f7a8b9c0
+Revises: e6f7a8b9c0d1
 Create Date: 2026-02-16 15:00:00.000000
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'a1b2c3d4e5f7'
-down_revision = 'd5e6f7a8b9c0'
+down_revision = 'e6f7a8b9c0d1'
 branch_labels = None
 depends_on = None
 
