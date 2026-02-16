@@ -55,7 +55,7 @@ const columns = [
     key: 'is_active',
     width: 100,
     render: (row: any) => {
-      return row.is_active ? '✅ 激活' : '❌ 禁用'
+      return row.is_active ? '[Active] 激活' : '[Disabled] 禁用'
     },
   },
   {

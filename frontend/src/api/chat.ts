@@ -155,3 +155,44 @@ export function sendMessage(
 
   return controller
 }
+
+// ==================== Autopilot ====================
+
+/** Autopilot 状态 */
+export interface AutopilotStatus {
+  running: boolean
+  symbols: string[]
+  interval: string
+}
+
+/** Autopilot 启动配置 */
+export interface AutopilotConfig {
+  symbols: string[]
+  interval: string
+}
+
+/** 启动 autopilot */
+export async function startAutopilot(config: AutopilotConfig) {
+  const response = await request.post('/agent/autopilot/start', config)
+  return response.data
+}
+
+/** 停止 autopilot */
+export async function stopAutopilot() {
+  const response = await request.post('/agent/autopilot/stop')
+  return response.data
+}
+
+/** 手动触发一次 autopilot 决策 */
+export async function runOnceAutopilot(symbol: string = 'BTCUSDT') {
+  const response = await request.post('/agent/autopilot/run-once', null, {
+    params: { symbol },
+  })
+  return response.data
+}
+
+/** 获取 autopilot 状态 */
+export async function getAutopilotStatus(): Promise<AutopilotStatus> {
+  const response = await request.get<AutopilotStatus>('/agent/autopilot/status')
+  return response.data
+}

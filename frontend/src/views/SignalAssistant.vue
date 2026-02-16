@@ -101,7 +101,7 @@ const sideColor = computed(() => {
   return parsedSignal.value.side === 'long' ? '#00c853' : '#ff4757'
 })
 
-// 🔥 新增: 预计止损盈亏
+// 新增: 预计止损盈亏
 const estimatedStopLossProfit = computed(() => {
   const signal = editingSignal.value
   if (!signal || !signal.stop_loss) return null
@@ -125,7 +125,7 @@ const estimatedStopLossProfit = computed(() => {
   return pnl
 })
 
-// 🔥 新增: 预计止盈盈亏
+// 新增: 预计止盈盈亏
 const estimatedTakeProfitProfit = computed(() => {
   const signal = editingSignal.value
   if (!signal || !signal.take_profit) return null
@@ -154,7 +154,7 @@ const estimatedTakeProfitProfit = computed(() => {
 async function loadContext() {
   contexLoading.value = true
   try {
-    // 🔥 使用 store 的当前交易对获取上下文
+    // 使用 store 的当前交易对获取上下文
     context.value = await getAIContext(symbolStore.currentSymbol)
   } catch (error) {
     console.error('Failed to load context:', error)
@@ -223,7 +223,7 @@ async function handleParse() {
     if (result.success && result.signal) {
       parsedSignal.value = result.signal
       
-      // 🔥 自动切换交易模式: 如果 AI 检测到网格交易
+      // 自动切换交易模式: 如果 AI 检测到网格交易
       if (result.signal.is_grid) {
         tradeMode.value = 'grid'
       } else {
@@ -251,7 +251,7 @@ async function handleConfirm() {
   loading.value = true
   
   try {
-    // 🔥 根据交易模式选择不同的执行路径
+    // 根据交易模式选择不同的执行路径
     if (tradeMode.value === 'grid') {
       // ========== 网格交易模式 ==========
       const gridParams = {
@@ -329,11 +329,11 @@ async function handleConfirm() {
       await approveTask(task.id, true)
       
       if (tradingMode === 'right_side') {
-        message.success('已创建条件单并开始监控 🚀')
+        message.success('已创建条件单并开始监控')
       } else if (tradingMode === 'left_side') {
-        message.success('已创建限价挂单 ⏱️')
+        message.success('已创建限价挂单')
       } else {
-        message.success('市价任务已执行 ✅')
+        message.success('市价任务已执行')
       }
     }
     
@@ -556,19 +556,19 @@ onMounted(() => {
                     </div>
                  </div>
 
-                 <!-- 🔥 交易模式切换 -->
+                 <!-- 交易模式切换 -->
                  <div class="trade-mode-tabs">
                     <button 
                       :class="['mode-tab', tradeMode === 'normal' ? 'active' : '']"
                       @click="tradeMode = 'normal'"
                     >
-                      📈 普通交易
+                      普通交易
                     </button>
                     <button 
                       :class="['mode-tab', tradeMode === 'grid' ? 'active' : '']"
                       @click="tradeMode = 'grid'"
                     >
-                      📊 网格交易
+                      网格交易
                     </button>
                  </div>
 
@@ -803,13 +803,13 @@ onMounted(() => {
                     :class="['modal-mode-tab', tradeMode === 'normal' ? 'active' : '']"
                     @click="tradeMode = 'normal'"
                   >
-                    📈 普通交易参数
+                    普通交易参数
                   </button>
                   <button 
                     :class="['modal-mode-tab', tradeMode === 'grid' ? 'active' : '']"
                     @click="tradeMode = 'grid'"
                   >
-                    📊 网格交易参数
+                    网格交易参数
                   </button>
                </div>
 
@@ -823,9 +823,9 @@ onMounted(() => {
                        <NSelect 
                           v-model:value="editingSignal.trading_mode"
                           :options="[
-                             { label: '⚡ 市价立即成交 (Market)', value: 'market' },
-                             { label: '⏱️ 左侧限价挂单 (Left Side)', value: 'left_side' },
-                             { label: '🚀 右侧突破追单 (Right Side)', value: 'right_side' }
+                             { label: '市价立即成交 (Market)', value: 'market' },
+                             { label: '左侧限价挂单 (Left Side)', value: 'left_side' },
+                             { label: '右侧突破追单 (Right Side)', value: 'right_side' }
                           ]"
                           placeholder="选择交易模式"
                        />
@@ -836,16 +836,16 @@ onMounted(() => {
                  <template v-if="editingSignal.trading_mode === 'right_side'">
                     <div class="section-title">突破条件设置</div>
                     
-                    <!-- 🔥 条件类型选择 -->
+                    <!-- 条件类型选择 -->
                     <NGrid :cols="1" class="mb-4">
                        <NGi>
                           <NFormItem label="条件类型">
                              <NSelect 
                                 v-model:value="editingSignal.condition_type"
                                 :options="[
-                                   { label: '🚀 简单突破 (价格突破即入场)', value: 'simple_breakout' },
-                                   { label: '📉 跌破回抽 (做多: 跌破后回抽入场)', value: 'breakdown_reclaim' },
-                                   { label: '📈 突破回撤 (做空: 突破后回撤入场)', value: 'breakout_pullback' }
+                                   { label: '简单突破 (价格突破即入场)', value: 'simple_breakout' },
+                                   { label: '跌破回抽 (做多: 跌破后回抽入场)', value: 'breakdown_reclaim' },
+                                   { label: '突破回撤 (做空: 突破后回撤入场)', value: 'breakout_pullback' }
                                 ]"
                                 placeholder="选择条件类型"
                              />
@@ -1763,7 +1763,7 @@ onMounted(() => {
   transform: translateY(20px);
 }
 
-/* 🔥 新增: 预计盈亏显示样式 */
+/* 新增: 预计盈亏显示样式 */
 .pnl-preview {
   font-size: 12px;
   padding: 4px 8px;

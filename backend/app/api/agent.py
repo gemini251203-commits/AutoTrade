@@ -10,12 +10,16 @@ AI 交易代理端点
     POST /api/agent/conversations/{id}/chat - 发消息 (SSE 流式)
     GET  /api/agent/conversations/{id}/messages - 获取历史消息
     GET  /api/agent/personas               - 获取可用角色列表
+    POST /api/agent/autopilot/start        - 启动自动交易
+    POST /api/agent/autopilot/stop         - 停止自动交易
+    POST /api/agent/autopilot/run-once     - 手动触发一次
+    GET  /api/agent/autopilot/status       - 查询状态
 """
 
 import json
 from typing import Optional, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select, desc, delete
@@ -25,6 +29,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.models.agent import ChatConversation, ChatMessage
 from app.services.agent.agent import chat_stream
 from app.services.agent.prompts import get_persona_names
+from app.services.agent.autopilot import autopilot
 
 
 router = APIRouter(tags=["Agent"])
@@ -272,3 +277,53 @@ async def get_messages(
         )
         for m in messages
     ]
+
+
+# ==================== Autopilot ====================
+
+class AutopilotStartRequest(BaseModel):
+    """启动 autopilot 请求"""
+    symbols: List[str] = Field(default=["BTCUSDT"], description="交易对列表")
+    interval: str = Field(default="15m", description="决策间隔: 5m/15m/30m/1h/4h")
+
+
+@router.post("/autopilot/start")
+async def autopilot_start(
+    request: AutopilotStartRequest,
+    current_user: CurrentUser,
+):
+    """启动自动交易模式"""
+    if request.interval not in ("5m", "15m", "30m", "1h", "4h"):
+        raise HTTPException(status_code=400, detail="interval 只支持 5m/15m/30m/1h/4h")
+
+    await autopilot.start(
+        user_id=current_user.id,
+        config={
+            "symbols": request.symbols,
+            "interval": request.interval,
+        },
+    )
+    return {"message": "Autopilot started", **autopilot.get_status(current_user.id)}
+
+
+@router.post("/autopilot/stop")
+async def autopilot_stop(current_user: CurrentUser):
+    """停止自动交易"""
+    await autopilot.stop(current_user.id)
+    return {"message": "Autopilot stopped"}
+
+
+@router.post("/autopilot/run-once")
+async def autopilot_run_once(
+    current_user: CurrentUser,
+    symbol: str = Query(default="BTCUSDT", description="交易对"),
+):
+    """手动触发一次 autopilot 决策"""
+    reply = await autopilot.run_once(current_user.id, symbol)
+    return {"reply": reply}
+
+
+@router.get("/autopilot/status")
+async def autopilot_status(current_user: CurrentUser):
+    """查询 autopilot 状态"""
+    return autopilot.get_status(current_user.id)

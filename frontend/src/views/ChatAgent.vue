@@ -12,7 +12,7 @@
  * - Markdown 渲染
  */
 
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import {
   ChatboxEllipsesOutline,
@@ -22,6 +22,8 @@ import {
   PersonOutline,
   ChevronForwardOutline,
   ChevronBackOutline,
+  PlayOutline,
+  StopOutline,
 } from '@vicons/ionicons5'
 import MainLayout from '@/layouts/MainLayout.vue'
 import {
@@ -31,10 +33,15 @@ import {
   deleteConversation,
   getMessages,
   sendMessage,
+  startAutopilot,
+  stopAutopilot,
+  runOnceAutopilot,
+  getAutopilotStatus,
   type Persona,
   type Conversation,
   type ChatMessage,
   type SSEEvent,
+  type AutopilotStatus,
 } from '@/api/chat'
 import { useAuthStore } from '@/stores/auth'
 
@@ -65,6 +72,14 @@ const loadingMessages = ref(false)
 // SSE 控制器
 let abortController: AbortController | null = null
 
+// Autopilot
+const autopilotRunning = ref(false)
+const autopilotSymbol = ref('BTCUSDT')
+const autopilotInterval = ref('15m')
+const showAutopilotPanel = ref(false)
+const autopilotLoading = ref(false)
+let autopilotPollTimer: ReturnType<typeof setInterval> | null = null
+
 // ==================== Computed ====================
 
 const activeConversation = computed(() =>
@@ -88,6 +103,12 @@ const displayMessages = computed(() => {
 onMounted(async () => {
   await loadPersonas()
   await loadConversations()
+  await pollAutopilotStatus()
+  autopilotPollTimer = setInterval(pollAutopilotStatus, 10000)
+})
+
+onUnmounted(() => {
+  if (autopilotPollTimer) clearInterval(autopilotPollTimer)
 })
 
 // 自动滚动到底部
@@ -97,6 +118,64 @@ watch(
     nextTick(() => scrollToBottom())
   },
 )
+
+// ==================== Autopilot ====================
+
+async function pollAutopilotStatus() {
+  try {
+    const status: AutopilotStatus = await getAutopilotStatus()
+    autopilotRunning.value = status.running
+    if (status.running) {
+      autopilotSymbol.value = status.symbols[0] || 'BTCUSDT'
+      autopilotInterval.value = status.interval
+    }
+  } catch { /* ignore */ }
+}
+
+async function handleStartAutopilot() {
+  autopilotLoading.value = true
+  try {
+    await startAutopilot({
+      symbols: [autopilotSymbol.value],
+      interval: autopilotInterval.value,
+    })
+    autopilotRunning.value = true
+    showAutopilotPanel.value = false
+    message.success('自动交易已启动')
+    // 刷新会话列表 (autopilot 可能创建了专属会话)
+    await loadConversations()
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || '启动失败')
+  } finally {
+    autopilotLoading.value = false
+  }
+}
+
+async function handleStopAutopilot() {
+  autopilotLoading.value = true
+  try {
+    await stopAutopilot()
+    autopilotRunning.value = false
+    message.success('自动交易已停止')
+  } catch (e: any) {
+    message.error('停止失败')
+  } finally {
+    autopilotLoading.value = false
+  }
+}
+
+async function handleRunOnce() {
+  autopilotLoading.value = true
+  try {
+    await runOnceAutopilot(autopilotSymbol.value)
+    message.success('已触发一次分析, 请查看 autopilot 会话')
+    await loadConversations()
+  } catch (e: any) {
+    message.error('触发失败')
+  } finally {
+    autopilotLoading.value = false
+  }
+}
 
 // ==================== API Methods ====================
 
@@ -346,7 +425,10 @@ function formatTime(iso: string): string {
                 <n-icon :component="ChatboxEllipsesOutline" :size="18" />
               </div>
               <div class="conv-info">
-                <div class="conv-title">{{ conv.title }}</div>
+                <div class="conv-title">
+                  <span v-if="conv.persona === 'autopilot'" class="autopilot-tag">[自动]</span>
+                  {{ conv.title }}
+                </div>
                 <div class="conv-meta">
                   <span class="persona-badge">{{ getPersonaName(conv.persona) }}</span>
                 </div>
@@ -366,27 +448,83 @@ function formatTime(iso: string): string {
       <!-- 右侧: 聊天主区域 -->
       <main class="chat-main">
         <!-- 顶部栏 -->
-        <div class="chat-header" v-if="activeConversation">
-          <div class="header-info">
+        <div class="chat-header">
+          <div class="header-info" v-if="activeConversation">
             <n-icon :component="PersonOutline" :size="20" />
             <span class="header-name">{{ activePersonaName }}</span>
             <n-tag :type="'info'" size="small" round>
               {{ activeConversation.title }}
             </n-tag>
           </div>
+          <div class="header-spacer" v-else></div>
+
+          <!-- Autopilot 控制 -->
+          <div class="autopilot-controls">
+            <div :class="['autopilot-indicator', { active: autopilotRunning }]">
+              <span class="indicator-dot"></span>
+              <span>{{ autopilotRunning ? '自动运行中' : '自动交易' }}</span>
+            </div>
+            <button
+              v-if="!autopilotRunning"
+              class="autopilot-btn start"
+              @click="showAutopilotPanel = !showAutopilotPanel"
+              :disabled="autopilotLoading"
+            >
+              <n-icon :component="PlayOutline" :size="14" />
+              启动
+            </button>
+            <button
+              v-else
+              class="autopilot-btn stop"
+              @click="handleStopAutopilot"
+              :disabled="autopilotLoading"
+            >
+              <n-icon :component="StopOutline" :size="14" />
+              停止
+            </button>
+          </div>
+        </div>
+
+        <!-- Autopilot 配置面板 -->
+        <div v-if="showAutopilotPanel" class="autopilot-panel">
+          <div class="panel-row">
+            <label>交易对</label>
+            <input v-model="autopilotSymbol" placeholder="BTCUSDT" />
+          </div>
+          <div class="panel-row">
+            <label>决策间隔</label>
+            <select v-model="autopilotInterval">
+              <option value="5m">5 分钟</option>
+              <option value="15m">15 分钟</option>
+              <option value="30m">30 分钟</option>
+              <option value="1h">1 小时</option>
+              <option value="4h">4 小时</option>
+            </select>
+          </div>
+          <div class="panel-actions">
+            <button class="autopilot-btn start" @click="handleStartAutopilot" :disabled="autopilotLoading">
+              确认启动
+            </button>
+            <button class="autopilot-btn trigger" @click="handleRunOnce" :disabled="autopilotLoading">
+              手动触发一次
+            </button>
+            <button class="autopilot-btn cancel" @click="showAutopilotPanel = false">
+              取消
+            </button>
+          </div>
         </div>
 
         <!-- 空状态 -->
         <div v-if="!activeConversationId" class="empty-state">
-          <div class="empty-icon">🤖</div>
+          <div class="empty-icon">AI</div>
           <h2>AI 交易代理</h2>
-          <p>在左侧选择一个 AI 角色，点击「新建会话」开始对话</p>
+          <p>在左侧选择一个 AI 角色, 点击「新建会话」开始对话</p>
           <div class="empty-roles">
             <div class="role-tag" v-for="p in personas" :key="p.id" @click="selectedPersona = p.id; handleCreateConversation()">
               {{ p.name }}
             </div>
           </div>
-          <p class="empty-hint">AI 可以帮你查行情、下单、分析市场、查持仓 …</p>
+          <p class="empty-hint">AI 可以帮你查行情、下单、分析市场、查持仓</p>
         </div>
 
         <!-- 消息区域 -->
@@ -396,8 +534,8 @@ function formatTime(iso: string): string {
             :key="msg.id"
             :class="['message', msg.role]"
           >
-            <div class="msg-avatar">
-              {{ msg.role === 'user' ? '👤' : '🤖' }}
+            <div :class="['msg-avatar', msg.role === 'user' ? 'avatar-user' : 'avatar-ai']">
+              {{ msg.role === 'user' ? 'U' : 'AI' }}
             </div>
             <div class="msg-bubble">
               <div class="msg-content" v-html="renderMarkdown(msg.content)"></div>
@@ -407,7 +545,7 @@ function formatTime(iso: string): string {
 
           <!-- 流式消息 -->
           <div v-if="streamingText" class="message assistant">
-            <div class="msg-avatar">🤖</div>
+            <div class="msg-avatar avatar-ai">AI</div>
             <div class="msg-bubble streaming">
               <div class="msg-content" v-html="renderMarkdown(streamingText)"></div>
               <div class="cursor-blink">|</div>
@@ -1028,4 +1166,165 @@ function renderMarkdown(text: string): string {
     border: none;
   }
 }
+
+/* ==================== Autopilot ====================*/
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-spacer {
+  flex: 1;
+}
+
+.autopilot-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.autopilot-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #888;
+}
+
+.autopilot-indicator.active {
+  color: #52c41a;
+}
+
+.indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #555;
+}
+
+.autopilot-indicator.active .indicator-dot {
+  background: #52c41a;
+  box-shadow: 0 0 6px #52c41a;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.autopilot-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.autopilot-btn.start {
+  background: rgba(82, 196, 26, 0.15);
+  color: #52c41a;
+}
+
+.autopilot-btn.start:hover {
+  background: rgba(82, 196, 26, 0.3);
+}
+
+.autopilot-btn.stop {
+  background: rgba(255, 77, 79, 0.15);
+  color: #ff4d4f;
+}
+
+.autopilot-btn.stop:hover {
+  background: rgba(255, 77, 79, 0.3);
+}
+
+.autopilot-btn.trigger {
+  background: rgba(24, 144, 255, 0.15);
+  color: #1890ff;
+}
+
+.autopilot-btn.trigger:hover {
+  background: rgba(24, 144, 255, 0.3);
+}
+
+.autopilot-btn.cancel {
+  background: rgba(255, 255, 255, 0.08);
+  color: #999;
+}
+
+.autopilot-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.autopilot-panel {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 0 16px 8px;
+}
+
+.panel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.panel-row label {
+  width: 64px;
+  font-size: 13px;
+  color: #aaa;
+  flex-shrink: 0;
+}
+
+.panel-row input,
+.panel-row select {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: #ddd;
+  font-size: 13px;
+}
+
+.panel-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Avatar text styles */
+.avatar-user {
+  background: rgba(24, 144, 255, 0.2) !important;
+  color: #1890ff !important;
+  font-weight: 600;
+  font-size: 12px !important;
+}
+
+.avatar-ai {
+  background: rgba(82, 196, 26, 0.2) !important;
+  color: #52c41a !important;
+  font-weight: 600;
+  font-size: 11px !important;
+}
+
+/* Autopilot tag in sidebar */
+.autopilot-tag {
+  color: #52c41a;
+  font-size: 11px;
+  margin-right: 4px;
+}
+
 </style>
+

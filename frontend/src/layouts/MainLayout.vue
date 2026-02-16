@@ -13,7 +13,7 @@ import {
   AnalyticsOutline,
   ChatboxEllipsesOutline,
   BookOutline,
-  RocketOutline,
+
 } from '@vicons/ionicons5'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
@@ -31,7 +31,7 @@ const navItems = [
   { key: 'strategy', label: '量化策略', icon: AnalyticsOutline, route: '/strategy' },
   { key: 'chat', label: 'AI Agent', icon: ChatboxEllipsesOutline, route: '/chat' },
   { key: 'journal', label: '交易日志', icon: BookOutline, route: '/journal' },
-  { key: 'ai-trader', label: 'AI 交易员', icon: RocketOutline, route: '/ai-trader' },
+
   { key: 'wallet', label: '钱包', icon: WalletOutline, route: '/wallet' },
   { key: 'settings', label: 'Settings', icon: SettingsOutline, route: '/settings' },
 ]
@@ -43,7 +43,7 @@ const activeNavKey = computed(() => {
   if (path === '/strategy') return 'strategy'
   if (path === '/chat') return 'chat'
   if (path === '/journal') return 'journal'
-  if (path === '/ai-trader') return 'ai-trader'
+
   if (path === '/settings') return 'settings'
   if (path === '/wallet') return 'wallet'
   return 'dashboard'

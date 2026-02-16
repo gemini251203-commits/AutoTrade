@@ -240,3 +240,113 @@ async def chat_stream(
         await db.rollback()
         yield {"type": "error", "message": f"AI 处理出错: {str(e)}"}
 
+
+async def chat_complete(
+    db: AsyncSession,
+    user_id: int,
+    conversation_id: int,
+    user_message: str,
+    persona: str = "conservative",
+) -> str:
+    """
+    非流式版本 — 供 autopilot 内部调用
+
+    与 chat_stream 逻辑相同 (多轮工具调用), 但直接返回最终回复文本。
+
+    Returns:
+        AI 最终回复文本
+    """
+    MAX_TOOL_ROUNDS = 5
+
+    try:
+        # 1. 保存用户消息
+        await memory.save_message(db, conversation_id, "user", user_message)
+
+        # 2. 加载会话历史
+        history = await memory.load_history(db, conversation_id)
+
+        # 3. 构建上下文
+        context_text = await _build_context_text(db, user_id)
+
+        # 4. 构建 system prompt
+        system_prompt = build_system_prompt(persona, context_text)
+
+        # 5. 构建消息列表
+        messages = [ProviderMessage(role="system", content=system_prompt)]
+        for msg in history:
+            messages.append(ProviderMessage(role=msg["role"], content=msg["content"]))
+
+        # 6. 获取 AI Provider
+        provider = await AIBrain.get_provider(db, user_id)
+
+        # 7. 多轮工具调用循环
+        final_content = ""
+        tool_calls_log = []
+
+        for round_i in range(MAX_TOOL_ROUNDS + 1):
+            response = await provider.chat(
+                messages=messages,
+                temperature=0.7,
+                max_tokens=2000,
+            )
+            ai_content = response.content
+
+            tool_matches = TOOL_CALL_PATTERN.findall(ai_content)
+
+            if not tool_matches:
+                final_content = ai_content
+                break
+
+            if round_i >= MAX_TOOL_ROUNDS:
+                final_content = TOOL_CALL_PATTERN.sub("", ai_content).strip()
+                if not final_content:
+                    final_content = "已达到最大操作轮次。"
+                break
+
+            results_text_parts = []
+            for tool_name, args_str in tool_matches:
+                tool_args = _parse_tool_args(args_str)
+                tool_result = await execute_tool(tool_name, tool_args, db, user_id)
+                results_text_parts.append(
+                    f"[TOOL_RESULT: {tool_name}]\n{tool_result}\n[/TOOL_RESULT]"
+                )
+                tool_calls_log.append({
+                    "tool": tool_name,
+                    "args": tool_args,
+                    "result": tool_result,
+                })
+
+            messages.append(ProviderMessage(role="assistant", content=ai_content))
+            all_results = "\n\n".join(results_text_parts)
+            messages.append(ProviderMessage(
+                role="user",
+                content=(
+                    f"{all_results}\n\n"
+                    f"请根据以上工具结果继续。"
+                    f"如果需要额外操作, 继续使用 [TOOL_CALL: ...] 调用工具。"
+                    f"如果所有操作已完成, 直接用自然语言总结结果。"
+                ),
+            ))
+
+        # 清理残留工具标记
+        final_content = TOOL_CALL_PATTERN.sub("", final_content).strip()
+
+        # 保存工具调用记录
+        if tool_calls_log:
+            first = tool_calls_log[0]
+            await memory.save_message(
+                db, conversation_id, "assistant",
+                f"[执行了 {len(tool_calls_log)} 个操作]",
+                tool_name=first["tool"],
+                tool_args=json.dumps(first["args"], ensure_ascii=False),
+                tool_result=first["result"],
+            )
+
+        # 保存 AI 最终回复
+        await memory.save_message(db, conversation_id, "assistant", final_content)
+
+        return final_content
+
+    except Exception as e:
+        logger.error(f"[Agent] chat_complete error: {e}")
+        raise
