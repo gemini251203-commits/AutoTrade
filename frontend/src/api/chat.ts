@@ -163,12 +163,30 @@ export interface AutopilotStatus {
   running: boolean
   symbols: string[]
   interval: string
+  started_at: string | null
+  total_cycles: number
+  last_cycle_at: string | null
+  actions_taken: number
 }
 
 /** Autopilot 启动配置 */
 export interface AutopilotConfig {
   symbols: string[]
   interval: string
+}
+
+/** Autopilot 决策日志 */
+export interface AutopilotLogResponse {
+  id: number
+  symbol: string
+  decision: string
+  thinking: string
+  summary: string
+  market_snapshot: Record<string, unknown> | null
+  action_taken: boolean
+  order_id: number | null
+  error_message: string | null
+  created_at: string
 }
 
 /** 启动 autopilot */
@@ -196,3 +214,15 @@ export async function getAutopilotStatus(): Promise<AutopilotStatus> {
   const response = await request.get<AutopilotStatus>('/agent/autopilot/status')
   return response.data
 }
+
+/** 获取 autopilot 决策日志 */
+export async function getAutopilotLogs(
+  limit: number = 50,
+  symbol?: string,
+): Promise<AutopilotLogResponse[]> {
+  const response = await request.get<AutopilotLogResponse[]>('/agent/autopilot/logs', {
+    params: { limit, symbol },
+  })
+  return response.data
+}
+

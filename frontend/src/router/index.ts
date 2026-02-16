@@ -17,6 +17,7 @@ const Admin = () => import('@/views/Admin.vue')
 const StrategyManager = () => import('@/views/StrategyManager.vue')
 const ChatAgent = () => import('@/views/ChatAgent.vue')
 const TradeJournal = () => import('@/views/TradeJournal.vue')
+const AutopilotDashboard = () => import('@/views/AutopilotDashboard.vue')
 
 
 // Route definitions
@@ -73,6 +74,12 @@ const routes: RouteRecordRaw[] = [
     path: '/journal',
     name: 'TradeJournal',
     component: TradeJournal,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/autopilot',
+    name: 'AutopilotDashboard',
+    component: AutopilotDashboard,
     meta: { requiresAuth: true },
   },
 

@@ -327,3 +327,19 @@ async def autopilot_run_once(
 async def autopilot_status(current_user: CurrentUser):
     """查询 autopilot 状态"""
     return autopilot.get_status(current_user.id)
+
+
+@router.get("/autopilot/logs")
+async def autopilot_logs(
+    current_user: CurrentUser,
+    limit: int = Query(default=50, ge=1, le=200, description="返回条数"),
+    symbol: Optional[str] = Query(default=None, description="按交易对过滤"),
+):
+    """查询 autopilot 决策日志"""
+    logs = await autopilot.get_logs(
+        user_id=current_user.id,
+        limit=limit,
+        symbol=symbol,
+    )
+    return logs
+

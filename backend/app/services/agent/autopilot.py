@@ -1,24 +1,28 @@
 """
-Agent Autopilot
-================
-AI Agent 自动交易模式
+Agent Autopilot (Enhanced)
+============================
+AI Agent 自动交易模式 — 增强版
 
-将"自动交易"作为 Agent 的一个模式:
+功能:
 - 定时触发 Agent 分析市场并决策
-- 决策记录写入专属会话 (不混入手动对话)
+- 决策记录写入 AutopilotLog (结构化)
 - 复用 Agent 完整工具链 (get_price, place_order, etc.)
+- 支持多交易对同时监控
+- 每次周期记录: 思考过程 + 决策 + 操作
 """
 
 import asyncio
-from typing import Dict, Optional
+import re
+from typing import Dict, Optional, List
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from loguru import logger
 
 from app.db.session import AsyncSessionLocal
 from app.models.agent import ChatConversation, ChatMessage
+from app.models.autopilot_log import AutopilotLog, AutopilotDecision
 from app.services.agent.agent import chat_complete
 
 
@@ -34,18 +38,106 @@ INTERVAL_SECONDS = {
 # Autopilot 会话标识前缀
 AUTOPILOT_TITLE_PREFIX = "[autopilot]"
 
+# 决策关键词映射
+DECISION_KEYWORDS = {
+    AutopilotDecision.OPEN_LONG: [
+        "开多", "做多", "买入开仓", "open_long", "open long", "buy",
+        "看涨", "建仓做多",
+    ],
+    AutopilotDecision.OPEN_SHORT: [
+        "开空", "做空", "卖出开仓", "open_short", "open short", "short",
+        "看跌", "建仓做空",
+    ],
+    AutopilotDecision.CLOSE_LONG: [
+        "平多", "多仓平仓", "close_long", "close long",
+    ],
+    AutopilotDecision.CLOSE_SHORT: [
+        "平空", "空仓平仓", "close_short", "close short",
+    ],
+    AutopilotDecision.HOLD: [
+        "观望", "等待", "不操作", "hold", "wait", "no action",
+        "暂不交易", "保持观望",
+    ],
+}
+
+
+def parse_decision(ai_reply: str) -> AutopilotDecision:
+    """从 AI 回复中解析决策类型"""
+    text = ai_reply.lower()
+    
+    # 按优先级匹配 (操作 > 观望)
+    for decision in [
+        AutopilotDecision.OPEN_LONG,
+        AutopilotDecision.OPEN_SHORT,
+        AutopilotDecision.CLOSE_LONG,
+        AutopilotDecision.CLOSE_SHORT,
+    ]:
+        for keyword in DECISION_KEYWORDS[decision]:
+            if keyword.lower() in text:
+                return decision
+    
+    # 检查是否调用了 place_order 工具 (说明有实际操作)
+    if "place_order" in text:
+        if "buy" in text or "做多" in text:
+            return AutopilotDecision.OPEN_LONG
+        elif "sell" in text or "做空" in text:
+            return AutopilotDecision.OPEN_SHORT
+    
+    if "close_position" in text:
+        return AutopilotDecision.CLOSE_LONG
+    
+    return AutopilotDecision.HOLD
+
+
+def extract_summary(ai_reply: str) -> str:
+    """从 AI 回复中提取一句话摘要"""
+    # 尝试提取第一个完整句子
+    lines = ai_reply.strip().split("\n")
+    for line in lines:
+        clean = line.strip().lstrip("#").lstrip("-").lstrip("*").strip()
+        if clean and len(clean) > 5 and not clean.startswith("[TOOL_CALL"):
+            return clean[:200]
+    return ai_reply[:200] if ai_reply else "无摘要"
+
+
+def check_action_taken(ai_reply: str) -> bool:
+    """检查 AI 是否实际执行了交易操作"""
+    action_keywords = [
+        "place_order", "close_position", 
+        "订单已创建", "下单成功", "开仓成功", "平仓成功",
+        "order_id", "已执行",
+    ]
+    text = ai_reply.lower()
+    return any(kw.lower() in text for kw in action_keywords)
+
+
+def extract_order_id(ai_reply: str) -> Optional[int]:
+    """从 AI 回复中提取订单 ID"""
+    patterns = [
+        r"order_id[\"']?\s*[:=]\s*(\d+)",
+        r"订单.*?ID\s*[:：]\s*(\d+)",
+        r'"id"\s*:\s*(\d+)',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, ai_reply, re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+    return None
+
 
 class AgentAutopilot:
     """
-    Agent 自动交易引擎
+    Agent 自动交易引擎 (增强版)
 
-    管理每个用户的自动决策循环,
-    复用 AI Agent 的完整工具链。
+    - 多交易对支持
+    - 结构化决策日志
+    - 详细状态跟踪
     """
 
     def __init__(self):
         self._tasks: Dict[int, asyncio.Task] = {}
         self._configs: Dict[int, dict] = {}
+        self._stats: Dict[int, dict] = {}  # 运行统计
 
     def is_running(self, user_id: int) -> bool:
         task = self._tasks.get(user_id)
@@ -56,9 +148,8 @@ class AgentAutopilot:
         启动自动决策循环
 
         Args:
-            user_id: 用户 ID
             config: {
-                "symbols": ["BTCUSDT"],
+                "symbols": ["BTCUSDT", "ETHUSDT"],
                 "interval": "15m",
             }
         """
@@ -67,6 +158,12 @@ class AgentAutopilot:
             return
 
         self._configs[user_id] = config
+        self._stats[user_id] = {
+            "started_at": datetime.utcnow().isoformat(),
+            "total_cycles": 0,
+            "last_cycle_at": None,
+            "actions_taken": 0,
+        }
         task = asyncio.create_task(self._loop(user_id, config))
         self._tasks[user_id] = task
         logger.info(
@@ -79,6 +176,7 @@ class AgentAutopilot:
         """停止自动决策"""
         task = self._tasks.pop(user_id, None)
         self._configs.pop(user_id, None)
+        self._stats.pop(user_id, None)
         if task and not task.done():
             task.cancel()
             try:
@@ -88,23 +186,58 @@ class AgentAutopilot:
         logger.info(f"[Autopilot] Stopped for user {user_id}")
 
     async def run_once(self, user_id: int, symbol: str = "BTCUSDT") -> str:
-        """
-        手动触发一次决策
-
-        Returns:
-            AI 的回复文本
-        """
+        """手动触发一次决策"""
         return await self._run_cycle(user_id, symbol)
 
     def get_status(self, user_id: int) -> dict:
-        """获取运行状态"""
+        """获取运行状态 (增强版)"""
         running = self.is_running(user_id)
         config = self._configs.get(user_id, {})
+        stats = self._stats.get(user_id, {})
         return {
             "running": running,
             "symbols": config.get("symbols", []),
             "interval": config.get("interval", "15m"),
+            "started_at": stats.get("started_at"),
+            "total_cycles": stats.get("total_cycles", 0),
+            "last_cycle_at": stats.get("last_cycle_at"),
+            "actions_taken": stats.get("actions_taken", 0),
         }
+
+    async def get_logs(
+        self,
+        user_id: int,
+        limit: int = 50,
+        symbol: Optional[str] = None,
+    ) -> List[dict]:
+        """获取决策日志"""
+        async with AsyncSessionLocal() as db:
+            query = (
+                select(AutopilotLog)
+                .where(AutopilotLog.user_id == user_id)
+            )
+            if symbol:
+                query = query.where(AutopilotLog.symbol == symbol)
+            query = query.order_by(AutopilotLog.created_at.desc()).limit(limit)
+
+            result = await db.execute(query)
+            logs = result.scalars().all()
+
+            return [
+                {
+                    "id": log.id,
+                    "symbol": log.symbol,
+                    "decision": log.decision,
+                    "thinking": log.thinking,
+                    "summary": log.summary,
+                    "market_snapshot": log.market_snapshot,
+                    "action_taken": log.action_taken,
+                    "order_id": log.order_id,
+                    "error_message": log.error_message,
+                    "created_at": log.created_at.isoformat() if log.created_at else None,
+                }
+                for log in logs
+            ]
 
     # ============================================================
     # 内部方法
@@ -137,12 +270,13 @@ class AgentAutopilot:
 
     async def _run_cycle(self, user_id: int, symbol: str) -> str:
         """
-        单次决策周期
+        单次决策周期 (增强版)
 
         1. 获取/创建 autopilot 专属会话
         2. 构造分析指令
         3. 调用 agent chat_complete (非流式)
-        4. 返回 AI 回复
+        4. 解析 AI 回复 → 结构化日志
+        5. 写入 AutopilotLog
         """
         async with AsyncSessionLocal() as db:
             try:
@@ -161,7 +295,8 @@ class AgentAutopilot:
                     f"4. 查询历史交易经验\n"
                     f"5. 综合分析后给出决策: 开仓/平仓/观望\n"
                     f"6. 如果决定交易, 直接执行\n\n"
-                    f"回复要简洁, 列出关键数据和理由。"
+                    f"回复要简洁, 列出关键数据和理由。\n"
+                    f"最后一行请明确写出你的决策: 观望/开多/开空/平多/平空"
                 )
 
                 # 调用 Agent (非流式)
@@ -173,16 +308,58 @@ class AgentAutopilot:
                     persona="autopilot",
                 )
 
+                # === 解析 AI 回复 → 结构化日志 ===
+                decision = parse_decision(reply)
+                summary = extract_summary(reply)
+                action_taken = check_action_taken(reply)
+                order_id = extract_order_id(reply) if action_taken else None
+
+                # 写入 AutopilotLog
+                log = AutopilotLog(
+                    user_id=user_id,
+                    symbol=symbol,
+                    decision=decision.value,
+                    thinking=reply,
+                    summary=summary,
+                    action_taken=action_taken,
+                    order_id=order_id,
+                )
+                db.add(log)
                 await db.commit()
+
+                # 更新统计
+                stats = self._stats.get(user_id)
+                if stats:
+                    stats["total_cycles"] = stats.get("total_cycles", 0) + 1
+                    stats["last_cycle_at"] = now
+                    if action_taken:
+                        stats["actions_taken"] = stats.get("actions_taken", 0) + 1
 
                 logger.info(
                     f"[Autopilot] Cycle done: user={user_id}, "
-                    f"symbol={symbol}, reply_len={len(reply)}"
+                    f"symbol={symbol}, decision={decision.value}, "
+                    f"action={action_taken}, reply_len={len(reply)}"
                 )
                 return reply
 
             except Exception as e:
                 await db.rollback()
+
+                # 记录错误日志
+                try:
+                    error_log = AutopilotLog(
+                        user_id=user_id,
+                        symbol=symbol,
+                        decision=AutopilotDecision.ERROR.value,
+                        thinking=f"Error: {str(e)}",
+                        summary=f"分析异常: {str(e)[:100]}",
+                        error_message=str(e),
+                    )
+                    db.add(error_log)
+                    await db.commit()
+                except Exception:
+                    pass
+
                 logger.error(f"[Autopilot] run_cycle error: {e}")
                 raise
 
@@ -190,7 +367,6 @@ class AgentAutopilot:
         self, db: AsyncSession, user_id: int
     ) -> int:
         """获取或创建 autopilot 专属会话"""
-        # 查找已有的 autopilot 会话
         result = await db.execute(
             select(ChatConversation).where(
                 ChatConversation.user_id == user_id,
@@ -202,7 +378,6 @@ class AgentAutopilot:
         if conv:
             return conv.id
 
-        # 创建新的 autopilot 会话
         conv = ChatConversation(
             user_id=user_id,
             persona="autopilot",
