@@ -157,3 +157,9 @@ export async function getMemories(symbol?: string, limit: number = 50): Promise<
   const response = await request.get<TradeMemoryResponse[]>('/journal/', { params })
   return response.data
 }
+
+/** 删除单条交易记忆 */
+export async function deleteMemory(id: number): Promise<{ ok: boolean }> {
+  const response = await request.delete<{ ok: boolean }>(`/journal/${id}`)
+  return response.data
+}

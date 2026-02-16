@@ -37,6 +37,7 @@ import {
   getStrategyLogs,
   getTemplates,
   getMemories,
+  deleteMemory,
   type StrategyResponse,
   type StrategyLogResponse,
   type StrategyTemplate,
@@ -194,6 +195,16 @@ async function fetchMemories() {
     memories.value = await getMemories(undefined, 50)
   } catch {
     memories.value = []
+  }
+}
+
+async function handleDeleteMemory(id: number) {
+  if (!confirm('确定删除这条交易记忆？')) return
+  try {
+    await deleteMemory(id)
+    memories.value = memories.value.filter(m => m.id !== id)
+  } catch (e: any) {
+    error.value = e.response?.data?.detail || '删除失败'
   }
 }
 
@@ -452,6 +463,13 @@ onMounted(() => {
                   {{ m.pnl_pct >= 0 ? '+' : '' }}{{ m.pnl_pct.toFixed(2) }}%
                 </span>
                 <span>{{ formatDate(m.created_at || '') }}</span>
+                <button
+                  @click.stop="handleDeleteMemory(m.id)"
+                  class="ml-1 p-1 rounded hover:bg-red-500/10 transition-colors text-gray-500 hover:text-red-400"
+                  title="删除"
+                >
+                  <NIcon size="14"><TrashOutline /></NIcon>
+                </button>
               </div>
             </div>
             <div class="text-sm text-gray-300 mb-1">{{ m.lesson }}</div>
