@@ -45,6 +45,11 @@ class FeeCalculator:
     - 滑点
     - 开仓成本
     """
+    
+    # 类级别常量 (方便外部引用 FeeCalculator.XXX)
+    TAKER_FEE_RATE = TAKER_FEE_RATE
+    MAKER_FEE_RATE = MAKER_FEE_RATE
+    LIQUIDATION_FEE_RATE = LIQUIDATION_FEE_RATE
 
     @staticmethod
     def get_fee_rate(is_maker: bool = False) -> Decimal:
