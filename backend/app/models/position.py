@@ -18,6 +18,7 @@ from sqlalchemy import (
     Numeric, 
     Boolean, 
     DateTime, 
+    Text,
     ForeignKey,
     Enum as SQLEnum,
     CheckConstraint,
