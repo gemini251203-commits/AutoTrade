@@ -4,8 +4,9 @@ Trade Journal API
 交易记忆查询端点
 
 端点:
-    GET  /api/journal/           - 获取交易记忆列表
-    GET  /api/journal/stats      - 获取交易统计
+    GET    /api/journal/           - 获取交易记忆列表
+    GET    /api/journal/stats      - 获取交易统计
+    DELETE /api/journal/{id}       - 删除单条交易记忆
 """
 
 from typing import Optional, List
@@ -186,3 +187,30 @@ async def get_journal_stats(
         avg_duration_min=round(float(row.avg_dur), 1) if row.avg_dur else None,
         by_source=by_source,
     )
+
+
+@router.delete("/{memory_id}")
+async def delete_memory(
+    memory_id: int,
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """删除单条交易记忆"""
+    from fastapi import HTTPException
+    
+    result = await db.execute(
+        select(TradeMemory).where(
+            TradeMemory.id == memory_id,
+            TradeMemory.user_id == current_user.id,
+        )
+    )
+    memory = result.scalar_one_or_none()
+    
+    if not memory:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    
+    await db.delete(memory)
+    await db.commit()
+    
+    return {"ok": True}
+

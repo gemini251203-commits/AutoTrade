@@ -8,8 +8,8 @@
  * 包含统计卡片 + 记忆列表
  */
 import { ref, onMounted, computed } from 'vue'
-import { NTag, NEmpty, NSpin, NSelect, NTooltip, NIcon } from 'naive-ui'
-import { BookOutline, TrendingUpOutline, TrendingDownOutline, TimeOutline, ShieldCheckmarkOutline } from '@vicons/ionicons5'
+import { NTag, NEmpty, NSpin, NSelect, NTooltip, NIcon, NPopconfirm, useMessage } from 'naive-ui'
+import { BookOutline, TrendingUpOutline, TrendingDownOutline, TimeOutline, ShieldCheckmarkOutline, TrashOutline } from '@vicons/ionicons5'
 import MainLayout from '@/layouts/MainLayout.vue'
 import request from '@/utils/request'
 
@@ -53,6 +53,7 @@ const stats = ref<JournalStats | null>(null)
 const loading = ref(false)
 const sourceFilter = ref<string | null>(null)
 const resultFilter = ref<string | null>(null)
+const message = useMessage()
 
 // ========== Options ==========
 const sourceOptions = [
@@ -123,6 +124,16 @@ async function fetchAll() {
 
 function onFilterChange() {
   fetchAll()
+}
+
+async function deleteMemory(id: number) {
+  try {
+    await request.delete(`/journal/${id}`)
+    message.success('已删除')
+    fetchAll()
+  } catch (e) {
+    message.error('删除失败')
+  }
 }
 
 // ========== Helpers ==========
@@ -275,23 +286,34 @@ onMounted(fetchAll)
               >
                 {{ sourceLabels[mem.source || ''] || mem.source || '未知' }}
               </NTag>
-              <NTag size="tiny" :bordered="false" :type="mem.side === 'long' ? 'success' : 'error'">
+              <NTag v-if="mem.side" size="tiny" :bordered="false" :type="mem.side === 'long' ? 'success' : 'error'">
                 {{ mem.side === 'long' ? '做多' : '做空' }}
               </NTag>
               <NTag v-if="mem.leverage" size="tiny" :bordered="false" style="background: rgba(139,92,246,0.15); color: #a78bfa;">
                 {{ mem.leverage }}x
               </NTag>
+              <NTag v-if="mem.close_reason === 'account_reset'" size="tiny" :bordered="false" style="background: rgba(245,158,11,0.15); color: #f59e0b;">
+                账户重置
+              </NTag>
             </div>
-            <div class="mem-pnl" :class="mem.trade_result">
-              <span class="pnl-pct">{{ mem.pnl_pct >= 0 ? '+' : '' }}{{ mem.pnl_pct.toFixed(2) }}%</span>
-              <span class="pnl-usdt" v-if="mem.pnl_usdt !== null">
-                {{ mem.pnl_usdt >= 0 ? '+' : '' }}{{ mem.pnl_usdt.toFixed(2) }} USDT
-              </span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="mem-pnl" :class="mem.trade_result">
+                <span class="pnl-pct">{{ mem.pnl_pct >= 0 ? '+' : '' }}{{ mem.pnl_pct.toFixed(2) }}%</span>
+                <span class="pnl-usdt" v-if="mem.pnl_usdt !== null">
+                  {{ mem.pnl_usdt >= 0 ? '+' : '' }}{{ mem.pnl_usdt.toFixed(2) }} USDT
+                </span>
+              </div>
+              <NPopconfirm @positive-click="deleteMemory(mem.id)">
+                <template #trigger>
+                  <span class="delete-btn"><NIcon size="14"><TrashOutline /></NIcon></span>
+                </template>
+                确定删除这条记录？
+              </NPopconfirm>
             </div>
           </div>
 
-          <!-- Row 2: Prices, Duration, Close Reason -->
-          <div class="mem-details">
+          <!-- Row 2: Details -->
+          <div class="mem-details" v-if="mem.source !== 'system'">
             <div class="detail-item">
               <span class="detail-label">入场</span>
               <span class="detail-value">{{ formatPrice(mem.entry_price) }}</span>
@@ -327,9 +349,18 @@ onMounted(fetchAll)
               <span class="detail-value muted">{{ formatTime(mem.created_at) }}</span>
             </div>
           </div>
+          <!-- System entry (reset etc) -->
+          <div class="mem-details" v-else>
+            <div class="detail-item">
+              <span class="detail-value">{{ mem.open_reason }}</span>
+            </div>
+            <div class="detail-item time-item">
+              <span class="detail-value muted">{{ formatTime(mem.created_at) }}</span>
+            </div>
+          </div>
 
           <!-- Row 3: Reason (collapsible) -->
-          <div class="mem-reason" v-if="mem.open_reason">
+          <div class="mem-reason" v-if="mem.open_reason && mem.source !== 'system'">
             <span class="reason-label">理由:</span>
             {{ mem.open_reason }}
           </div>
@@ -533,6 +564,24 @@ onMounted(fetchAll)
 .mem-pnl.win { color: #22c55e; }
 .mem-pnl.loss { color: #ef4444; }
 .mem-pnl.breakeven { color: #6b7280; }
+
+.delete-btn {
+  cursor: pointer;
+  color: #4b5563;
+  opacity: 0;
+  transition: all 0.2s;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.memory-card:hover .delete-btn {
+  opacity: 1;
+}
+
+.delete-btn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
 
 .pnl-pct {
   font-size: 15px;
