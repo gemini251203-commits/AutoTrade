@@ -173,6 +173,7 @@ export interface AutopilotStatus {
 export interface AutopilotConfig {
   symbols: string[]
   interval: string
+  intervals: string[]
 }
 
 /** Autopilot 决策日志 */
@@ -227,3 +228,8 @@ export async function getAutopilotLogs(
   return response.data
 }
 
+/** 清空 autopilot 决策日志 */
+export async function clearAutopilotLogs() {
+  const response = await request.delete('/agent/autopilot/logs')
+  return response.data
+}

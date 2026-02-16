@@ -283,17 +283,18 @@ class AgentAutopilot:
         interval = config.get("interval", "15m")
         seconds = INTERVAL_SECONDS.get(interval, 900)
         symbols = config.get("symbols", ["BTCUSDT"])
+        intervals = config.get("intervals", [interval])
 
         logger.info(
             f"[Autopilot] Loop started: user={user_id}, "
-            f"interval={seconds}s, symbols={symbols}"
+            f"interval={seconds}s, symbols={symbols}, indicator_intervals={intervals}"
         )
 
         try:
             while True:
                 for symbol in symbols:
                     try:
-                        await self._run_cycle(user_id, symbol, interval)
+                        await self._run_cycle(user_id, symbol, intervals)
                     except Exception as e:
                         logger.error(
                             f"[Autopilot] Cycle error: user={user_id}, "
@@ -303,7 +304,7 @@ class AgentAutopilot:
         except asyncio.CancelledError:
             logger.info(f"[Autopilot] Loop cancelled for user {user_id}")
 
-    async def _run_cycle(self, user_id: int, symbol: str, interval: str = "1h") -> str:
+    async def _run_cycle(self, user_id: int, symbol: str, intervals: list = None) -> str:
         """
         单次决策周期 (增强版)
 
@@ -314,13 +315,16 @@ class AgentAutopilot:
         5. 解析 AI 回复 → 结构化日志
         6. 写入 AutopilotLog
         """
+        if intervals is None:
+            intervals = ["1h"]
+
         async with AsyncSessionLocal() as db:
             try:
                 # 获取或创建 autopilot 会话
                 conv_id = await self._get_or_create_conversation(db, user_id)
 
-                # 预取技术指标 (使用用户配置的 K 线级别)
-                indicator_text = await self._fetch_indicators(symbol, interval)
+                # 预取技术指标 (使用用户选择的多个 K 线级别)
+                indicator_text = await self._fetch_indicators(symbol, intervals)
 
                 # 构造分析指令 (直接注入指标数据)
                 now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
@@ -402,36 +406,35 @@ class AgentAutopilot:
                 logger.error(f"[Autopilot] run_cycle error: {e}")
                 raise
 
-    async def _fetch_indicators(self, symbol: str, interval: str = "1h") -> str:
+    async def _fetch_indicators(self, symbol: str, intervals: list = None) -> str:
         """预取多级别技术指标，返回格式化文本注入 prompt"""
-        # 将前端格式转换为 Binance API 格式
+        if not intervals:
+            intervals = ["1h"]
+
+        # 确保所有 interval 格式正确
         interval_map = {
             "5m": "5m", "15m": "15m", "30m": "30m",
-            "1h": "1h", "4h": "4h",
+            "1h": "1h", "4h": "4h", "1d": "1d",
             "5分钟": "5m", "15分钟": "15m", "30分钟": "30m",
             "1小时": "1h", "4小时": "4h",
         }
-        primary = interval_map.get(interval, "1h")
-
-        # 根据用户选择的级别搭配更高级别做多级别分析
-        timeframe_sets = {
-            "5m":  ["5m", "1h", "4h"],
-            "15m": ["15m", "1h", "4h"],
-            "30m": ["30m", "4h"],
-            "1h":  ["1h", "4h"],
-            "4h":  ["4h", "1d"],
-        }
-        intervals = timeframe_sets.get(primary, [primary, "4h"])
+        clean_intervals = [interval_map.get(i, i) for i in intervals]
+        # 去重保序
+        seen = set()
+        unique_intervals = []
+        for i in clean_intervals:
+            if i not in seen:
+                seen.add(i)
+                unique_intervals.append(i)
 
         try:
             from app.core.network import net_manager
             results = {}
 
             async with net_manager.get_client(timeout=15.0) as client:
-                # 并行请求所有级别的 K 线
                 import asyncio as aio
                 tasks = {}
-                for tf in intervals:
+                for tf in unique_intervals:
                     tasks[tf] = client.get(
                         "https://fapi.binance.com/fapi/v1/klines",
                         params={"symbol": symbol.upper(), "interval": tf, "limit": 100},
@@ -481,12 +484,11 @@ class AgentAutopilot:
             trend_cn = {"bullish": "看涨", "bearish": "看跌", "neutral": "中性"}
             all_lines = [f"== 多级别技术指标 ({symbol}) =="]
 
-            for tf in intervals:
+            for tf in unique_intervals:
                 if tf not in results:
                     continue
                 d = results[tf]
-                label = "★ " if tf == primary else ""
-                line = f"{label}[{tf}] RSI:{d['rsi']}"
+                line = f"[{tf}] RSI:{d['rsi']}"
                 if d['rsi'] > 70:
                     line += "(超买)"
                 elif d['rsi'] < 30:

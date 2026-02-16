@@ -285,6 +285,7 @@ class AutopilotStartRequest(BaseModel):
     """启动 autopilot 请求"""
     symbols: List[str] = Field(default=["BTCUSDT"], description="交易对列表")
     interval: str = Field(default="15m", description="决策间隔: 5m/15m/30m/1h/4h")
+    intervals: List[str] = Field(default=[], description="多级别指标: [5m, 1h, 4h]")
 
 
 @router.post("/autopilot/start")
@@ -301,6 +302,7 @@ async def autopilot_start(
         config={
             "symbols": request.symbols,
             "interval": request.interval,
+            "intervals": request.intervals if request.intervals else [request.interval],
         },
     )
     return {"message": "Autopilot started", **autopilot.get_status(current_user.id)}
@@ -345,3 +347,18 @@ async def autopilot_logs(
     )
     return logs
 
+
+@router.delete("/autopilot/logs")
+async def autopilot_clear_logs(
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """清空 autopilot 决策日志"""
+    from app.models.autopilot_log import AutopilotLog
+    result = await db.execute(
+        AutopilotLog.__table__.delete().where(
+            AutopilotLog.user_id == current_user.id
+        )
+    )
+    await db.commit()
+    return {"message": f"已清空 {result.rowcount} 条记录"}

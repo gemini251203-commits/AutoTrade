@@ -25,6 +25,7 @@ import {
   ChevronUpOutline,
   CloseOutline,
   AddOutline,
+  TrashOutline,
 } from '@vicons/ionicons5'
 import MainLayout from '@/layouts/MainLayout.vue'
 import {
@@ -33,6 +34,7 @@ import {
   runOnceAutopilot,
   getAutopilotStatus,
   getAutopilotLogs,
+  clearAutopilotLogs,
   type AutopilotStatus,
   type AutopilotLogResponse,
 } from '@/api/chat'
@@ -44,6 +46,7 @@ const message = useMessage()
 const symbols = ref<string[]>(['BTCUSDT'])
 const newSymbol = ref('')
 const interval = ref('15m')
+const selectedIntervals = ref<string[]>(['5m', '1h', '4h'])
 
 // Status
 const status = ref<AutopilotStatus>({
@@ -160,7 +163,7 @@ async function handleStart() {
   }
   loading.value = true
   try {
-    await startAutopilot({ symbols: symbols.value, interval: interval.value })
+    await startAutopilot({ symbols: symbols.value, interval: interval.value, intervals: selectedIntervals.value })
     message.success('自动交易已启动')
     await pollStatus()
   } catch (e: any) {
@@ -197,6 +200,30 @@ async function handleRunOnce() {
 
 function toggleExpand(logId: number) {
   expandedLogId.value = expandedLogId.value === logId ? null : logId
+}
+
+function toggleInterval(val: string) {
+  const idx = selectedIntervals.value.indexOf(val)
+  if (idx >= 0) {
+    if (selectedIntervals.value.length > 1) {
+      selectedIntervals.value.splice(idx, 1)
+    }
+  } else {
+    selectedIntervals.value.push(val)
+  }
+}
+
+async function handleClearLogs() {
+  if (logs.value.length === 0) return
+  loading.value = true
+  try {
+    await clearAutopilotLogs()
+    logs.value = []
+    message.success('已清空决策记录')
+  } catch {
+    message.error('清空失败')
+  }
+  loading.value = false
 }
 
 function formatTime(iso: string): string {
@@ -317,7 +344,7 @@ function formatTime(iso: string): string {
             </div>
           </div>
 
-          <!-- 间隔 -->
+          <!-- 分析间隔 -->
           <div class="config-section">
             <label>分析间隔</label>
             <select
@@ -329,6 +356,22 @@ function formatTime(iso: string): string {
                 {{ opt.label }}
               </option>
             </select>
+          </div>
+
+          <!-- 指标级别 -->
+          <div class="config-section">
+            <label>指标K线级别 <span class="hint">(可多选)</span></label>
+            <div class="interval-toggles">
+              <button
+                v-for="opt in intervalOptions"
+                :key="opt.value"
+                :class="['interval-chip', { active: selectedIntervals.includes(opt.value) }]"
+                :disabled="status.running"
+                @click="toggleInterval(opt.value)"
+              >
+                {{ opt.value }}
+              </button>
+            </div>
           </div>
 
           <!-- 操作按钮 -->
@@ -368,6 +411,16 @@ function formatTime(iso: string): string {
           <h3 class="panel-title">
             决策记录
             <span class="log-count" v-if="logs.length > 0">{{ logs.length }}</span>
+            <button
+              v-if="logs.length > 0"
+              class="btn btn-ghost btn-xs clear-logs-btn"
+              @click.stop="handleClearLogs"
+              :disabled="loading"
+              title="清空记录"
+            >
+              <NIcon :component="TrashOutline" :size="14" />
+              清空
+            </button>
           </h3>
 
           <div v-if="logsLoading && logs.length === 0" class="timeline-loading">
@@ -667,6 +720,67 @@ function formatTime(iso: string): string {
 
 .config-select:disabled {
   opacity: 0.5;
+}
+
+/* ==== Interval Toggle Chips ==== */
+.interval-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.interval-chip {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #888;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Courier New', monospace;
+}
+
+.interval-chip:hover:not(:disabled) {
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #bbb;
+}
+
+.interval-chip.active {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.6);
+  color: #a78bfa;
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.15);
+}
+
+.interval-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hint {
+  color: #666;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+/* ==== Clear Logs ==== */
+.clear-logs-btn {
+  margin-left: auto;
+  font-size: 12px;
+  color: #888 !important;
+  padding: 2px 8px !important;
+}
+
+.clear-logs-btn:hover {
+  color: #ff4d4f !important;
+}
+
+.btn-xs {
+  padding: 2px 8px;
+  font-size: 12px;
+  border-radius: 6px;
 }
 
 .action-buttons {
