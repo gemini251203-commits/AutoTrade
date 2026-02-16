@@ -301,6 +301,9 @@ class PositionManager:
                     margin_mode=margin_mode,
                     stop_loss=stop_loss,
                     take_profit=take_profit,
+                    source=source,
+                    open_reason=open_reason,
+                    commission=Decimal("0"),  # 手续费已在平仓时扣完
                 )
         
         # 3. 检查是否有同向仓位

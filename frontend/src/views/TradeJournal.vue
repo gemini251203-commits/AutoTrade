@@ -61,6 +61,7 @@ const sourceOptions = [
   { label: 'AI Agent', value: 'agent' },
   { label: '信号助手', value: 'signal' },
   { label: '量化策略', value: 'quant' },
+  { label: '系统操作', value: 'system' },
 ]
 
 const resultOptions = [
@@ -76,6 +77,7 @@ const sourceLabels: Record<string, string> = {
   agent: 'AI Agent',
   signal: '信号助手',
   quant: '量化策略',
+  system: '系统',
 }
 
 const sourceColors: Record<string, string> = {
@@ -83,15 +85,19 @@ const sourceColors: Record<string, string> = {
   agent: '#8b5cf6',
   signal: '#3b82f6',
   quant: '#10b981',
+  system: '#f59e0b',
 }
 
 const closeReasonLabels: Record<string, string> = {
   manual: '手动平仓',
   tp_hit: '止盈触发',
   sl_hit: '止损触发',
+  stop_loss: '止损触发',
+  take_profit: '止盈触发',
   liquidated: '强平',
   signal: '信号平仓',
   strategy: '策略平仓',
+  account_reset: '账户重置',
 }
 
 // ========== Fetch ==========

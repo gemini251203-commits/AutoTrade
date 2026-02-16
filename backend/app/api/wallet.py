@@ -286,6 +286,9 @@ async def reset_wallet(
     if not wallet:
         wallet = await WalletManager.initialize_wallet(db, user_id)
     
+    # 记录重置前余额
+    old_balance = wallet.balance + wallet.frozen
+    
     wallet.balance = initial
     wallet.frozen = Decimal("0")
     wallet.total_pnl = Decimal("0")
@@ -296,13 +299,27 @@ async def reset_wallet(
         type=TransactionType.RESET.value,
         amount=initial,
         balance_after=initial,
-        note=f"Full account reset to {initial} USDT",
+        note=f"Full account reset to {initial} USDT (was {old_balance} USDT)",
     )
     db.add(tx)
+    
+    # 🔥 记录到交易日志 (让 journal 页面对账)
+    from app.models.strategy import TradeMemory
+    journal_entry = TradeMemory(
+        user_id=user_id,
+        symbol="ACCOUNT",
+        source="system",
+        trade_result="breakeven",
+        pnl_pct=0,
+        pnl_usdt=float(initial - old_balance),
+        close_reason="account_reset",
+        open_reason=f"账户重置: {old_balance} → {initial} USDT",
+        lesson=f"Full account reset to {initial} USDT",
+    )
+    db.add(journal_entry)
     
     await db.commit()
     await db.refresh(wallet)
     
     logger.info(f"[Wallet] User {user_id} account fully reset to {initial} USDT")
     return wallet
-
