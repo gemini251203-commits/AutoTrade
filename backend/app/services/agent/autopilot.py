@@ -159,7 +159,7 @@ class AgentAutopilot:
 
         self._configs[user_id] = config
         self._stats[user_id] = {
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.utcnow().isoformat() + "Z",
             "total_cycles": 0,
             "last_cycle_at": None,
             "actions_taken": 0,

@@ -102,11 +102,15 @@ class MemoryResponse(BaseModel):
     """交易记忆响应"""
     id: int
     symbol: str
+    source: Optional[str] = None
+    side: Optional[str] = None
+    leverage: Optional[int] = None
     strategy_name: Optional[str] = None
     trade_result: str
     pnl_pct: float
+    pnl_usdt: Optional[float] = None
     situation: Optional[str] = None
-    lesson: str
+    lesson: Optional[str] = None
     created_at: str
 
     class Config:
@@ -383,7 +387,7 @@ async def get_memories(
     db: DbSession,
     limit: int = Query(default=20, le=100),
 ):
-    """获取策略相关的交易记忆"""
+    """获取策略相关的交易记忆（仅量化策略来源）"""
     # 先获取策略的 symbol
     result = await db.execute(
         select(Strategy).where(
@@ -395,12 +399,13 @@ async def get_memories(
     if not strategy:
         raise HTTPException(status_code=404, detail="策略不存在")
     
-    # 获取该交易对的记忆
+    # 获取该交易对 + 量化来源的记忆（不再混入手动交易）
     result = await db.execute(
         select(TradeMemory)
         .where(
             TradeMemory.user_id == current_user.id,
             TradeMemory.symbol == strategy.symbol,
+            TradeMemory.source == "quant",
         )
         .order_by(desc(TradeMemory.created_at))
         .limit(limit)
@@ -411,9 +416,13 @@ async def get_memories(
         {
             "id": m.id,
             "symbol": m.symbol,
+            "source": m.source,
+            "side": m.side,
+            "leverage": m.leverage,
             "strategy_name": m.strategy_name,
             "trade_result": m.trade_result,
             "pnl_pct": m.pnl_pct,
+            "pnl_usdt": m.pnl_usdt,
             "situation": m.situation,
             "lesson": m.lesson,
             "created_at": m.created_at.isoformat() if m.created_at else "",

@@ -456,12 +456,22 @@ onMounted(() => {
                   {{ m.trade_result === 'win' ? 'WIN' : 'LOSS' }}
                 </span>
                 <span class="text-sm text-white font-mono">{{ m.symbol }}</span>
+                <span v-if="m.side" class="px-1.5 py-0.5 rounded text-[10px] font-mono" :style="{
+                  background: m.side === 'long' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                  color: m.side === 'long' ? '#22c55e' : '#ef4444',
+                }">{{ m.side === 'long' ? '做多' : '做空' }}</span>
+                <span v-if="m.leverage" class="px-1.5 py-0.5 rounded text-[10px] font-mono" style="background: rgba(139,92,246,0.1); color: #a78bfa;">{{ m.leverage }}x</span>
                 <span class="text-xs text-gray-500">{{ m.strategy_name }}</span>
               </div>
               <div class="flex items-center gap-3 text-xs text-gray-500">
-                <span :style="{ color: pnlColor(m.pnl_pct) }">
-                  {{ m.pnl_pct >= 0 ? '+' : '' }}{{ m.pnl_pct.toFixed(2) }}%
-                </span>
+                <div class="text-right">
+                  <span :style="{ color: pnlColor(m.pnl_pct) }" class="font-mono font-medium">
+                    {{ m.pnl_pct >= 0 ? '+' : '' }}{{ m.pnl_pct.toFixed(2) }}%
+                  </span>
+                  <span v-if="m.pnl_usdt != null" class="block text-[11px] font-mono" :style="{ color: pnlColor(m.pnl_usdt), opacity: 0.8 }">
+                    {{ m.pnl_usdt >= 0 ? '+' : '' }}{{ m.pnl_usdt.toFixed(2) }} USDT
+                  </span>
+                </div>
                 <span>{{ formatDate(m.created_at || '') }}</span>
                 <button
                   @click.stop="handleDeleteMemory(m.id)"
