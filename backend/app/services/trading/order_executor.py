@@ -20,12 +20,12 @@ from decimal import Decimal
 from typing import Optional, List
 from datetime import datetime
 
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from loguru import logger
 
 from app.models.order import Order, OrderSide, OrderType, OrderStatus, PositionSideEnum
-from app.models.position import PositionSide, PositionStatus
+from app.models.position import Position, PositionSide, PositionStatus
 from app.services.trading import PositionManager, InsufficientMarginError
 from app.services.wallet import WalletManager, InsufficientFundsError
 from app.services.trading.fee_calculator import FeeCalculator
@@ -585,4 +585,110 @@ class OrderExecutor:
                 filled_orders.append(order)
         
         return filled_orders
+
+    @staticmethod
+    async def check_position_sl_tp(
+        db: AsyncSession,
+        symbol: str,
+        current_price: Decimal,
+    ) -> List[Position]:
+        """
+        🔥 检查仓位止损/止盈触发
+        
+        规则 (币安标准):
+        - LONG 止损: current_price <= stop_loss → 平仓
+        - LONG 止盈: current_price >= take_profit → 平仓
+        - SHORT 止损: current_price >= stop_loss → 平仓
+        - SHORT 止盈: current_price <= take_profit → 平仓
+        
+        Args:
+            db: 数据库会话
+            symbol: 交易对
+            current_price: 当前标记价格
+            
+        Returns:
+            已触发平仓的仓位列表
+        """
+        from app.services.trading.fee_calculator import FeeCalculator
+        
+        # 查询该交易对的所有开放仓位 (有止损或止盈的)
+        result = await db.execute(
+            select(Position).where(
+                and_(
+                    Position.symbol == symbol,
+                    Position.status == PositionStatus.OPEN,
+                    or_(
+                        Position.stop_loss.isnot(None),
+                        Position.take_profit.isnot(None),
+                    ),
+                )
+            )
+        )
+        positions = result.scalars().all()
+        
+        closed_positions = []
+        
+        for position in positions:
+            triggered = False
+            trigger_reason = ""
+            
+            if position.side == PositionSide.LONG:
+                # 多仓止损: 价格跌破止损价
+                if position.stop_loss and current_price <= position.stop_loss:
+                    triggered = True
+                    trigger_reason = f"SL triggered: price {current_price} <= SL {position.stop_loss}"
+                # 多仓止盈: 价格涨破止盈价
+                elif position.take_profit and current_price >= position.take_profit:
+                    triggered = True
+                    trigger_reason = f"TP triggered: price {current_price} >= TP {position.take_profit}"
+            else:
+                # 空仓止损: 价格涨破止损价
+                if position.stop_loss and current_price >= position.stop_loss:
+                    triggered = True
+                    trigger_reason = f"SL triggered: price {current_price} >= SL {position.stop_loss}"
+                # 空仓止盈: 价格跌破止盈价
+                elif position.take_profit and current_price <= position.take_profit:
+                    triggered = True
+                    trigger_reason = f"TP triggered: price {current_price} <= TP {position.take_profit}"
+            
+            if triggered:
+                logger.warning(
+                    f"[OrderExecutor] ⚠️ Position SL/TP triggered: "
+                    f"id={position.id}, {position.symbol} {position.side.value}, "
+                    f"{trigger_reason}"
+                )
+                
+                try:
+                    # 计算平仓手续费 (市价平仓 = Taker)
+                    commission = FeeCalculator.calculate_commission(
+                        position.size, current_price, is_maker=False
+                    )
+                    
+                    # 确定平仓原因
+                    close_reason = "stop_loss" if "SL" in trigger_reason else "take_profit"
+                    
+                    # 执行平仓
+                    closed_pos, pnl = await PositionManager.close_position(
+                        db=db,
+                        position_id=position.id,
+                        close_price=current_price,
+                        commission=commission,
+                    )
+                    
+                    closed_positions.append(closed_pos)
+                    
+                    logger.warning(
+                        f"[OrderExecutor] ✅ SL/TP close executed: "
+                        f"id={position.id}, pnl={pnl}, commission={commission}, "
+                        f"reason={close_reason}"
+                    )
+                    
+                except Exception as e:
+                    logger.error(
+                        f"[OrderExecutor] SL/TP close failed: "
+                        f"position_id={position.id}, error={e}"
+                    )
+        
+        return closed_positions
+
 

@@ -141,7 +141,7 @@ class PriceStreamService:
             asyncio.create_task(self._check_orders(symbol, price))
     
     async def _check_orders(self, symbol: str, current_price: Decimal):
-        """检查该交易对的挂单"""
+        """检查该交易对的挂单 + 仓位止损止盈"""
         try:
             async with AsyncSessionLocal() as db:
                 # 检查限价单
@@ -154,7 +154,12 @@ class PriceStreamService:
                     db, symbol, current_price
                 )
                 
-                if filled or triggered:
+                # 🔥 检查仓位止损/止盈
+                sl_tp_closed = await OrderExecutor.check_position_sl_tp(
+                    db, symbol, current_price
+                )
+                
+                if filled or triggered or sl_tp_closed:
                     await db.commit()
                     
                     if filled:
@@ -165,6 +170,11 @@ class PriceStreamService:
                     if triggered:
                         logger.info(
                             f"[PriceStream] {len(triggered)} conditional orders triggered "
+                            f"for {symbol} @ {current_price}"
+                        )
+                    if sl_tp_closed:
+                        logger.warning(
+                            f"[PriceStream] ⚠️ {len(sl_tp_closed)} positions SL/TP closed "
                             f"for {symbol} @ {current_price}"
                         )
                         
