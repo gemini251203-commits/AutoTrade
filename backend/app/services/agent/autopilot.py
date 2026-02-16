@@ -12,6 +12,7 @@ AI Agent 自动交易模式 — 增强版
 """
 
 import asyncio
+import json
 import re
 from typing import Dict, Optional, List
 from datetime import datetime
@@ -288,28 +289,32 @@ class AgentAutopilot:
         单次决策周期 (增强版)
 
         1. 获取/创建 autopilot 专属会话
-        2. 构造分析指令
-        3. 调用 agent chat_complete (非流式)
-        4. 解析 AI 回复 → 结构化日志
-        5. 写入 AutopilotLog
+        2. 预取技术指标
+        3. 构造分析指令 (含指标数据)
+        4. 调用 agent chat_complete (非流式)
+        5. 解析 AI 回复 → 结构化日志
+        6. 写入 AutopilotLog
         """
         async with AsyncSessionLocal() as db:
             try:
                 # 获取或创建 autopilot 会话
                 conv_id = await self._get_or_create_conversation(db, user_id)
 
-                # 构造分析指令
+                # 预取技术指标
+                indicator_text = await self._fetch_indicators(symbol)
+
+                # 构造分析指令 (直接注入指标数据)
                 now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
                 prompt = (
                     f"[Autopilot {now}] "
                     f"请分析 {symbol} 当前市场状况并做出交易决策。\n\n"
+                    f"{indicator_text}\n\n"
                     f"请按以下步骤操作:\n"
-                    f"1. 查询 {symbol} 实时价格\n"
-                    f"2. 获取技术指标\n"
-                    f"3. 查看当前持仓和余额\n"
-                    f"4. 查询历史交易经验\n"
-                    f"5. 综合分析后给出决策: 开仓/平仓/观望\n"
-                    f"6. 如果决定交易, 直接执行\n\n"
+                    f"1. 查询 {symbol} 实时价格 (如需更新)\n"
+                    f"2. 查看当前持仓和余额\n"
+                    f"3. 查询历史交易经验\n"
+                    f"4. 结合上方技术指标综合分析后给出决策: 开仓/平仓/观望\n"
+                    f"5. 如果决定交易, 直接执行\n\n"
                     f"回复要简洁, 列出关键数据和理由。\n"
                     f"最后一行请明确写出你的决策: 观望/开多/开空/平多/平空"
                 )
@@ -378,20 +383,78 @@ class AgentAutopilot:
                 logger.error(f"[Autopilot] run_cycle error: {e}")
                 raise
 
+    async def _fetch_indicators(self, symbol: str) -> str:
+        """预取技术指标，返回格式化文本注入 prompt"""
+        try:
+            from app.core.network import net_manager
+            async with net_manager.get_client(timeout=15.0) as client:
+                resp = await client.get(
+                    "https://fapi.binance.com/fapi/v1/klines",
+                    params={"symbol": symbol.upper(), "interval": "1h", "limit": 100},
+                )
+                if resp.status_code == 200:
+                    raw = resp.json()
+                    if raw and len(raw) >= 15:
+                        closes = [float(k[4]) for k in raw]
+
+                        # RSI(14)
+                        changes = [closes[i] - closes[i-1] for i in range(1, len(closes))]
+                        gains = [c if c > 0 else 0 for c in changes[-14:]]
+                        losses = [-c if c < 0 else 0 for c in changes[-14:]]
+                        avg_gain = sum(gains) / 14
+                        avg_loss = sum(losses) / 14
+                        rsi = round(100 - (100 / (1 + avg_gain / avg_loss)), 2) if avg_loss > 0 else 100.0
+
+                        ma7 = round(sum(closes[-7:]) / 7, 2)
+                        ma25 = round(sum(closes[-25:]) / 25, 2) if len(closes) >= 25 else None
+
+                        current = closes[-1]
+                        trend = "neutral"
+                        if ma7 and ma25:
+                            if rsi > 50 and current > ma7 > ma25:
+                                trend = "bullish"
+                            elif rsi < 50 and current < ma7 < ma25:
+                                trend = "bearish"
+                        trend_cn = {"bullish": "看涨", "bearish": "看跌", "neutral": "中性"}
+
+                        logger.info(f"[Autopilot] Fetched indicators: RSI={rsi}, MA7={ma7}, MA25={ma25}, trend={trend}")
+                        lines = [
+                            f"== 技术指标 ({symbol}, 1h) ==",
+                            f"RSI(14): {rsi}" + (" (超买)" if rsi > 70 else " (超卖)" if rsi < 30 else ""),
+                            f"MA7: ${ma7:,.2f}",
+                        ]
+                        if ma25:
+                            lines.append(f"MA25: ${ma25:,.2f}")
+                        lines.append(f"趋势: {trend_cn.get(trend, '中性')}")
+                        return "\n".join(lines)
+                else:
+                    logger.warning(f"[Autopilot] Binance klines HTTP {resp.status_code}")
+        except Exception as e:
+            logger.warning(f"[Autopilot] Failed to fetch indicators: {e}")
+        return f"== 技术指标 ({symbol}) ==\n暂时无法获取，请使用工具 get_indicators 获取"
+
     async def _get_or_create_conversation(
         self, db: AsyncSession, user_id: int
     ) -> int:
-        """获取或创建 autopilot 专属会话"""
+        """获取或创建 autopilot 专属会话 (每次启动重建)"""
+        # 删除旧的 autopilot 会话，避免历史消息污染
         result = await db.execute(
             select(ChatConversation).where(
                 ChatConversation.user_id == user_id,
                 ChatConversation.persona == "autopilot",
             )
         )
-        conv = result.scalar_one_or_none()
+        old_conv = result.scalar_one_or_none()
 
-        if conv:
-            return conv.id
+        if old_conv:
+            # 删除旧会话的消息
+            from app.models.agent import ChatMessage as CM
+            await db.execute(
+                CM.__table__.delete().where(CM.conversation_id == old_conv.id)
+            )
+            await db.delete(old_conv)
+            await db.flush()
+            logger.info(f"[Autopilot] Cleared old conversation {old_conv.id} for user {user_id}")
 
         conv = ChatConversation(
             user_id=user_id,
@@ -401,7 +464,7 @@ class AgentAutopilot:
         db.add(conv)
         await db.flush()
         logger.info(
-            f"[Autopilot] Created conversation {conv.id} for user {user_id}"
+            f"[Autopilot] Created fresh conversation {conv.id} for user {user_id}"
         )
         return conv.id
 
