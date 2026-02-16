@@ -403,60 +403,103 @@ class AgentAutopilot:
                 raise
 
     async def _fetch_indicators(self, symbol: str, interval: str = "1h") -> str:
-        """预取技术指标，返回格式化文本注入 prompt"""
-        # 将前端的分析间隔格式转换为 Binance API 格式
+        """预取多级别技术指标，返回格式化文本注入 prompt"""
+        # 将前端格式转换为 Binance API 格式
         interval_map = {
             "5m": "5m", "15m": "15m", "30m": "30m",
             "1h": "1h", "4h": "4h",
             "5分钟": "5m", "15分钟": "15m", "30分钟": "30m",
             "1小时": "1h", "4小时": "4h",
         }
-        binance_interval = interval_map.get(interval, "1h")
+        primary = interval_map.get(interval, "1h")
+
+        # 根据用户选择的级别搭配更高级别做多级别分析
+        timeframe_sets = {
+            "5m":  ["5m", "1h", "4h"],
+            "15m": ["15m", "1h", "4h"],
+            "30m": ["30m", "4h"],
+            "1h":  ["1h", "4h"],
+            "4h":  ["4h", "1d"],
+        }
+        intervals = timeframe_sets.get(primary, [primary, "4h"])
 
         try:
             from app.core.network import net_manager
+            results = {}
+
             async with net_manager.get_client(timeout=15.0) as client:
-                resp = await client.get(
-                    "https://fapi.binance.com/fapi/v1/klines",
-                    params={"symbol": symbol.upper(), "interval": binance_interval, "limit": 100},
-                )
-                if resp.status_code == 200:
+                # 并行请求所有级别的 K 线
+                import asyncio as aio
+                tasks = {}
+                for tf in intervals:
+                    tasks[tf] = client.get(
+                        "https://fapi.binance.com/fapi/v1/klines",
+                        params={"symbol": symbol.upper(), "interval": tf, "limit": 100},
+                    )
+
+                responses = await aio.gather(*tasks.values(), return_exceptions=True)
+
+                for tf, resp in zip(tasks.keys(), responses):
+                    if isinstance(resp, Exception):
+                        logger.warning(f"[Autopilot] Klines {tf} error: {resp}")
+                        continue
+                    if resp.status_code != 200:
+                        logger.warning(f"[Autopilot] Klines {tf} HTTP {resp.status_code}")
+                        continue
+
                     raw = resp.json()
-                    if raw and len(raw) >= 15:
-                        closes = [float(k[4]) for k in raw]
+                    if not raw or len(raw) < 15:
+                        continue
 
-                        # RSI(14)
-                        changes = [closes[i] - closes[i-1] for i in range(1, len(closes))]
-                        gains = [c if c > 0 else 0 for c in changes[-14:]]
-                        losses = [-c if c < 0 else 0 for c in changes[-14:]]
-                        avg_gain = sum(gains) / 14
-                        avg_loss = sum(losses) / 14
-                        rsi = round(100 - (100 / (1 + avg_gain / avg_loss)), 2) if avg_loss > 0 else 100.0
+                    closes = [float(k[4]) for k in raw]
 
-                        ma7 = round(sum(closes[-7:]) / 7, 2)
-                        ma25 = round(sum(closes[-25:]) / 25, 2) if len(closes) >= 25 else None
+                    # RSI(14)
+                    changes = [closes[i] - closes[i-1] for i in range(1, len(closes))]
+                    gains = [c if c > 0 else 0 for c in changes[-14:]]
+                    losses = [-c if c < 0 else 0 for c in changes[-14:]]
+                    avg_gain = sum(gains) / 14
+                    avg_loss = sum(losses) / 14
+                    rsi = round(100 - (100 / (1 + avg_gain / avg_loss)), 2) if avg_loss > 0 else 100.0
 
-                        current = closes[-1]
-                        trend = "neutral"
-                        if ma7 and ma25:
-                            if rsi > 50 and current > ma7 > ma25:
-                                trend = "bullish"
-                            elif rsi < 50 and current < ma7 < ma25:
-                                trend = "bearish"
-                        trend_cn = {"bullish": "看涨", "bearish": "看跌", "neutral": "中性"}
+                    ma7 = round(sum(closes[-7:]) / 7, 2)
+                    ma25 = round(sum(closes[-25:]) / 25, 2) if len(closes) >= 25 else None
 
-                        logger.info(f"[Autopilot] Fetched indicators ({binance_interval}): RSI={rsi}, MA7={ma7}, MA25={ma25}, trend={trend}")
-                        lines = [
-                            f"== 技术指标 ({symbol}, {binance_interval}) ==",
-                            f"RSI(14): {rsi}" + (" (超买)" if rsi > 70 else " (超卖)" if rsi < 30 else ""),
-                            f"MA7: ${ma7:,.2f}",
-                        ]
-                        if ma25:
-                            lines.append(f"MA25: ${ma25:,.2f}")
-                        lines.append(f"趋势: {trend_cn.get(trend, '中性')}")
-                        return "\n".join(lines)
-                else:
-                    logger.warning(f"[Autopilot] Binance klines HTTP {resp.status_code}")
+                    current = closes[-1]
+                    trend = "neutral"
+                    if ma7 and ma25:
+                        if rsi > 50 and current > ma7 > ma25:
+                            trend = "bullish"
+                        elif rsi < 50 and current < ma7 < ma25:
+                            trend = "bearish"
+
+                    results[tf] = {"rsi": rsi, "ma7": ma7, "ma25": ma25, "trend": trend}
+
+            if not results:
+                return f"== 技术指标 ({symbol}) ==\n暂时无法获取，请使用工具 get_indicators 获取"
+
+            # 格式化多级别输出
+            trend_cn = {"bullish": "看涨", "bearish": "看跌", "neutral": "中性"}
+            all_lines = [f"== 多级别技术指标 ({symbol}) =="]
+
+            for tf in intervals:
+                if tf not in results:
+                    continue
+                d = results[tf]
+                label = "★ " if tf == primary else ""
+                line = f"{label}[{tf}] RSI:{d['rsi']}"
+                if d['rsi'] > 70:
+                    line += "(超买)"
+                elif d['rsi'] < 30:
+                    line += "(超卖)"
+                line += f" | MA7:${d['ma7']:,.2f}"
+                if d['ma25']:
+                    line += f" | MA25:${d['ma25']:,.2f}"
+                line += f" | {trend_cn.get(d['trend'], '中性')}"
+                all_lines.append(line)
+
+            logger.info(f"[Autopilot] Multi-TF indicators: {json.dumps({k: v['rsi'] for k, v in results.items()})}")
+            return "\n".join(all_lines)
+
         except Exception as e:
             logger.warning(f"[Autopilot] Failed to fetch indicators: {e}")
         return f"== 技术指标 ({symbol}) ==\n暂时无法获取，请使用工具 get_indicators 获取"
