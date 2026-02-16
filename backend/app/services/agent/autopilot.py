@@ -95,8 +95,14 @@ def extract_summary(ai_reply: str) -> str:
     lines = ai_reply.strip().split("\n")
     for line in lines:
         clean = line.strip().lstrip("#").lstrip("-").lstrip("*").strip()
-        if clean and len(clean) > 5 and not clean.startswith("[TOOL_CALL"):
-            return clean[:200]
+        if not clean or len(clean) <= 5:
+            continue
+        if clean.startswith("[TOOL_CALL"):
+            continue
+        # 跳过工具调用计数行，如 "[执行了 4 个操作]" 或 "执行了 4 个操作"
+        if "执行了" in clean and "个操作" in clean:
+            continue
+        return clean[:200]
     return ai_reply[:200] if ai_reply else "无摘要"
 
 

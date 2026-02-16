@@ -29,7 +29,7 @@ const symbolStore = useSymbolStore()
 const { getPrice, isConnected: wsConnected } = useWebSocket()
 
 // ==================== 基础状态 ====================
-// 🔥 从 store 获取当前交易对
+// 从 store 获取当前交易对
 const symbol = computed(() => symbolStore.currentSymbol)
 const baseAsset = computed(() => symbolStore.baseAsset)  // BTC, ETH 等
 const currentPrice = ref(0)
@@ -49,7 +49,7 @@ const orderTypeTab = ref<OrderTypeTab>('limit')
 
 // ==================== 价格和仓位 ====================
 const price = ref<number | null>(null)
-// 🔥 改为仓位大小 (USDT 名义价值)
+// 改为仓位大小 (USDT 名义价值)
 const notional = ref<number | null>(null)
 const sliderValue = ref(0)
 
@@ -256,7 +256,7 @@ async function openPosition(side: 'long' | 'short') {
 
     if (orderTypeTab.value === 'limit') {
       // ========== 限价单 (使用 Order API) ==========
-      // ⚠️ 注意: 后端 Order 系统目前不支持 margin_mode 参数，限价单将默认为 ISOLATED (逐仓)
+      // 注意: 后端 Order 系统目前不支持 margin_mode 参数，限价单将默认为 ISOLATED (逐仓)
       if (marginMode.value === 'cross') {
         message.warning('即将在逐仓模式下创建限价单 (系统限制)')
       }
@@ -361,7 +361,7 @@ watch(
   }
 )
 
-// 🔥 监听交易对变化，重新获取价格和仓位
+// 监听交易对变化，重新获取价格和仓位
 watch(() => symbolStore.currentSymbol, async (newSymbol, oldSymbol) => {
   if (newSymbol !== oldSymbol) {
 
@@ -382,7 +382,7 @@ onMounted(async () => {
   await fetchLatestPrice()
   await fetchExistingPosition()
   
-  // 🔥 WebSocket 实时价格更新 (替代 setInterval 1s 轮询)
+  // WebSocket 实时价格更新 (替代 setInterval 1s 轮询)
   // 每 500ms 检查 WS 价格，比 HTTP 轮询节省大量请求
   priceCheckInterval = setInterval(() => {
     if (wsConnected.value) {
@@ -844,7 +844,7 @@ onUnmounted(() => {
   color: #a855f7;
 }
 
-/* 🔥 新增: BTC 数量显示 */
+/* 新增: BTC 数量显示 */
 .btc-display {
   font-size: 12px;
   color: #6b7280;
@@ -852,13 +852,13 @@ onUnmounted(() => {
   padding-left: 2px;
 }
 
-/* 🔥 新增: 滑块容器 */
+/* 新增: 滑块容器 */
 .slider-wrapper {
   margin-bottom: 16px;
   padding: 0 4px;
 }
 
-/* 🔥 新增: 信息行 */
+/* 新增: 信息行 */
 .info-rows {
   margin-bottom: 16px;
   padding: 12px;

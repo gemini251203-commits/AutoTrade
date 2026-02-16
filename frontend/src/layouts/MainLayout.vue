@@ -56,7 +56,7 @@ function handleNav(item: typeof navItems[0]) {
   router.push(item.route)
 }
 
-// 🔍 调试: 组件挂载时加载钱包数据
+// 调试: 组件挂载时加载钱包数据
 onMounted(async () => {
   await walletStore.fetchBalance()
 })

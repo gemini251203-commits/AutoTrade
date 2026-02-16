@@ -70,11 +70,12 @@ class IndicatorService:
         limit: int = 100
     ) -> List[Dict]:
         """
-        从数据库获取 K 线数据
+        从数据库获取 K 线数据，数据库为空时 fallback 到 Binance API
         
         Returns:
             List of kline dicts with: open, high, low, close, volume
         """
+        # 1. 优先从数据库获取
         async with AsyncSessionLocal() as db:
             result = await db.execute(
                 select(Kline)
@@ -85,19 +86,41 @@ class IndicatorService:
             )
             klines = result.scalars().all()
             
-            # 转换为 dict 列表 (按时间正序)
-            data = []
-            for k in reversed(klines):
-                data.append({
-                    "open_time": k.open_time,
-                    "open": float(k.open),
-                    "high": float(k.high),
-                    "low": float(k.low),
-                    "close": float(k.close),
-                    "volume": float(k.volume),
-                })
-            
-            return data
+            if klines:
+                data = []
+                for k in reversed(klines):
+                    data.append({
+                        "open_time": k.open_time,
+                        "open": float(k.open),
+                        "high": float(k.high),
+                        "low": float(k.low),
+                        "close": float(k.close),
+                        "volume": float(k.volume),
+                    })
+                return data
+        
+        # 2. 数据库无数据 → fallback 到 Binance API
+        try:
+            from app.services.exchange import BinanceClient
+            client = BinanceClient()
+            raw_klines = await client.get_klines(symbol.upper(), interval, limit=limit)
+            if raw_klines:
+                logger.info(f"[Indicator] DB empty, fetched {len(raw_klines)} klines from Binance API for {symbol}/{interval}")
+                data = []
+                for k in raw_klines:
+                    data.append({
+                        "open_time": k["open_time"],
+                        "open": float(k["open"]),
+                        "high": float(k["high"]),
+                        "low": float(k["low"]),
+                        "close": float(k["close"]),
+                        "volume": float(k["volume"]),
+                    })
+                return data
+        except Exception as e:
+            logger.warning(f"[Indicator] Binance API fallback failed: {e}")
+        
+        return []
     
     def calculate_rsi(self, closes: List[float], period: int = 14) -> Optional[float]:
         """

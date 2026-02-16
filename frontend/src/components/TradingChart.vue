@@ -28,19 +28,19 @@ const isLoading = ref(true)
 const selectedTimeframe = ref('1h')
 const timeframes = ['1m', '5m', '15m', '1h', '4h', '1d']
 
-// 🔥 使用全局 Symbol Store
+// 使用全局 Symbol Store
 const symbolStore = useSymbolStore()
 const symbols = SYMBOLS
 const symbolMenuOpen = ref(false)
 
-// 🔥 从 store 获取当前交易对信息
+// 从 store 获取当前交易对信息
 const currentSymbol = computed(() => symbolStore.currentSymbol)
 const currentSymbolInfo = computed((): SymbolInfo => symbolStore.currentSymbolInfo!)
 
 
 // Handle symbol change
 async function handleSymbolChange(symbolCode: string) {
-  symbolStore.setSymbol(symbolCode)  // 🔥 更新 store
+  symbolStore.setSymbol(symbolCode)  // 更新 store
   symbolMenuOpen.value = false
   emit('symbolChange', symbolCode)
   
@@ -50,7 +50,7 @@ async function handleSymbolChange(symbolCode: string) {
     if (klines && klines.length > 0) {
       candlestickSeries.setData(klines)
     } else {
-      console.warn('[TradingChart] ⚠️ No data to display')
+      console.warn('[TradingChart] No data to display')
     }
   }
 }
@@ -73,7 +73,7 @@ async function fetchKlines(interval: string = '1h', limit?: number): Promise<Can
   const fetchLimit = limit ?? KLINE_LIMITS[interval] ?? 500
   try {
     isLoading.value = true
-    const symbol = symbolStore.currentSymbol  // 🔥 使用 store
+    const symbol = symbolStore.currentSymbol  // 使用 store
     
     const response = await request.get('/market/klines', {
       params: {
@@ -112,7 +112,7 @@ async function fetchKlines(interval: string = '1h', limit?: number): Promise<Can
     return klines
     
   } catch (error) {
-    console.error('[TradingChart] ❌ 获取 K 线数据失败:', error)
+    console.error('[TradingChart] 获取 K 线数据失败:', error)
     return []
   } finally {
     isLoading.value = false
@@ -169,7 +169,7 @@ async function initChart() {
       },
     })
     
-    // ✅ lightweight-charts v5 新 API
+    // lightweight-charts v5 新 API
     candlestickSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#22c55e',
       downColor: '#ef4444',
@@ -189,11 +189,11 @@ async function initChart() {
       candlestickSeries.setData(klines)
       chart.timeScale().fitContent()
     } else {
-      console.warn('[TradingChart] ⚠️ 没有获取到数据，请运行 binance_spider.py')
+      console.warn('[TradingChart] 没有获取到数据，请运行 binance_spider.py')
     }
     
   } catch (error) {
-    console.error('[TradingChart] ❌ K 线图初始化失败:', error)
+    console.error('[TradingChart] K 线图初始化失败:', error)
   }
 }
 
@@ -228,7 +228,7 @@ function startLiveUpdates() {
     // 检查组件是否已销毁或图表不存在
     if (isDestroyed || !candlestickSeries || !chart) return
     
-    const symbol = symbolStore.currentSymbol  // 🔥 使用 store
+    const symbol = symbolStore.currentSymbol  // 使用 store
     
     try {
       // 1. 获取实时行情 (直接从币安获取，最准确)
@@ -238,7 +238,7 @@ function startLiveUpdates() {
         currentPrice.value = tickerRes.data.price
         priceChange.value = tickerRes.data.change_percent || 0
         isPositive.value = priceChange.value >= 0
-        // 🔥 同步更新 store 的价格
+        // 同步更新 store 的价格
         symbolStore.updatePrice(tickerRes.data.price, tickerRes.data.change_percent)
       }
     } catch {

@@ -4,7 +4,7 @@ import { NConfigProvider, NMessageProvider, NDialogProvider, darkTheme, NGlobalS
 import { RouterView } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 
-// 🔥 Initialize auth on app startup to restore session from localStorage
+// Initialize auth on app startup to restore session from localStorage
 const authStore = useAuthStore()
 onMounted(() => {
   authStore.initialize()

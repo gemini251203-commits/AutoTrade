@@ -49,7 +49,7 @@ const gridBots = ref<GridBot[]>([])
 const showCreateForm = ref(false)
 const currentPrice = ref(0)
 
-// 创建表单 - 🔥 默认使用 store 的当前交易对
+// 创建表单 - 默认使用 store 的当前交易对
 const form = ref({
   name: '',
   symbol: symbolStore.currentSymbol,
@@ -63,7 +63,7 @@ const form = ref({
 })
 
 // ==================== 计算属性 ====================
-// 🔥 使用 store 的完整交易对列表
+// 使用 store 的完整交易对列表
 const symbolOptions = computed(() => symbolStore.symbolOptions)
 
 const gridTypeOptions = [
@@ -123,7 +123,7 @@ async function fetchCurrentPrice() {
 function openCreateForm() {
   form.value = {
     name: `${symbolStore.currentSymbol} 网格 #${gridBots.value.length + 1}`,
-    symbol: symbolStore.currentSymbol,  // 🔥 使用当前选中的交易对
+    symbol: symbolStore.currentSymbol,  // 使用当前选中的交易对
     lower_price: null,
     upper_price: null,
     grid_count: 10,
@@ -180,7 +180,7 @@ async function startGrid(botId: number) {
   try {
     // 找到对应的 bot 获取其 symbol
     const bot = gridBots.value.find(b => b.id === botId)
-    const symbol = bot?.symbol || symbolStore.currentSymbol  // 🔥 使用 store
+    const symbol = bot?.symbol || symbolStore.currentSymbol  // 使用 store
     
     // 获取当前价格
     const priceResp = await request.get('/market/klines/latest', {

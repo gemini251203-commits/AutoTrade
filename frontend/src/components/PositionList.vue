@@ -36,7 +36,7 @@ interface PositionRisk {
   margin_ratio: string
   is_at_risk: boolean
   should_liquidate: boolean
-  // 🔥 新增
+  // 新增
   stop_loss: string | null
   take_profit: string | null
 }

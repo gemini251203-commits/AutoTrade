@@ -85,12 +85,12 @@ const decisionColors: Record<string, string> = {
 }
 
 const decisionLabels: Record<string, string> = {
-  hold: '📊 观望',
-  open_long: '🟢 开多',
-  open_short: '🔴 开空',
-  close_long: '🟡 平多',
-  close_short: '🟡 平空',
-  error: '❌ 异常',
+  hold: '观望',
+  open_long: '开多',
+  open_short: '开空',
+  close_long: '平多',
+  close_short: '平空',
+  error: '异常',
 }
 
 const runDuration = computed(() => {
@@ -160,7 +160,7 @@ async function handleStart() {
   loading.value = true
   try {
     await startAutopilot({ symbols: symbols.value, interval: interval.value })
-    message.success('🚀 自动交易已启动')
+    message.success('自动交易已启动')
     await pollStatus()
   } catch (e: any) {
     message.error(e?.response?.data?.detail || '启动失败')
@@ -415,15 +415,15 @@ function formatTime(iso: string): string {
                 <!-- 展开详情 -->
                 <div v-if="expandedLogId === log.id" class="card-detail">
                   <div class="detail-section" v-if="log.action_taken">
-                    <span class="detail-label">✅ 已执行操作</span>
+                    <span class="detail-label">已执行操作</span>
                     <span v-if="log.order_id" class="detail-value">订单 #{{ log.order_id }}</span>
                   </div>
                   <div class="detail-section" v-if="log.error_message">
-                    <span class="detail-label">❌ 错误</span>
+                    <span class="detail-label">错误</span>
                     <span class="detail-value error">{{ log.error_message }}</span>
                   </div>
                   <div class="thinking-block">
-                    <div class="thinking-label">🧠 AI 思考过程</div>
+                    <div class="thinking-label">AI 思考过程</div>
                     <pre class="thinking-content">{{ log.thinking }}</pre>
                   </div>
                 </div>
