@@ -19,13 +19,15 @@ AI 交易代理端点
 import json
 from typing import Optional, List
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select, desc, delete
 from loguru import logger
 
 from app.api.deps import CurrentUser, DbSession
+from app.db.session import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.agent import ChatConversation, ChatMessage
 from app.services.agent.agent import chat_stream
 from app.services.agent.prompts import get_persona_names
