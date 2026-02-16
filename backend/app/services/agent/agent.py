@@ -80,15 +80,6 @@ async def execute_tool(
 ) -> str:
     """
     执行单个工具
-
-    Args:
-        tool_name: 工具名称 (如 get_price, place_order)
-        args: 工具参数字典
-        db: 数据库会话
-        user_id: 用户 ID
-
-    Returns:
-        工具执行结果 (JSON 字符串)
     """
     tool_fn = TOOL_REGISTRY.get(tool_name)
     if not tool_fn:
@@ -97,7 +88,9 @@ async def execute_tool(
     try:
         # 转换参数类型
         typed_args = {k: _cast_arg(v) for k, v in args.items()}
+        logger.info(f"[Agent] Calling tool: {tool_name}({typed_args})")
         result = await tool_fn(db=db, user_id=user_id, **typed_args)
+        logger.info(f"[Agent] Tool {tool_name} returned: {result[:200]}")
         return result
     except Exception as e:
         logger.error(f"[Agent] Tool {tool_name} failed: {e}")
