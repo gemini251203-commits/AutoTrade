@@ -264,7 +264,7 @@ class PositionManager:
         if opposite_position:
             # 🔥 净仓位模式: 反向订单 = 平掉反向仓位
             # 先释放刚才冻结的保证金 (close_position 会单独处理)
-            await WalletManager.release_funds(db, user_id, margin_required)
+            await WalletManager.unfreeze_funds(db, user_id, margin_required)
             
             if quantity <= opposite_position.size:
                 # 情况1: 反向数量 <= 现有仓位 → 部分平仓
@@ -273,7 +273,7 @@ class PositionManager:
                     f"by {quantity} (partial close)"
                 )
                 updated_pos, pnl = await PositionManager.close_position(
-                    db, opposite_position.id, entry_price, quantity
+                    db, opposite_position.id, entry_price, quantity, commission=commission
                 )
                 return updated_pos
             else:
@@ -286,7 +286,7 @@ class PositionManager:
                 
                 # 先全部平仓
                 await PositionManager.close_position(
-                    db, opposite_position.id, entry_price
+                    db, opposite_position.id, entry_price, commission=commission
                 )
                 
                 # 递归调用开反向仓位 (此时没有反向仓位了)
@@ -318,6 +318,7 @@ class PositionManager:
             existing.entry_price = new_avg_price
             existing.margin += margin_required
             existing.leverage = leverage  # 更新杠杆
+            existing.total_commission += commission  # 🔥 累加手续费
             
             # 🔥 全仓模式: 使用钱包余额计算强平价
             wallet = await WalletManager.get_or_create_wallet(db, user_id)
@@ -552,9 +553,15 @@ class PositionManager:
             f"symbol={position.symbol}, side={position.side.value}"
         )
         
+        # 🔥 强平手续费 (使用 FeeCalculator 的清算费率)
+        from app.services.trading.fee_calculator import FeeCalculator
+        liq_commission = (
+            position.size * position.liquidation_price * FeeCalculator.LIQUIDATION_FEE_RATE
+        )
+        
         # 以强平价格平仓
         _, pnl = await PositionManager.close_position(
-            db, position_id, position.liquidation_price
+            db, position_id, position.liquidation_price, commission=liq_commission
         )
         
         # 更新状态为已强平

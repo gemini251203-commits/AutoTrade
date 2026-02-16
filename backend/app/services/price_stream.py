@@ -29,7 +29,7 @@ class PriceStreamService:
     实时价格流服务
     
     使用 Binance WebSocket 获取实时价格，
-    实现毫秒级订单撮合。
+    实现毫秒级订单撮合 + 止损止盈 + 强平监控。
     """
     
     # Binance WebSocket 端点
@@ -141,7 +141,7 @@ class PriceStreamService:
             asyncio.create_task(self._check_orders(symbol, price))
     
     async def _check_orders(self, symbol: str, current_price: Decimal):
-        """检查该交易对的挂单 + 仓位止损止盈"""
+        """检查该交易对的挂单 + 仓位止损止盈 + 强平"""
         try:
             async with AsyncSessionLocal() as db:
                 # 检查限价单
@@ -159,7 +159,13 @@ class PriceStreamService:
                     db, symbol, current_price
                 )
                 
-                if filled or triggered or sl_tp_closed:
+                # 🔥 检查强平 (替代原来缺失的定时任务)
+                from app.services.risk import RiskEngine
+                price_map = {symbol: current_price}
+                liquidated = await RiskEngine.monitor_positions(db, price_map)
+                
+                has_changes = filled or triggered or sl_tp_closed or liquidated
+                if has_changes:
                     await db.commit()
                     
                     if filled:
@@ -175,6 +181,11 @@ class PriceStreamService:
                     if sl_tp_closed:
                         logger.warning(
                             f"[PriceStream] ⚠️ {len(sl_tp_closed)} positions SL/TP closed "
+                            f"for {symbol} @ {current_price}"
+                        )
+                    if liquidated:
+                        logger.warning(
+                            f"[PriceStream] 🔥 {len(liquidated)} positions LIQUIDATED "
                             f"for {symbol} @ {current_price}"
                         )
                         

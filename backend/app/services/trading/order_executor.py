@@ -437,14 +437,25 @@ class OrderExecutor:
         
         logger.info(f"[OrderExecutor] Cancelling order: id={order_id}")
         
-        # 释放保证金 (只有非 reduce_only 订单冻结了保证金)
+        # 释放保证金 + 手续费 (只有非 reduce_only 订单冻结了保证金)
         if not order.reduce_only and order.price:
             margin = OrderExecutor.calculate_required_margin(
                 order.remaining_quantity, order.price, order.leverage
             )
-            if margin > 0:
-                await WalletManager.unfreeze_funds(db, user_id, margin)
-                logger.info(f"[OrderExecutor] Released margin: {margin}")
+            # 🔥 手续费也要退回 (创建时冻结了 margin + commission)
+            is_maker = order.order_type in (
+                OrderType.LIMIT, OrderType.STOP_LIMIT, OrderType.TAKE_PROFIT_LIMIT
+            )
+            commission = FeeCalculator.calculate_commission(
+                order.remaining_quantity, order.price, is_maker
+            )
+            total_unfreeze = margin + commission
+            if total_unfreeze > 0:
+                await WalletManager.unfreeze_funds(db, user_id, total_unfreeze)
+                logger.info(
+                    f"[OrderExecutor] Released: margin={margin}, "
+                    f"commission={commission}, total={total_unfreeze}"
+                )
         
         order.status = OrderStatus.CANCELLED
         return order
