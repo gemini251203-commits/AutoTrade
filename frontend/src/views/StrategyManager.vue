@@ -451,7 +451,7 @@ onMounted(() => {
                 <span :style="{ color: pnlColor(m.pnl_pct) }">
                   {{ m.pnl_pct >= 0 ? '+' : '' }}{{ m.pnl_pct.toFixed(2) }}%
                 </span>
-                <span>{{ formatDate(m.created_at) }}</span>
+                <span>{{ formatDate(m.created_at || '') }}</span>
               </div>
             </div>
             <div class="text-sm text-gray-300 mb-1">{{ m.lesson }}</div>
