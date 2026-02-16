@@ -400,35 +400,74 @@ async def get_indicators(
 ) -> str:
     """获取技术指标"""
     try:
+        # 直接从 Binance API 获取 K 线，绕过 indicator_service
+        from app.services.exchange import BinanceClient
+        client = BinanceClient()
+        raw_klines = await client.get_klines(symbol.upper(), interval, limit=100)
+
+        if raw_klines and len(raw_klines) >= 15:
+            closes = [float(k["close"]) for k in raw_klines]
+            volumes = [float(k["volume"]) for k in raw_klines]
+
+            # RSI(14) 计算
+            rsi = None
+            if len(closes) >= 15:
+                changes = [closes[i] - closes[i-1] for i in range(1, len(closes))]
+                gains = [c if c > 0 else 0 for c in changes[-14:]]
+                losses = [-c if c < 0 else 0 for c in changes[-14:]]
+                avg_gain = sum(gains) / 14
+                avg_loss = sum(losses) / 14
+                if avg_loss > 0:
+                    rs = avg_gain / avg_loss
+                    rsi = round(100 - (100 / (1 + rs)), 2)
+                else:
+                    rsi = 100.0
+
+            # MA 均线
+            ma7 = round(sum(closes[-7:]) / 7, 2) if len(closes) >= 7 else None
+            ma25 = round(sum(closes[-25:]) / 25, 2) if len(closes) >= 25 else None
+
+            # 当前价格
+            current_price = closes[-1]
+
+            # 趋势判断
+            trend = "neutral"
+            if rsi and ma7 and ma25:
+                if rsi > 50 and current_price > ma7 > ma25:
+                    trend = "bullish"
+                elif rsi < 50 and current_price < ma7 < ma25:
+                    trend = "bearish"
+
+            return json.dumps({
+                "symbol": symbol.upper(),
+                "interval": interval,
+                "current_price": round(current_price, 2),
+                "trend": trend,
+                "indicators": {
+                    "rsi": rsi,
+                    "ma7": ma7,
+                    "ma25": ma25,
+                },
+            }, ensure_ascii=False)
+
+        logger.warning(f"[AgentTools] get_indicators: no klines from Binance for {symbol}/{interval}")
+    except Exception as e:
+        logger.warning(f"[AgentTools] get_indicators Binance direct failed: {e}")
+
+    # Fallback: 尝试 indicator_service
+    try:
         from app.services.indicator_service import indicator_service
         result = await indicator_service.get_or_calculate(symbol.upper(), interval)
-
         if result and result.get("indicators"):
-            ind = result["indicators"]
-            # 提取关键指标
-            summary = {}
-            for key in ["rsi", "atr", "volume_ratio",
-                         "ma7", "ma25", "ma99"]:
-                if key in ind and ind[key] is not None:
-                    val = ind[key]
-                    summary[key] = round(float(val), 4) if isinstance(val, (int, float)) else val
-
-            # MACD 是嵌套 dict
-            if isinstance(ind.get("macd"), dict):
-                macd = ind["macd"]
-                summary["macd"] = macd.get("macd")
-                summary["macd_signal"] = macd.get("signal")
-                summary["macd_histogram"] = macd.get("histogram")
-
             return json.dumps({
                 "symbol": symbol.upper(),
                 "interval": interval,
                 "current_price": result.get("current_price"),
                 "trend": result.get("trend"),
-                "indicators": summary,
+                "indicators": result["indicators"],
             }, ensure_ascii=False)
     except Exception as e:
-        logger.warning(f"[AgentTools] get_indicators failed: {e}")
+        logger.warning(f"[AgentTools] get_indicators fallback also failed: {e}")
 
     return json.dumps({"error": f"无法获取 {symbol} {interval} 指标"}, ensure_ascii=False)
 
