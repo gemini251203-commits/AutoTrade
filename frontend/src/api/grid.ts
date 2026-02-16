@@ -23,7 +23,7 @@ export type GridType = 'arithmetic' | 'geometric'
 export type GridDirection = 'long' | 'short' | 'neutral'
 
 /** 网格状态 (对应后端 GridStatus) */
-export type GridStatus = 'created' | 'running' | 'paused' | 'stopped' | 'completed' | 'error'
+export type GridStatus = 'created' | 'running' | 'paused' | 'stopped' | 'completed'
 
 /** 创建网格请求 (对应后端 GridCreateRequest) */
 export interface GridCreateRequest {
