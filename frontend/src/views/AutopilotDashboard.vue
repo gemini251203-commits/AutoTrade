@@ -97,10 +97,9 @@ const runDuration = computed(() => {
   if (!status.value.started_at) return '-'
   const start = new Date(status.value.started_at)
   const now = new Date()
-  const diff = Math.floor((now.getTime() - start.getTime()) / 1000)
-  if (diff < 60) return `${diff}秒`
-  if (diff < 3600) return `${Math.floor(diff / 60)}分钟`
-  return `${Math.floor(diff / 3600)}小时${Math.floor((diff % 3600) / 60)}分钟`
+  const diffMin = Math.floor((now.getTime() - start.getTime()) / 60000)
+  if (diffMin < 60) return `${diffMin} 分钟`
+  return `${Math.floor(diffMin / 60)} 小时 ${diffMin % 60} 分钟`
 })
 
 // ==================== Lifecycle ====================
@@ -135,7 +134,9 @@ async function pollStatus() {
 async function fetchLogs() {
   logsLoading.value = true
   try {
-    logs.value = await getAutopilotLogs(50)
+    // 只获取当前会话的日志
+    const since = status.value.started_at || undefined
+    logs.value = await getAutopilotLogs(50, undefined, since)
   } catch { /* ignore */ }
   logsLoading.value = false
 }
@@ -399,7 +400,7 @@ function formatTime(iso: string): string {
               <div class="timeline-card">
                 <div class="card-header">
                   <span class="decision-badge" :style="{ color: decisionColors[log.decision] || '#666' }">
-                    {{ decisionLabels[log.decision] || log.decision }}
+                    {{ log.action_taken ? (decisionLabels[log.decision] || log.decision) : (log.decision === 'hold' ? '观望' : '分析:' + (decisionLabels[log.decision] || log.decision)) }}
                   </span>
                   <span class="symbol-label">{{ log.symbol }}</span>
                   <span class="time-label">{{ formatTime(log.created_at) }}</span>

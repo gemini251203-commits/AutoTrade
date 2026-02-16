@@ -215,6 +215,7 @@ class AgentAutopilot:
         user_id: int,
         limit: int = 50,
         symbol: Optional[str] = None,
+        since: Optional[str] = None,
     ) -> List[dict]:
         """获取决策日志"""
         async with AsyncSessionLocal() as db:
@@ -224,6 +225,14 @@ class AgentAutopilot:
             )
             if symbol:
                 query = query.where(AutopilotLog.symbol == symbol)
+            if since:
+                try:
+                    since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+                    # 如果数据库中的时间是 naive (无时区)，去掉时区信息
+                    since_dt = since_dt.replace(tzinfo=None)
+                    query = query.where(AutopilotLog.created_at >= since_dt)
+                except (ValueError, TypeError):
+                    pass
             query = query.order_by(AutopilotLog.created_at.desc()).limit(limit)
 
             result = await db.execute(query)

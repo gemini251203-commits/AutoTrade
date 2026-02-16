@@ -219,9 +219,10 @@ export async function getAutopilotStatus(): Promise<AutopilotStatus> {
 export async function getAutopilotLogs(
   limit: number = 50,
   symbol?: string,
+  since?: string,
 ): Promise<AutopilotLogResponse[]> {
   const response = await request.get<AutopilotLogResponse[]>('/agent/autopilot/logs', {
-    params: { limit, symbol },
+    params: { limit, symbol, since },
   })
   return response.data
 }

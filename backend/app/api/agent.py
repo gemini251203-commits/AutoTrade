@@ -334,12 +334,14 @@ async def autopilot_logs(
     current_user: CurrentUser,
     limit: int = Query(default=50, ge=1, le=200, description="返回条数"),
     symbol: Optional[str] = Query(default=None, description="按交易对过滤"),
+    since: Optional[str] = Query(default=None, description="只返回此时间之后的日志 (ISO格式)"),
 ):
     """查询 autopilot 决策日志"""
     logs = await autopilot.get_logs(
         user_id=current_user.id,
         limit=limit,
         symbol=symbol,
+        since=since,
     )
     return logs
 
