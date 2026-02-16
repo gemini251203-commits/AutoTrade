@@ -15,7 +15,7 @@ import sqlalchemy as sa
 
 # revision identifiers
 revision = 'c8d9e0f1a2b3'
-down_revision = 'a1b2c3d4e5f6'
+down_revision = 'b7a9c3e1f502'
 branch_labels = None
 depends_on = None
 
