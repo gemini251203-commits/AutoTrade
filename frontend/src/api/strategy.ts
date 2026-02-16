@@ -12,7 +12,7 @@
  *   POST   /strategy/{id}/stop  -> stopStrategy()
  *   GET    /strategy/{id}/logs  -> getStrategyLogs()
  *   GET    /strategy/templates  -> getTemplates()
- *   GET    /strategy/memories   -> getMemories()
+ *   GET    /journal/            -> getMemories()
  */
 
 import request from '@/utils/request'
@@ -65,23 +65,37 @@ export interface StrategyLogResponse {
   created_at: string
 }
 
-/** 策略模板 */
+/** 策略模板 (对应后端 TemplateResponse) */
 export interface StrategyTemplate {
+  id: string
   name: string
-  description: string
-  yaml: string
+  symbol: string
+  interval: string
+  config_yaml: string
 }
 
-/** 交易记忆 */
+/** 交易记忆 (对应后端 journal.py TradeMemoryResponse) */
 export interface TradeMemoryResponse {
   id: number
   symbol: string
-  strategy_name: string | null
+  source: string | null
+  side: string | null
+  entry_price: number | null
+  exit_price: number | null
+  leverage: number | null
+  margin_used: number | null
   trade_result: string
   pnl_pct: number
-  situation: string
-  lesson: string
-  created_at: string
+  pnl_usdt: number | null
+  duration_minutes: number | null
+  close_reason: string | null
+  had_stop_loss: boolean | null
+  had_take_profit: boolean | null
+  open_reason: string | null
+  indicators_snapshot: string | null
+  lesson: string | null
+  strategy_name: string | null
+  created_at: string | null
 }
 
 // ==================== API Functions ====================
@@ -136,10 +150,10 @@ export async function getTemplates(): Promise<StrategyTemplate[]> {
   return response.data
 }
 
-/** 获取交易记忆 */
-export async function getMemories(symbol?: string, limit: number = 20): Promise<TradeMemoryResponse[]> {
+/** 获取交易记忆 (调用 journal API) */
+export async function getMemories(symbol?: string, limit: number = 50): Promise<TradeMemoryResponse[]> {
   const params: Record<string, unknown> = { limit }
   if (symbol) params.symbol = symbol
-  const response = await request.get<TradeMemoryResponse[]>('/strategy/memories', { params })
+  const response = await request.get<TradeMemoryResponse[]>('/journal/', { params })
   return response.data
 }

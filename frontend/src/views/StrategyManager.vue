@@ -113,7 +113,7 @@ function openCreateModal(template?: StrategyTemplate) {
   formName.value = template?.name || ''
   formSymbol.value = ''
   formInterval.value = '1h'
-  formYaml.value = template?.yaml || ''
+  formYaml.value = template?.config_yaml || ''
   showCreateModal.value = true
 }
 
@@ -307,7 +307,7 @@ onMounted(() => {
               style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);"
             >
               <div class="text-sm text-white font-medium truncate">{{ tmpl.name }}</div>
-              <div class="text-xs text-gray-500 mt-1 line-clamp-2">{{ tmpl.description }}</div>
+              <div class="text-xs text-gray-500 mt-1 line-clamp-2">{{ tmpl.symbol }} · {{ tmpl.interval }}</div>
             </button>
           </div>
         </div>
@@ -455,7 +455,7 @@ onMounted(() => {
               </div>
             </div>
             <div class="text-sm text-gray-300 mb-1">{{ m.lesson }}</div>
-            <div class="text-xs text-gray-500">{{ m.situation }}</div>
+            <div v-if="m.open_reason" class="text-xs text-gray-500">{{ m.open_reason }}</div>
           </div>
         </div>
       </template>

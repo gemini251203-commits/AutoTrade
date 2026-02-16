@@ -105,6 +105,7 @@ class MemoryResponse(BaseModel):
     strategy_name: Optional[str] = None
     trade_result: str
     pnl_pct: float
+    situation: Optional[str] = None
     lesson: str
     created_at: str
 
@@ -413,6 +414,7 @@ async def get_memories(
             "strategy_name": m.strategy_name,
             "trade_result": m.trade_result,
             "pnl_pct": m.pnl_pct,
+            "situation": m.situation,
             "lesson": m.lesson,
             "created_at": m.created_at.isoformat() if m.created_at else "",
         }
