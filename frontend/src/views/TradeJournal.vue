@@ -12,29 +12,10 @@ import { NTag, NEmpty, NSpin, NSelect, NTooltip, NIcon, NPopconfirm, useMessage 
 import { BookOutline, TrendingUpOutline, TrendingDownOutline, TimeOutline, ShieldCheckmarkOutline, TrashOutline } from '@vicons/ionicons5'
 import MainLayout from '@/layouts/MainLayout.vue'
 import request from '@/utils/request'
+import type { TradeMemoryResponse as TradeMemory } from '@/api/strategy'
 
 // ========== Types ==========
-interface TradeMemory {
-  id: number
-  symbol: string
-  source: string | null
-  side: string | null
-  entry_price: number | null
-  exit_price: number | null
-  leverage: number | null
-  margin_used: number | null
-  trade_result: string
-  pnl_pct: number
-  pnl_usdt: number | null
-  duration_minutes: number | null
-  close_reason: string | null
-  had_stop_loss: boolean | null
-  had_take_profit: boolean | null
-  open_reason: string | null
-  lesson: string | null
-  strategy_name: string | null
-  created_at: string | null
-}
+// TradeMemory imported from '@/api/strategy' as TradeMemoryResponse
 
 interface JournalStats {
   total_trades: number

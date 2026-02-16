@@ -64,7 +64,7 @@ const symbolStore = useSymbolStore()
 
 const inputText = ref('')
 const loading = ref(false)
-const contexLoading = ref(false)
+const contextLoading = ref(false)
 const parsedSignal = ref<ParsedSignal | null>(null)
 const context = ref<AIContextResponse | null>(null)
 const pendingTasks = ref<TaskResponse[]>([])
@@ -152,14 +152,14 @@ const estimatedTakeProfitProfit = computed(() => {
 // ==================== Methods ====================
 
 async function loadContext() {
-  contexLoading.value = true
+  contextLoading.value = true
   try {
     // 使用 store 的当前交易对获取上下文
     context.value = await getAIContext(symbolStore.currentSymbol)
   } catch (error) {
     console.error('Failed to load context:', error)
   } finally {
-    contexLoading.value = false
+    contextLoading.value = false
   }
 }
 
@@ -432,7 +432,7 @@ onMounted(() => {
               <div class="card-icon-bg success">
                 <NIcon :component="WalletOutline" />
               </div>
-              <NSpin :show="contexLoading">
+              <NSpin :show="contextLoading">
                  <div class="market-header">
                   <span class="label">账户概览</span>
                 </div>

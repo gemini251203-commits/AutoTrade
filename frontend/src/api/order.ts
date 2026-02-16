@@ -100,16 +100,26 @@ export interface OrderCreateRequest {
 
 export interface OrderResponse {
   id: number
+  user_id: number
   symbol: string
   side: string
   order_type: string
   status: string
-  quantity: string
-  price: string | null
-  filled_quantity: string
-  avg_fill_price: string | null
   leverage: number
+  position_side: string | null
+  reduce_only: boolean
+  quantity: string
+  filled_quantity: string
+  price: string | null
+  trigger_price: string | null
+  avg_fill_price: string | null
+  stop_loss: string | null
+  take_profit: string | null
+  commission: string
+  realized_pnl: string
   created_at: string
+  filled_at: string | null
+  note?: string
 }
 
 export async function createOrder(data: OrderCreateRequest): Promise<OrderResponse> {
