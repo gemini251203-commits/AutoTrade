@@ -29,7 +29,7 @@ from loguru import logger
 from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import async_session
+from app.db.session import AsyncSessionLocal
 from app.models.ai_trader import AITraderDecision, AITraderConfig
 from app.models.order import Order, OrderSide, OrderType, OrderStatus
 from app.models.position import Position, PositionStatus
@@ -185,7 +185,7 @@ class AITrader:
 
         while self._running:
             try:
-                async with async_session() as db:
+                async with AsyncSessionLocal() as db:
                     # 读取配置
                     config = await self._get_config(db, user_id)
                     if not config or not config.enabled:
