@@ -517,17 +517,18 @@ class AgentAutopilot:
                 ChatConversation.persona == "autopilot",
             )
         )
-        old_conv = result.scalar_one_or_none()
+        old_convs = result.scalars().all()
 
-        if old_conv:
-            # 删除旧会话的消息
+        if old_convs:
             from app.models.agent import ChatMessage as CM
-            await db.execute(
-                CM.__table__.delete().where(CM.conversation_id == old_conv.id)
-            )
-            await db.delete(old_conv)
+            for old_conv in old_convs:
+                # 删除旧会话的消息
+                await db.execute(
+                    CM.__table__.delete().where(CM.conversation_id == old_conv.id)
+                )
+                await db.delete(old_conv)
             await db.flush()
-            logger.info(f"[Autopilot] Cleared old conversation {old_conv.id} for user {user_id}")
+            logger.info(f"[Autopilot] Cleared {len(old_convs)} old conversation(s) for user {user_id}")
 
         conv = ChatConversation(
             user_id=user_id,

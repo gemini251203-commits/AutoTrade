@@ -129,7 +129,7 @@ async function pollStatus() {
     status.value = await getAutopilotStatus()
     if (status.value.running && status.value.symbols.length > 0) {
       symbols.value = [...status.value.symbols]
-      interval.value = status.value.interval
+      // interval 不从服务器同步，允许用户自由修改
     }
   } catch { /* ignore */ }
 }
@@ -350,7 +350,6 @@ function formatTime(iso: string): string {
             <select
               v-model="interval"
               class="form-select"
-              :disabled="status.running"
             >
               <option v-for="opt in intervalOptions" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
