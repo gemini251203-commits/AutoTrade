@@ -42,12 +42,12 @@ AUTOPILOT_TITLE_PREFIX = "[autopilot]"
 # 决策关键词映射
 DECISION_KEYWORDS = {
     AutopilotDecision.OPEN_LONG: [
-        "开多", "做多", "买入开仓", "open_long", "open long", "buy",
-        "看涨", "建仓做多",
+        "开多", "做多", "买入开仓", "open_long", "open long",
+        "建仓做多",
     ],
     AutopilotDecision.OPEN_SHORT: [
-        "开空", "做空", "卖出开仓", "open_short", "open short", "short",
-        "看跌", "建仓做空",
+        "开空", "做空", "卖出开仓", "open_short", "open short",
+        "建仓做空",
     ],
     AutopilotDecision.CLOSE_LONG: [
         "平多", "多仓平仓", "close_long", "close long",
@@ -63,30 +63,49 @@ DECISION_KEYWORDS = {
 
 
 def parse_decision(ai_reply: str) -> AutopilotDecision:
-    """从 AI 回复中解析决策类型"""
-    text = ai_reply.lower()
-    
-    # 按优先级匹配 (操作 > 观望)
+    """从 AI 回复中解析决策类型 (只匹配最后3行，避免分析描述干扰)"""
+    lines = ai_reply.strip().split("\n")
+
+    # 优先匹配 "决策：xxx" 格式
+    for line in reversed(lines):
+        clean = line.strip()
+        decision_match = re.search(r"[决策决定][:：]\s*(.+)", clean)
+        if decision_match:
+            decision_text = decision_match.group(1).lower()
+            for decision in [
+                AutopilotDecision.HOLD,
+                AutopilotDecision.OPEN_LONG,
+                AutopilotDecision.OPEN_SHORT,
+                AutopilotDecision.CLOSE_LONG,
+                AutopilotDecision.CLOSE_SHORT,
+            ]:
+                for keyword in DECISION_KEYWORDS[decision]:
+                    if keyword.lower() in decision_text:
+                        return decision
+
+    # fallback: 只看最后3行
+    last_lines = "\n".join(lines[-3:]).lower()
     for decision in [
+        AutopilotDecision.HOLD,
         AutopilotDecision.OPEN_LONG,
         AutopilotDecision.OPEN_SHORT,
         AutopilotDecision.CLOSE_LONG,
         AutopilotDecision.CLOSE_SHORT,
     ]:
         for keyword in DECISION_KEYWORDS[decision]:
-            if keyword.lower() in text:
+            if keyword.lower() in last_lines:
                 return decision
-    
-    # 检查是否调用了 place_order 工具 (说明有实际操作)
-    if "place_order" in text:
-        if "buy" in text or "做多" in text:
+
+    # 检查是否调用了 place_order 工具 (全文检查)
+    if "place_order" in ai_reply.lower():
+        if "buy" in ai_reply.lower() or "做多" in ai_reply.lower():
             return AutopilotDecision.OPEN_LONG
-        elif "sell" in text or "做空" in text:
+        elif "sell" in ai_reply.lower() or "做空" in ai_reply.lower():
             return AutopilotDecision.OPEN_SHORT
-    
-    if "close_position" in text:
+
+    if "close_position" in ai_reply.lower():
         return AutopilotDecision.CLOSE_LONG
-    
+
     return AutopilotDecision.HOLD
 
 
@@ -274,7 +293,7 @@ class AgentAutopilot:
             while True:
                 for symbol in symbols:
                     try:
-                        await self._run_cycle(user_id, symbol)
+                        await self._run_cycle(user_id, symbol, interval)
                     except Exception as e:
                         logger.error(
                             f"[Autopilot] Cycle error: user={user_id}, "
@@ -284,7 +303,7 @@ class AgentAutopilot:
         except asyncio.CancelledError:
             logger.info(f"[Autopilot] Loop cancelled for user {user_id}")
 
-    async def _run_cycle(self, user_id: int, symbol: str) -> str:
+    async def _run_cycle(self, user_id: int, symbol: str, interval: str = "1h") -> str:
         """
         单次决策周期 (增强版)
 
@@ -300,8 +319,8 @@ class AgentAutopilot:
                 # 获取或创建 autopilot 会话
                 conv_id = await self._get_or_create_conversation(db, user_id)
 
-                # 预取技术指标
-                indicator_text = await self._fetch_indicators(symbol)
+                # 预取技术指标 (使用用户配置的 K 线级别)
+                indicator_text = await self._fetch_indicators(symbol, interval)
 
                 # 构造分析指令 (直接注入指标数据)
                 now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
@@ -383,14 +402,23 @@ class AgentAutopilot:
                 logger.error(f"[Autopilot] run_cycle error: {e}")
                 raise
 
-    async def _fetch_indicators(self, symbol: str) -> str:
+    async def _fetch_indicators(self, symbol: str, interval: str = "1h") -> str:
         """预取技术指标，返回格式化文本注入 prompt"""
+        # 将前端的分析间隔格式转换为 Binance API 格式
+        interval_map = {
+            "5m": "5m", "15m": "15m", "30m": "30m",
+            "1h": "1h", "4h": "4h",
+            "5分钟": "5m", "15分钟": "15m", "30分钟": "30m",
+            "1小时": "1h", "4小时": "4h",
+        }
+        binance_interval = interval_map.get(interval, "1h")
+
         try:
             from app.core.network import net_manager
             async with net_manager.get_client(timeout=15.0) as client:
                 resp = await client.get(
                     "https://fapi.binance.com/fapi/v1/klines",
-                    params={"symbol": symbol.upper(), "interval": "1h", "limit": 100},
+                    params={"symbol": symbol.upper(), "interval": binance_interval, "limit": 100},
                 )
                 if resp.status_code == 200:
                     raw = resp.json()
@@ -417,9 +445,9 @@ class AgentAutopilot:
                                 trend = "bearish"
                         trend_cn = {"bullish": "看涨", "bearish": "看跌", "neutral": "中性"}
 
-                        logger.info(f"[Autopilot] Fetched indicators: RSI={rsi}, MA7={ma7}, MA25={ma25}, trend={trend}")
+                        logger.info(f"[Autopilot] Fetched indicators ({binance_interval}): RSI={rsi}, MA7={ma7}, MA25={ma25}, trend={trend}")
                         lines = [
-                            f"== 技术指标 ({symbol}, 1h) ==",
+                            f"== 技术指标 ({symbol}, {binance_interval}) ==",
                             f"RSI(14): {rsi}" + (" (超买)" if rsi > 70 else " (超卖)" if rsi < 30 else ""),
                             f"MA7: ${ma7:,.2f}",
                         ]
