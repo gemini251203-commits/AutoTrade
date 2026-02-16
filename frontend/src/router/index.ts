@@ -17,6 +17,7 @@ const Admin = () => import('@/views/Admin.vue')
 const StrategyManager = () => import('@/views/StrategyManager.vue')
 const ChatAgent = () => import('@/views/ChatAgent.vue')
 const TradeJournal = () => import('@/views/TradeJournal.vue')
+const AITrader = () => import('@/views/AITrader.vue')
 
 // Route definitions
 const routes: RouteRecordRaw[] = [
@@ -72,6 +73,12 @@ const routes: RouteRecordRaw[] = [
     path: '/journal',
     name: 'TradeJournal',
     component: TradeJournal,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/ai-trader',
+    name: 'AITrader',
+    component: AITrader,
     meta: { requiresAuth: true },
   },
   // Catch-all redirect to dashboard

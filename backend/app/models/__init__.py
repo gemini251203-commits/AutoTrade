@@ -14,6 +14,7 @@ from .position import Position, PositionSide, PositionStatus, MarginMode
 from .grid_bot import GridBot, GridType, GridStatus, GridDirection
 from .user_ai_config import UserAIConfig, AIProvider
 from .agent import ChatConversation, ChatMessage
+from .ai_trader import AITraderDecision, AITraderConfig
 
 __all__ = [
     "User",
@@ -38,5 +39,8 @@ __all__ = [
     "AIProvider",
     "ChatConversation",
     "ChatMessage",
+    "AITraderDecision",
+    "AITraderConfig",
 ]
+
 
