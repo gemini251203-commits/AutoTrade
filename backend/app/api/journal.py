@@ -137,9 +137,6 @@ async def get_journal_stats(
     result = await db.execute(
         select(
             func.count(TradeMemory.id).label("total"),
-            func.sum(
-                func.cast(TradeMemory.trade_result == "win", type_=func.count.__self__.__class__)
-            ).label("wins"),
             func.coalesce(func.sum(TradeMemory.pnl_usdt), 0).label("total_pnl"),
             func.coalesce(func.avg(TradeMemory.pnl_pct), 0).label("avg_pnl"),
             func.avg(TradeMemory.duration_minutes).label("avg_dur"),
