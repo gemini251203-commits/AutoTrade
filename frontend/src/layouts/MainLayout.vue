@@ -142,7 +142,7 @@ function handleLogout() {
     <div class="relative z-10 flex-1 flex flex-col h-full bg-transparent">
       <!-- Header -->
       <header 
-        class="h-16 px-8 flex items-center justify-between border-b border-white/5 bg-black/20 backdrop-blur-md"
+        class="relative z-50 h-16 px-8 flex items-center justify-between border-b border-white/5 bg-black/20 backdrop-blur-md"
       >
         <!-- Left: Branding & Equity -->
         <div class="flex items-center gap-6">
