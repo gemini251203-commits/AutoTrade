@@ -302,7 +302,14 @@ async def reset_wallet(
     )
     logger.info(f"[Wallet] Deleted all AI tasks for user {user_id}")
     
-    # 5. 删除所有流水记录
+    # 5. 删除所有交易记忆 (Trade Journal)
+    from app.models.strategy import TradeMemory
+    await db.execute(
+        delete(TradeMemory).where(TradeMemory.user_id == user_id)
+    )
+    logger.info(f"[Wallet] Deleted all trade memories for user {user_id}")
+    
+    # 6. 删除所有流水记录
     await db.execute(
         delete(WalletTransaction).where(WalletTransaction.user_id == user_id)
     )

@@ -1,6 +1,6 @@
 """Backfill trade journal from closed positions"""
 import asyncio
-from app.db import async_session
+from app.db.session import AsyncSessionLocal as async_session_factory
 from app.models.position import Position, PositionStatus
 from app.models.strategy import TradeMemory
 from sqlalchemy import select, func
@@ -9,7 +9,7 @@ from datetime import datetime
 
 
 async def backfill():
-    async with async_session() as db:
+    async with async_session_factory() as db:
         # 1. Check existing trade memories
         r2 = await db.execute(select(func.count(TradeMemory.id)))
         cnt = r2.scalar()
