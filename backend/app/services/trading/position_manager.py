@@ -478,12 +478,14 @@ class PositionManager:
             # 🔥 统一记忆: 平仓时自动生成交易记忆
             try:
                 from app.services.trade_journal import TradeJournal
+                # close_reason 从 position.source 推断
+                close_reason = getattr(position, "source", "manual") or "manual"
                 await TradeJournal.record_close(
                     db=db,
                     position=position,
                     pnl=pnl,
                     close_price=close_price,
-                    close_reason="manual",
+                    close_reason=close_reason,
                 )
             except Exception as e:
                 logger.warning(f"[PositionManager] TradeJournal 记录失败 (不影响平仓): {e}")

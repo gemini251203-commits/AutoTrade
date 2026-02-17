@@ -42,6 +42,7 @@ class WalletBalanceResponse(BaseModel):
     frozen: Decimal
     total_equity: Decimal
     total_pnl: Decimal
+    unrealized_pnl: Decimal = Decimal("0")
 
 
 # ==================== Routes ====================
@@ -78,7 +79,12 @@ async def get_balance(
     
     懒加载: 如果钱包不存在，自动初始化
     安全: 绝不修改现有余额
+    包含: unrealized_pnl (从持仓实时计算)
     """
+    from sqlalchemy import select
+    from app.models.position import Position, PositionStatus, PositionSide
+    from app.services.exchange import BinanceClient
+
     wallet = await WalletManager.get_wallet(db, current_user.id)
     
     if not wallet:
@@ -88,11 +94,36 @@ async def get_balance(
         await db.refresh(wallet)
         logger.info(f"[Wallet] Auto-initialized wallet for user {current_user.id}: {wallet.balance} USDT")
     
+    # 计算未实现盈亏: 从所有 open positions 获取
+    unrealized_pnl = Decimal("0")
+    try:
+        result = await db.execute(
+            select(Position).where(
+                Position.user_id == current_user.id,
+                Position.status == PositionStatus.OPEN,
+            )
+        )
+        open_positions = result.scalars().all()
+        
+        if open_positions:
+            client = BinanceClient()
+            for pos in open_positions:
+                try:
+                    ticker = await client.get_ticker(pos.symbol)
+                    mark_price = Decimal(str(ticker.get("lastPrice", 0))) if ticker else Decimal("0")
+                    if mark_price > 0:
+                        unrealized_pnl += pos.calculate_unrealized_pnl(mark_price)
+                except Exception:
+                    pass  # 单个币种获取失败不影响整体
+    except Exception as e:
+        logger.warning(f"[Wallet] Failed to calculate unrealized PnL: {e}")
+    
     return WalletBalanceResponse(
         available=wallet.balance,
         frozen=wallet.frozen,
         total_equity=wallet.total_equity,
         total_pnl=wallet.total_pnl,
+        unrealized_pnl=unrealized_pnl,
     )
 
 

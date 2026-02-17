@@ -173,6 +173,22 @@ function handleLogout() {
               </span>
             </div>
           </div>
+          
+          <div class="h-8 w-[1px] bg-white/10"></div>
+          
+          <!-- Unrealized PnL -->
+          <div class="flex flex-col">
+            <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">Unrealized PnL</span>
+            <div class="flex items-center gap-2">
+              <span 
+                class="font-mono font-medium transition-colors duration-500"
+                :class="walletStore.isUnrealizedPnlPositive ? 'text-[#00e676]' : 'text-[#ff1744]'"
+              >
+                {{ walletStore.formattedUnrealizedPnl }}
+              </span>
+              <span class="text-xs text-gray-400 font-normal">USDT</span>
+            </div>
+          </div>
         </div>
         
         <!-- Right: Status -->

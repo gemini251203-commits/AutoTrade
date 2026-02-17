@@ -26,6 +26,7 @@ export const useWalletStore = defineStore('wallet', () => {
   const frozen = ref<number>(0)
   const totalEquity = ref<number>(0)
   const totalPnl = ref<number>(0)
+  const unrealizedPnl = ref<number>(0)
   const currency = ref<string>('USDT')
   const loading = ref<boolean>(false)
   const error = ref<string | null>(null)
@@ -69,6 +70,18 @@ export const useWalletStore = defineStore('wallet', () => {
   
   const isPnlPositive = computed(() => totalPnl.value >= 0)
   
+  const formattedUnrealizedPnl = computed(() => {
+    const value = unrealizedPnl.value
+    const sign = value >= 0 ? '+' : ''
+    return sign + new Intl.NumberFormat('en-US', {
+      style: 'decimal',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value)
+  })
+  
+  const isUnrealizedPnlPositive = computed(() => unrealizedPnl.value >= 0)
+  
   // ============================================
   // Actions
   // ============================================
@@ -91,6 +104,7 @@ export const useWalletStore = defineStore('wallet', () => {
       frozen.value = parseFloat(String(data.frozen)) || 0
       totalEquity.value = parseFloat(String(data.total_equity)) || 0
       totalPnl.value = parseFloat(String(data.total_pnl)) || 0
+      unrealizedPnl.value = parseFloat(String(data.unrealized_pnl)) || 0
       
     } catch (e: any) {
       error.value = e.response?.data?.detail || 'Failed to fetch balance'
@@ -124,6 +138,7 @@ export const useWalletStore = defineStore('wallet', () => {
     frozen.value = 0
     totalEquity.value = 0
     totalPnl.value = 0
+    unrealizedPnl.value = 0
     error.value = null
   }
   
@@ -137,6 +152,7 @@ export const useWalletStore = defineStore('wallet', () => {
     frozen,
     totalEquity,
     totalPnl,
+    unrealizedPnl,
     currency,
     loading,
     error,
@@ -145,8 +161,10 @@ export const useWalletStore = defineStore('wallet', () => {
     formattedBalance,
     formattedEquity,
     formattedPnl,
+    formattedUnrealizedPnl,
     pnlPercent,
     isPnlPositive,
+    isUnrealizedPnlPositive,
     
     // Actions
     fetchBalance,
