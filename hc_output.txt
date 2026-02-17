@@ -1,0 +1,58 @@
+=== WALLET (user 2) ===
+  Balance: 100.00000000 USDT
+  Frozen: 0E-8 USDT
+  Total Equity: 100.00000000 USDT
+  Total PnL: 0E-8 USDT
+=== WALLET (user 1) ===
+  Balance: 1978.85953925 USDT
+  Frozen: 5571.15109951 USDT
+  Total Equity: 7550.01063876 USDT
+  Total PnL: -2445.98482378 USDT
+=== WALLET (user 3) ===
+  Balance: 100.62913201 USDT
+  Frozen: 0E-8 USDT
+  Total Equity: 100.62913201 USDT
+  Total PnL: 0.62913200 USDT
+=== WALLET (user 4) ===
+  Balance: 100.00000000 USDT
+  Frozen: 0E-8 USDT
+  Total Equity: 100.00000000 USDT
+  Total PnL: 0E-8 USDT
+
+=== OPEN POSITIONS: 1 ===
+  #10 BTCUSDT long qty=0.55000000 entry=66946.23784527 margin=2518.02957560 lev=20x sl=65500.00000000 tp=69500.00000000 src=agent
+
+=== CLOSED POSITIONS: 3 ===
+  #4 ETHUSDT short entry=2136.25000000 pnl=+0.6291 src=manual opened=2026-02-03 19:07:19.441761 closed=2026-02-03 19:07:37.325249
+  #8 BTCUSDT long entry=68547.40000000 pnl=+0.6855 src=manual opened=2026-02-16 14:50:53.334638 closed=2026-02-16 14:51:45.667756
+  #9 BTCUSDT long entry=68291.91747903 pnl=-2318.4737 src=agent opened=2026-02-16 19:40:32.286267 closed=2026-02-17 14:44:00.113435
+
+  --- Summary ---
+  Total trades: 3
+  Wins: 2, Losses: 1
+  Win rate: 66.7%
+  Total PnL: -2317.1591 USDT
+
+=== TRADE JOURNAL ENTRIES: 3 ===
+  [agent] BTCUSDT long pnl=-2318.47 (-34.4%) result=loss reason=agent @2026-02-17 14:44:00.124399
+  [manual] BTCUSDT long pnl=+0.69 (+20.0%) result=win reason=manual @2026-02-17 00:36:21.016721
+  [manual] ETHUSDT short pnl=+0.63 (+2.6%) result=win reason=manual @2026-02-17 00:36:21.016718
+
+=== TOTAL ORDERS: 18 ===
+
+=== DATA CONSISTENCY ===
+  Wallet total_pnl: 0E-8
+  Sum of closed PnL: -2317.15913284
+  ⚠️ MISMATCH: diff = 2317.1591
+  Wallet total_pnl: -2445.98482378
+  Sum of closed PnL: -2317.15913284
+  ⚠️ MISMATCH: diff = 128.8257
+  Wallet total_pnl: 0.62913200
+  Sum of closed PnL: -2317.15913284
+  ⚠️ MISMATCH: diff = 2317.7883
+  Wallet total_pnl: 0E-8
+  Sum of closed PnL: -2317.15913284
+  ⚠️ MISMATCH: diff = 2317.1591
+  Journal entries: 3, Closed positions: 3
+  Trade journal (non-system): 3
+  ✅ MATCHED

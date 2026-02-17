@@ -151,8 +151,22 @@ async def get_positions(db: AsyncSession, user_id: int) -> str:
     if not positions:
         return json.dumps({"positions": [], "message": "当前无持仓"}, ensure_ascii=False)
 
-    data = [
-        {
+    # 获取实时价格计算未实现盈亏
+    from app.services.exchange import BinanceClient
+    client = BinanceClient()
+
+    data = []
+    for p in positions:
+        unrealized_pnl = 0.0
+        try:
+            ticker = await client.get_ticker(p.symbol)
+            mark_price = float(ticker.get("lastPrice", 0)) if ticker else 0
+            if mark_price > 0:
+                unrealized_pnl = float(p.calculate_unrealized_pnl(Decimal(str(mark_price))))
+        except Exception:
+            pass
+
+        data.append({
             "id": p.id,
             "symbol": p.symbol,
             "side": p.side.value,
@@ -160,12 +174,10 @@ async def get_positions(db: AsyncSession, user_id: int) -> str:
             "entry_price": float(p.entry_price),
             "leverage": p.leverage,
             "margin": float(p.margin),
-            "unrealized_pnl": float(p.unrealized_pnl) if p.unrealized_pnl else 0,
+            "unrealized_pnl": unrealized_pnl,
             "stop_loss": float(p.stop_loss) if p.stop_loss else None,
             "take_profit": float(p.take_profit) if p.take_profit else None,
-        }
-        for p in positions
-    ]
+        })
     return json.dumps({"positions": data}, ensure_ascii=False)
 
 
