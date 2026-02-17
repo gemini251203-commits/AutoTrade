@@ -232,6 +232,12 @@ const columns = [
     render: (row: PositionRisk) => parseFloat(row.size).toFixed(4),
   },
   {
+    title: '保证金',
+    key: 'margin',
+    width: 100,
+    render: (row: PositionRisk) => parseFloat(row.margin).toFixed(2) + ' USDT',
+  },
+  {
     title: '开仓价',
     key: 'entry_price',
     width: 100,

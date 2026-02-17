@@ -61,10 +61,10 @@ let walletTimer: ReturnType<typeof setInterval> | null = null
 
 onMounted(async () => {
   await walletStore.fetchBalance()
-  // 每 5 秒刷新一次余额 (包括 Unrealized PnL)
+  // 每 3 秒刷新一次余额 (包括 Unrealized PnL)
   walletTimer = setInterval(() => {
     walletStore.fetchBalance()
-  }, 5000)
+  }, 3000)
 })
 
 onUnmounted(() => {
