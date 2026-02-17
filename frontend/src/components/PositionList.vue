@@ -55,6 +55,48 @@ const tpSlForm = ref({
 })
 const tpSlSaving = ref(false)
 
+// 止盈预计盈亏
+const tpEstimatedPnl = computed(() => {
+  if (!tpSlEditing.value || !tpSlForm.value.take_profit) return null
+  return calculatePnl(
+    tpSlEditing.value.side,
+    parseFloat(tpSlEditing.value.size),
+    parseFloat(tpSlEditing.value.entry_price),
+    tpSlForm.value.take_profit
+  )
+})
+
+const tpEstimatedPct = computed(() => {
+  if (!tpSlEditing.value || tpEstimatedPnl.value === null) return null
+  const margin = parseFloat(tpSlEditing.value.margin)
+  return margin > 0 ? (tpEstimatedPnl.value / margin) * 100 : 0
+})
+
+// 止损预计亏损
+const slEstimatedPnl = computed(() => {
+  if (!tpSlEditing.value || !tpSlForm.value.stop_loss) return null
+  return calculatePnl(
+    tpSlEditing.value.side,
+    parseFloat(tpSlEditing.value.size),
+    parseFloat(tpSlEditing.value.entry_price),
+    tpSlForm.value.stop_loss
+  )
+})
+
+const slEstimatedPct = computed(() => {
+  if (!tpSlEditing.value || slEstimatedPnl.value === null) return null
+  const margin = parseFloat(tpSlEditing.value.margin)
+  return margin > 0 ? (slEstimatedPnl.value / margin) * 100 : 0
+})
+
+// 盈亏比
+const riskRewardRatio = computed(() => {
+  if (tpEstimatedPnl.value === null || slEstimatedPnl.value === null) return null
+  const profit = Math.abs(tpEstimatedPnl.value)
+  const loss = Math.abs(slEstimatedPnl.value)
+  return loss > 0 ? profit / loss : null
+})
+
 // 平仓弹窗
 const showCloseModal = ref(false)
 const closeEditing = ref<PositionRisk | null>(null)
@@ -339,6 +381,13 @@ onUnmounted(() => {
             :min="0"
             style="width: 100%"
           />
+          <div v-if="tpEstimatedPnl !== null" class="mt-1.5 flex items-center gap-2 text-xs">
+            <span class="text-gray-500">预计盈利:</span>
+            <span class="font-mono text-green-400">+{{ tpEstimatedPnl.toFixed(2) }} USDT</span>
+            <span class="px-1 py-0.5 rounded bg-green-500/10 text-green-400 font-mono">
+              +{{ tpEstimatedPct?.toFixed(1) }}% ROE
+            </span>
+          </div>
         </div>
         
         <!-- 止损 -->
@@ -359,6 +408,21 @@ onUnmounted(() => {
             :min="0"
             style="width: 100%"
           />
+          <div v-if="slEstimatedPnl !== null" class="mt-1.5 flex items-center gap-2 text-xs">
+            <span class="text-gray-500">预计亏损:</span>
+            <span class="font-mono text-red-400">{{ slEstimatedPnl.toFixed(2) }} USDT</span>
+            <span class="px-1 py-0.5 rounded bg-red-500/10 text-red-400 font-mono">
+              {{ slEstimatedPct?.toFixed(1) }}% ROE
+            </span>
+          </div>
+        </div>
+
+        <!-- 盈亏比 -->
+        <div v-if="riskRewardRatio !== null" class="flex items-center justify-between py-2 px-3 rounded-lg bg-white/5">
+          <span class="text-xs text-gray-400">盈亏比</span>
+          <span class="font-mono text-sm" :class="riskRewardRatio >= 1 ? 'text-amber-400' : 'text-red-400'">
+            1 : {{ riskRewardRatio.toFixed(2) }}
+          </span>
         </div>
         
         <!-- 确认按钮 -->
