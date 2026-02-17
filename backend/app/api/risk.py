@@ -97,7 +97,7 @@ async def get_current_prices(symbols: List[str]) -> Dict[str, Decimal]:
 def risk_to_response(risk: PositionRisk) -> PositionRiskResponse:
     """转换 PositionRisk 为 API 响应"""
     # 判断是否全仓模式
-    margin_mode = getattr(risk, 'margin_mode', 'isolated')
+    margin_mode = getattr(risk, 'margin_mode', 'cross')
     is_dynamic = margin_mode == 'cross'
     
     return PositionRiskResponse(

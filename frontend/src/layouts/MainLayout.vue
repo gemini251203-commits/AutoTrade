@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed, type Component } from 'vue'
+import { onMounted, onUnmounted, computed, type Component } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { NIcon, NTooltip } from 'naive-ui'
 import { 
@@ -56,9 +56,22 @@ function handleNav(item: typeof navItems[0]) {
   router.push(item.route)
 }
 
-// 调试: 组件挂载时加载钱包数据
+// 调试: 组件挂载时加载钱包数据 + 定时轮询
+let walletTimer: ReturnType<typeof setInterval> | null = null
+
 onMounted(async () => {
   await walletStore.fetchBalance()
+  // 每 5 秒刷新一次余额 (包括 Unrealized PnL)
+  walletTimer = setInterval(() => {
+    walletStore.fetchBalance()
+  }, 5000)
+})
+
+onUnmounted(() => {
+  if (walletTimer) {
+    clearInterval(walletTimer)
+    walletTimer = null
+  }
 })
 
 // Handle logout

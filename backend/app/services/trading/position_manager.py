@@ -184,7 +184,7 @@ class PositionManager:
         quantity: Decimal,
         entry_price: Decimal,
         leverage: int = 1,
-        margin_mode: MarginMode = MarginMode.ISOLATED,
+        margin_mode: MarginMode = MarginMode.CROSS,
         stop_loss: Optional[Decimal] = None,
         take_profit: Optional[Decimal] = None,
         source: str = "manual",

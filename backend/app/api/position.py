@@ -34,7 +34,7 @@ class OpenPositionRequest(BaseModel):
     quantity: Decimal = Field(..., gt=0, example=0.01)
     entry_price: Decimal = Field(..., gt=0, example=80000)
     leverage: int = Field(default=10, ge=1, le=125, example=10)
-    margin_mode: MarginMode = Field(default=MarginMode.ISOLATED)
+    margin_mode: MarginMode = Field(default=MarginMode.CROSS)
     reduce_only: bool = Field(default=False, description="只减仓 (平仓模式)")
     stop_loss: Optional[Decimal] = Field(default=None, example=75000)
     take_profit: Optional[Decimal] = Field(default=None, example=90000)

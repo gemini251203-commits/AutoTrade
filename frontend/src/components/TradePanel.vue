@@ -35,8 +35,7 @@ const baseAsset = computed(() => symbolStore.baseAsset)  // BTC, ETH 等
 const currentPrice = ref(0)
 const loading = ref(false)
 
-// ==================== 保证金模式 ====================
-const marginMode = ref<'cross' | 'isolated'>('cross')
+// ==================== 保证金模式 (仅全仓) ====================
 
 // ==================== 杠杆 ====================
 const leverage = ref(20)
@@ -256,11 +255,6 @@ async function openPosition(side: 'long' | 'short') {
 
     if (orderTypeTab.value === 'limit') {
       // ========== 限价单 (使用 Order API) ==========
-      // 注意: 后端 Order 系统目前不支持 margin_mode 参数，限价单将默认为 ISOLATED (逐仓)
-      if (marginMode.value === 'cross') {
-        message.warning('即将在逐仓模式下创建限价单 (系统限制)')
-      }
-      
       await createOrder({
         ...commonParams,
         order_type: 'limit',
@@ -273,7 +267,6 @@ async function openPosition(side: 'long' | 'short') {
       const payload = {
         ...commonParams,
         entry_price: entryPrice.toString(),
-        margin_mode: marginMode.value,
       }
       await request.post('/position/open', payload)
       message.success(`${side === 'long' ? '开多' : '开空'} 成功!`)
