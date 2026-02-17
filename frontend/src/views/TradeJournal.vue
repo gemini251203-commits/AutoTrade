@@ -41,6 +41,7 @@ const sourceOptions = [
   { label: '全部来源', value: '' },
   { label: '手动交易', value: 'manual' },
   { label: 'AI Agent', value: 'agent' },
+  { label: 'Autopilot', value: 'autopilot' },
   { label: '信号助手', value: 'signal' },
   { label: '量化策略', value: 'quant' },
   { label: '系统操作', value: 'system' },
@@ -57,6 +58,7 @@ const resultOptions = [
 const sourceLabels: Record<string, string> = {
   manual: '手动',
   agent: 'AI Agent',
+  autopilot: 'Autopilot',
   signal: '信号助手',
   quant: '量化策略',
   system: '系统',
@@ -65,6 +67,7 @@ const sourceLabels: Record<string, string> = {
 const sourceColors: Record<string, string> = {
   manual: '#6b7280',
   agent: '#8b5cf6',
+  autopilot: '#f97316',
   signal: '#3b82f6',
   quant: '#10b981',
   system: '#f59e0b',
@@ -72,6 +75,8 @@ const sourceColors: Record<string, string> = {
 
 const closeReasonLabels: Record<string, string> = {
   manual: '手动平仓',
+  agent: 'AI Agent 平仓',
+  autopilot: 'Autopilot 平仓',
   tp_hit: '止盈触发',
   sl_hit: '止损触发',
   stop_loss: '止损触发',

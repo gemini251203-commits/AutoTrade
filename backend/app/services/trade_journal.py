@@ -68,6 +68,7 @@ class TradeJournal:
             # 交易来源
             source = getattr(position, "source", "manual") or "manual"
             open_reason = getattr(position, "open_reason", None)
+            commission = float(position.total_commission) if getattr(position, "total_commission", None) else 0
             
             # 风控记录
             had_sl = position.stop_loss is not None
@@ -88,6 +89,7 @@ class TradeJournal:
                 pnl_usdt=round(pnl_float, 4),
                 duration_minutes=duration_minutes,
                 close_reason=close_reason,
+                commission=commission,
                 had_stop_loss=had_sl,
                 had_take_profit=had_tp,
                 open_reason=open_reason,

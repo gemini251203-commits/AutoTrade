@@ -339,8 +339,11 @@ class OrderExecutor:
             if note.startswith("[Agent]"):
                 source = "agent"
                 open_reason = note[7:].strip()
+            elif note.startswith("[Autopilot]"):
+                source = "autopilot"
+                open_reason = note[11:].strip()
             elif note.startswith("[AutoPilot]"):
-                source = "quant"
+                source = "autopilot"
                 open_reason = note[11:].strip()
             elif note.startswith("[Signal]"):
                 source = "signal"

@@ -12,6 +12,7 @@ AI 交易代理的工具集
 """
 
 import json
+import contextvars
 from typing import Optional, Dict, Any
 from decimal import Decimal
 
@@ -25,6 +26,9 @@ from app.models.wallet import Wallet
 from app.models.market import Kline
 from app.models.strategy import TradeMemory
 
+# ==================== 来源上下文 ====================
+# Autopilot 调用前设置此变量，tools 自动使用正确的 note 前缀
+agent_source_var = contextvars.ContextVar('agent_source', default='agent')
 
 # ==================== 工具注册表 ====================
 
@@ -298,6 +302,15 @@ async def place_order(
         sl = Decimal(str(stop_loss)) if stop_loss and float(stop_loss) > 0 else None
         tp = Decimal(str(take_profit)) if take_profit and float(take_profit) > 0 else None
 
+        # 根据来源上下文设置 note 前缀
+        source_label = agent_source_var.get('agent')
+        if source_label == 'autopilot':
+            note_prefix = '[Autopilot]'
+            note_text = 'Autopilot 自动下单'
+        else:
+            note_prefix = '[Agent]'
+            note_text = 'AI Agent 下单'
+
         order = await OrderExecutor.create_order(
             db=db,
             user_id=user_id,
@@ -309,7 +322,7 @@ async def place_order(
             leverage=int(leverage),
             stop_loss=sl,
             take_profit=tp,
-            note=f"[Agent] AI Agent 下单",
+            note=f"{note_prefix} {note_text}",
         )
 
         return json.dumps({

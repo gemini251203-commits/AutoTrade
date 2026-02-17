@@ -94,7 +94,7 @@ async def get_balance(
         await db.refresh(wallet)
         logger.info(f"[Wallet] Auto-initialized wallet for user {current_user.id}: {wallet.balance} USDT")
     
-    # 计算未实现盈亏: 从所有 open positions 获取
+    # 计算未实现盈亏: 从所有 open positions 获取 (并发查询)
     unrealized_pnl = Decimal("0")
     try:
         result = await db.execute(
@@ -106,15 +106,19 @@ async def get_balance(
         open_positions = result.scalars().all()
         
         if open_positions:
+            import asyncio
             client = BinanceClient()
-            for pos in open_positions:
+
+            async def _calc_pnl(pos):
                 try:
                     ticker = await client.get_ticker(pos.symbol)
-                    mark_price = Decimal(str(ticker.get("lastPrice", 0))) if ticker else Decimal("0")
-                    if mark_price > 0:
-                        unrealized_pnl += pos.calculate_unrealized_pnl(mark_price)
+                    price = Decimal(str(ticker.get("lastPrice", 0))) if ticker else Decimal("0")
+                    return pos.calculate_unrealized_pnl(price) if price > 0 else Decimal("0")
                 except Exception:
-                    pass  # 单个币种获取失败不影响整体
+                    return Decimal("0")
+
+            results = await asyncio.gather(*[_calc_pnl(p) for p in open_positions])
+            unrealized_pnl = sum(results, Decimal("0"))
     except Exception as e:
         logger.warning(f"[Wallet] Failed to calculate unrealized PnL: {e}")
     

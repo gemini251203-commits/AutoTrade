@@ -275,6 +275,12 @@ class TradeMemory(Base):
         nullable=True,
         comment="盈亏金额 (USDT)",
     )
+    commission: Mapped[Optional[float]] = mapped_column(
+        Float,
+        nullable=True,
+        default=0,
+        comment="手续费 (USDT)",
+    )
     duration_minutes: Mapped[Optional[int]] = mapped_column(
         Integer,
         nullable=True,

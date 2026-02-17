@@ -290,6 +290,7 @@ class AgentAutopilot:
             f"interval={seconds}s, symbols={symbols}, indicator_intervals={intervals}"
         )
 
+        cycle_count = 0
         try:
             while True:
                 for symbol in symbols:
@@ -300,9 +301,65 @@ class AgentAutopilot:
                             f"[Autopilot] Cycle error: user={user_id}, "
                             f"symbol={symbol}, error={e}"
                         )
+                cycle_count += 1
+
+                # 每 10 个周期做一次数据一致性检查
+                if cycle_count % 10 == 0:
+                    await self._health_check(user_id)
+
                 await asyncio.sleep(seconds)
         except asyncio.CancelledError:
             logger.info(f"[Autopilot] Loop cancelled for user {user_id}")
+
+    async def _health_check(self, user_id: int):
+        """定期数据一致性检查"""
+        try:
+            async with AsyncSessionLocal() as db:
+                from sqlalchemy import select, func
+                from app.models.position import Position, PositionStatus
+                from app.models.wallet import Wallet
+                from app.models.strategy import TradeMemory
+
+                # 1. 检查交易日志 vs 已平仓
+                closed_count = await db.scalar(
+                    select(func.count(Position.id)).where(
+                        Position.user_id == user_id,
+                        Position.status == PositionStatus.CLOSED,
+                    )
+                )
+                journal_count = await db.scalar(
+                    select(func.count(TradeMemory.id)).where(
+                        TradeMemory.user_id == user_id,
+                        TradeMemory.source != "system",
+                    )
+                )
+                if closed_count != journal_count:
+                    logger.warning(
+                        f"[Autopilot] ⚠️ Data mismatch: "
+                        f"{journal_count} journal entries vs {closed_count} closed positions"
+                    )
+
+                # 2. 检查是否有无止损的开仓
+                r = await db.execute(
+                    select(Position).where(
+                        Position.user_id == user_id,
+                        Position.status == PositionStatus.OPEN,
+                        Position.stop_loss == None,
+                    )
+                )
+                no_sl = r.scalars().all()
+                if no_sl:
+                    symbols = [p.symbol for p in no_sl]
+                    logger.warning(
+                        f"[Autopilot] ⚠️ Positions without stop-loss: {symbols}"
+                    )
+
+                logger.info(
+                    f"[Autopilot] Health check OK: user={user_id}, "
+                    f"journal={journal_count}, closed={closed_count}"
+                )
+        except Exception as e:
+            logger.warning(f"[Autopilot] Health check failed: {e}")
 
     async def _run_cycle(self, user_id: int, symbol: str, intervals: list = None) -> str:
         """
@@ -342,14 +399,19 @@ class AgentAutopilot:
                     f"最后一行请明确写出你的决策: 观望/开多/开空/平多/平空"
                 )
 
-                # 调用 Agent (非流式)
-                reply = await chat_complete(
-                    db=db,
-                    user_id=user_id,
-                    conversation_id=conv_id,
-                    user_message=prompt,
-                    persona="autopilot",
-                )
+                # 调用 Agent (非流式) — 设置来源上下文
+                from app.services.agent.tools import agent_source_var
+                token = agent_source_var.set('autopilot')
+                try:
+                    reply = await chat_complete(
+                        db=db,
+                        user_id=user_id,
+                        conversation_id=conv_id,
+                        user_message=prompt,
+                        persona="autopilot",
+                    )
+                finally:
+                    agent_source_var.reset(token)
 
                 # === 解析 AI 回复 → 结构化日志 ===
                 decision = parse_decision(reply)
