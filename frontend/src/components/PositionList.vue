@@ -234,8 +234,11 @@ const columns = [
   {
     title: '保证金',
     key: 'margin',
-    width: 100,
-    render: (row: PositionRisk) => parseFloat(row.margin).toFixed(2) + ' USDT',
+    width: 110,
+    render: (row: PositionRisk) => {
+      const notional = parseFloat(row.size) * parseFloat(row.entry_price)
+      return notional.toFixed(2) + ' USDT'
+    },
   },
   {
     title: '开仓价',
