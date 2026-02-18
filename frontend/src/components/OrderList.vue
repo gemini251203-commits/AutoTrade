@@ -186,6 +186,14 @@ const columns = [
 onMounted(() => {
   fetchOrders()
 })
+
+// 辅助函数: 安全格式化数字
+function formatNumber(val: string | number | null | undefined, decimals: number = 2): string {
+  if (val === null || val === undefined || val === '') return '--'
+  const num = typeof val === 'string' ? parseFloat(val) : val
+  if (isNaN(num)) return '--'
+  return num.toFixed(decimals)
+}
 </script>
 
 <template>
@@ -251,13 +259,13 @@ onMounted(() => {
           <div class="text-right text-gray-300">{{ getOrderTypeText(order.order_type) }}</div>
           
           <div class="text-gray-500">价格</div>
-          <div class="text-right font-mono">{{ order.price ? order.price : '市价' }}</div>
+          <div class="text-right font-mono">{{ order.price ? formatNumber(order.price, 2) : '市价' }}</div>
           
           <div class="text-gray-500">数量</div>
-          <div class="text-right font-mono">{{ parseFloat(order.quantity).toFixed(4) }}</div>
+          <div class="text-right font-mono">{{ formatNumber(order.quantity, 4) }}</div>
           
           <div class="text-gray-500">成交</div>
-          <div class="text-right font-mono">{{ parseFloat(order.filled_quantity).toFixed(4) }}</div>
+          <div class="text-right font-mono">{{ formatNumber(order.filled_quantity, 4) }}</div>
         </div>
         
         <!-- Footer -->

@@ -360,6 +360,14 @@ onUnmounted(() => {
     clearInterval(refreshTimer)
   }
 })
+
+// 辅助函数: 安全格式化数字
+function formatNumber(val: string | number | null | undefined, decimals: number = 2): string {
+  if (val === null || val === undefined || val === '') return '--'
+  const num = typeof val === 'string' ? parseFloat(val) : val
+  if (isNaN(num)) return '--'
+  return num.toFixed(decimals)
+}
 </script>
 
 <template>
@@ -434,16 +442,16 @@ onUnmounted(() => {
         <!-- Details Grid -->
         <div class="grid grid-cols-2 gap-y-2 text-xs mb-4 p-2 bg-black/20 rounded-lg">
           <div class="text-gray-500">持仓数量</div>
-          <div class="text-right text-gray-300">{{ parseFloat(pos.size).toFixed(4) }}</div>
+          <div class="text-right text-gray-300 font-mono">{{ formatNumber(pos.size, 4) }}</div>
           
           <div class="text-gray-500">保证金</div>
-          <div class="text-right text-gray-300">{{ (parseFloat(pos.size) * parseFloat(pos.entry_price) / (pos.leverage || 1)).toFixed(2) }}</div>
+          <div class="text-right text-gray-300 font-mono">{{ formatNumber(parseFloat(pos.size) * parseFloat(pos.entry_price) / (pos.leverage || 1), 2) }}</div>
           
           <div class="text-gray-500">开仓均价</div>
-          <div class="text-right text-gray-300">${{ parseFloat(pos.entry_price).toFixed(2) }}</div>
+          <div class="text-right text-gray-300 font-mono">${{ formatNumber(pos.entry_price, 2) }}</div>
           
           <div class="text-gray-500">标记价格</div>
-          <div class="text-right text-gray-300">${{ parseFloat(pos.mark_price).toFixed(2) }}</div>
+          <div class="text-right text-gray-300 font-mono">${{ formatNumber(pos.mark_price, 2) }}</div>
         </div>
         
         <!-- Actions -->
@@ -454,9 +462,9 @@ onUnmounted(() => {
           >
             <span class="text-gray-400 mb-0.5">止盈/止损</span>
             <div class="flex gap-2 font-mono scale-90">
-              <span class="text-green-400">{{ pos.take_profit ? parseFloat(pos.take_profit).toFixed(1) : '--' }}</span>
+              <span class="text-green-400">{{ pos.take_profit ? formatNumber(pos.take_profit, 1) : '--' }}</span>
               <span class="text-zinc-600">|</span>
-              <span class="text-red-400">{{ pos.stop_loss ? parseFloat(pos.stop_loss).toFixed(1) : '--' }}</span>
+              <span class="text-red-400">{{ pos.stop_loss ? formatNumber(pos.stop_loss, 1) : '--' }}</span>
             </div>
           </button>
           
@@ -490,9 +498,9 @@ onUnmounted(() => {
         <!-- 仓位信息 -->
         <div class="grid grid-cols-2 gap-2 text-sm text-gray-400 mb-4">
           <div>开仓价格 (USDT)</div>
-          <div class="text-right text-white">${{ parseFloat(tpSlEditing.entry_price).toFixed(2) }}</div>
+          <div class="text-right text-white">${{ formatNumber(tpSlEditing.entry_price, 2) }}</div>
           <div>标记价格 (USDT)</div>
-          <div class="text-right text-white">${{ parseFloat(tpSlEditing.mark_price).toFixed(2) }}</div>
+          <div class="text-right text-white">${{ formatNumber(tpSlEditing.mark_price, 2) }}</div>
         </div>
         
         <!-- 止盈 -->
@@ -585,9 +593,9 @@ onUnmounted(() => {
         <!-- 仓位信息 -->
         <div class="grid grid-cols-2 gap-2 text-sm text-gray-400">
           <div>开仓价格 (USDT)</div>
-          <div class="text-right text-white">${{ parseFloat(closeEditing.entry_price).toFixed(2) }}</div>
+          <div class="text-right text-white">${{ formatNumber(closeEditing.entry_price, 2) }}</div>
           <div>标记价格 (USDT)</div>
-          <div class="text-right text-white">${{ parseFloat(closeEditing.mark_price).toFixed(2) }}</div>
+          <div class="text-right text-white">${{ formatNumber(closeEditing.mark_price, 2) }}</div>
         </div>
         
         <div class="border-t border-white/10 my-4"></div>
