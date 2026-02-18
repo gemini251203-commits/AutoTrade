@@ -43,6 +43,7 @@ class WalletBalanceResponse(BaseModel):
     total_equity: Decimal
     total_pnl: Decimal
     unrealized_pnl: Decimal = Decimal("0")
+    funding_balance: Decimal = Decimal("0")
 
 
 # ==================== Routes ====================
@@ -128,6 +129,7 @@ async def get_balance(
         total_equity=wallet.total_equity,
         total_pnl=wallet.total_pnl,
         unrealized_pnl=unrealized_pnl,
+        funding_balance=wallet.funding_balance,
     )
 
 
@@ -157,6 +159,69 @@ async def initialize_wallet(
     logger.info(f"[Wallet] Created new wallet for user {current_user.id}: {wallet.balance} USDT")
     
     return wallet
+
+
+class TransferRequest(BaseModel):
+    """划转请求"""
+    amount: Decimal
+    direction: str  # "to_funding" | "to_contract"
+
+
+class TransferResponse(BaseModel):
+    """划转响应"""
+    success: bool
+    contract_balance: Decimal
+    funding_balance: Decimal
+    message: str
+
+
+@router.post("/transfer", response_model=TransferResponse)
+async def transfer_funds(
+    current_user: CurrentUser,
+    db: DbSession,
+    req: TransferRequest,
+):
+    """
+    合约账户 ↔ 资金账户 划转
+    
+    direction:
+    - "to_funding": 合约 → 资金
+    - "to_contract": 资金 → 合约
+    """
+    from app.services.wallet.manager import InsufficientFundsError
+    
+    try:
+        wallet = await WalletManager.transfer_funds(
+            db, current_user.id, req.amount, req.direction
+        )
+        await db.commit()
+        await db.refresh(wallet)
+        
+        # 划转后重算爆仓价 (余额变化影响全仓爆仓价)
+        try:
+            from app.services.trading.position_manager import PositionManager
+            from app.services.exchange import BinanceClient
+            client = BinanceClient()
+            prices = await client.get_all_tickers()
+            price_map = {t['symbol']: Decimal(str(t['price'])) for t in (prices or [])}
+            await PositionManager.update_all_liquidation_prices(
+                db, current_user.id, price_map
+            )
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"[Wallet] Failed to update liquidation prices after transfer: {e}")
+        
+        direction_label = "合约→资金" if req.direction == "to_funding" else "资金→合约"
+        return TransferResponse(
+            success=True,
+            contract_balance=wallet.balance,
+            funding_balance=wallet.funding_balance,
+            message=f"{direction_label} 划转 {req.amount} USDT 成功",
+        )
+    except InsufficientFundsError as e:
+        raise HTTPException(status_code=400, detail=f"余额不足: {e}")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ==================== Portfolio Stats ====================

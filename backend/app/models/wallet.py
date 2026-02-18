@@ -71,6 +71,14 @@ class Wallet(Base):
         nullable=False
     )
     
+    # 资金账户余额 (独立于合约账户, 不参与保证金计算)
+    funding_balance: Mapped[Decimal] = mapped_column(
+        Numeric(precision=20, scale=8), 
+        default=Decimal("0"),
+        nullable=False,
+        server_default="0",
+    )
+    
     # 时间戳
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 
@@ -86,6 +94,7 @@ class Wallet(Base):
     __table_args__ = (
         CheckConstraint('balance >= 0', name='check_balance_non_negative'),
         CheckConstraint('frozen >= 0', name='check_frozen_non_negative'),
+        CheckConstraint('funding_balance >= 0', name='check_funding_non_negative'),
     )
     
     @property

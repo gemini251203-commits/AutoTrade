@@ -34,6 +34,9 @@ export interface WalletAPIResponse {
 
   /** 未实现盈亏 (持仓浮盈浮亏) */
   unrealized_pnl: string | number
+
+  /** 资金账户余额 */
+  funding_balance: string | number
 }
 
 /**
@@ -70,6 +73,7 @@ export interface WalletState {
   totalEquity: number
   totalPnl: number
   unrealizedPnl: number
+  fundingBalance: number
   currency: string
   loading: boolean
   error: string | null

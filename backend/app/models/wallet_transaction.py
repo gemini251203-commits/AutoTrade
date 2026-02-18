@@ -31,6 +31,8 @@ class TransactionType(str, Enum):
     FEE = "fee"                   # 手续费
     FUNDING = "funding"           # 资金费用
     RESET = "reset"               # 重置余额
+    TRANSFER_IN = "transfer_in"   # 从资金账户转入合约
+    TRANSFER_OUT = "transfer_out" # 从合约转出到资金账户
 
 
 class WalletTransaction(Base):

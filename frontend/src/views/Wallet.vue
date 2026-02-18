@@ -66,6 +66,18 @@ const statusMessage = ref('')
 const statusType = ref<'success' | 'error' | 'warning'>('success')
 const showStatus = ref(false)
 
+// Transfer modal
+const showTransferModal = ref(false)
+const transferAmount = ref<number>(100)
+const transferDirection = ref<'to_funding' | 'to_contract'>('to_funding')
+const transferLoading = ref(false)
+
+const transferMaxAmount = computed(() => {
+  return transferDirection.value === 'to_funding'
+    ? walletStore.available
+    : walletStore.fundingBalance
+})
+
 // ============ Computed ============
 const pnl7dColor = computed(() => (stats.value?.pnl_7d ?? 0) >= 0 ? '#00e676' : '#ff1744')
 
@@ -191,16 +203,42 @@ function selectPeriod(p: string) {
   fetchStats()
 }
 
+async function handleTransfer() {
+  if (!transferAmount.value || transferAmount.value <= 0) return
+  transferLoading.value = true
+  try {
+    const result = await walletStore.transferFunds(transferAmount.value, transferDirection.value)
+    if (result.success) {
+      showMessage(result.message)
+      showTransferModal.value = false
+      await fetchStats()
+      await fetchTransactions()
+    } else {
+      showMessage(result.message, 'error')
+    }
+  } catch (e: any) {
+    showMessage('划转失败', 'error')
+  } finally {
+    transferLoading.value = false
+  }
+}
+
+function toggleTransferDirection() {
+  transferDirection.value = transferDirection.value === 'to_funding' ? 'to_contract' : 'to_funding'
+}
+
 // ============ Table Columns ============
 function getTypeTag(type: string) {
   const map: Record<string, { label: string; type: any }> = {
-    deposit:  { label: '充值', type: 'success' },
-    withdraw: { label: '提现', type: 'warning' },
-    freeze:   { label: '冻结', type: 'info' },
-    unfreeze: { label: '解冻', type: 'info' },
-    pnl:      { label: '盈亏', type: 'primary' },
-    fee:      { label: '手续费', type: 'error' },
-    reset:    { label: '重置', type: 'warning' },
+    deposit:      { label: '充值', type: 'success' },
+    withdraw:     { label: '提现', type: 'warning' },
+    freeze:       { label: '冻结', type: 'info' },
+    unfreeze:     { label: '解冻', type: 'info' },
+    pnl:          { label: '盈亏', type: 'primary' },
+    fee:          { label: '手续费', type: 'error' },
+    reset:        { label: '重置', type: 'warning' },
+    transfer_in:  { label: '转入合约', type: 'success' },
+    transfer_out: { label: '转出资金', type: 'warning' },
   }
   return map[type] || { label: type, type: 'default' }
 }
@@ -275,6 +313,60 @@ onMounted(async () => {
           <NButton type="primary" secondary @click="showDepositModal = true">存款</NButton>
           <NButton type="warning" secondary @click="handleReset" :loading="resetLoading">重置账户</NButton>
         </NSpace>
+      </div>
+
+      <!-- ==================== Dual Account Panel ==================== -->
+      <div class="dual-account-panel">
+        <!-- Contract Account -->
+        <div class="account-card contract">
+          <div class="account-card-header">
+            <span class="account-icon">📊</span>
+            <span class="account-title">合约账户</span>
+          </div>
+          <div class="account-balance">
+            <span class="currency-symbol">$</span>{{ walletStore.formattedEquity }}
+          </div>
+          <div class="account-details">
+            <div class="account-detail-item">
+              <span class="detail-label">可用</span>
+              <span class="detail-value">{{ walletStore.formattedBalance }}</span>
+            </div>
+            <div class="account-detail-item">
+              <span class="detail-label">冻结</span>
+              <span class="detail-value">{{ formatNum(walletStore.frozen) }}</span>
+            </div>
+            <div class="account-detail-item">
+              <span class="detail-label">未实现盈亏</span>
+              <span class="detail-value" :class="pnlClass(walletStore.unrealizedPnl)">{{ walletStore.formattedUnrealizedPnl }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Transfer Button -->
+        <button class="transfer-btn-center" @click="showTransferModal = true" title="划转">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 16l-4-4 4-4"/>
+            <path d="M17 8l4 4-4 4"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+          </svg>
+        </button>
+
+        <!-- Funding Account -->
+        <div class="account-card funding">
+          <div class="account-card-header">
+            <span class="account-icon">🏦</span>
+            <span class="account-title">资金账户</span>
+          </div>
+          <div class="account-balance">
+            <span class="currency-symbol">$</span>{{ walletStore.formattedFundingBalance }}
+          </div>
+          <div class="account-details">
+            <div class="account-detail-item">
+              <span class="detail-label">可用余额</span>
+              <span class="detail-value">{{ walletStore.formattedFundingBalance }}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <NSpin :show="statsLoading && !stats">
@@ -453,6 +545,60 @@ onMounted(async () => {
           >确认充值</NButton>
         </div>
       </NModal>
+
+      <!-- Transfer Modal -->
+      <NModal v-model:show="showTransferModal" preset="card" title="账户划转" style="max-width: 420px;">
+        <div class="transfer-form">
+          <!-- Direction Display -->
+          <div class="transfer-direction">
+            <div class="transfer-account-box">
+              <span class="transfer-account-label">从</span>
+              <span class="transfer-account-name">{{ transferDirection === 'to_funding' ? '📊 合约账户' : '🏦 资金账户' }}</span>
+              <span class="transfer-account-balance">可用: {{ formatNum(transferMaxAmount) }} USDT</span>
+            </div>
+            <button class="transfer-swap-btn" @click="toggleTransferDirection" title="切换方向">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7 3v18"/><path d="m3 7 4-4 4 4"/>
+                <path d="M17 21V3"/><path d="m13 17 4 4 4-4"/>
+              </svg>
+            </button>
+            <div class="transfer-account-box">
+              <span class="transfer-account-label">到</span>
+              <span class="transfer-account-name">{{ transferDirection === 'to_funding' ? '🏦 资金账户' : '📊 合约账户' }}</span>
+            </div>
+          </div>
+
+          <!-- Amount Input -->
+          <div class="transfer-amount-section">
+            <label class="transfer-input-label">划转金额</label>
+            <NInputNumber
+              v-model:value="transferAmount"
+              :min="0.01"
+              :max="transferMaxAmount"
+              :show-button="false"
+              placeholder="输入金额"
+              style="width: 100%;"
+            >
+              <template #suffix>USDT</template>
+            </NInputNumber>
+            <div class="transfer-quick-btns">
+              <NButton size="tiny" secondary @click="transferAmount = Math.floor(transferMaxAmount * 0.25 * 100) / 100">25%</NButton>
+              <NButton size="tiny" secondary @click="transferAmount = Math.floor(transferMaxAmount * 0.5 * 100) / 100">50%</NButton>
+              <NButton size="tiny" secondary @click="transferAmount = Math.floor(transferMaxAmount * 0.75 * 100) / 100">75%</NButton>
+              <NButton size="tiny" secondary @click="transferAmount = Math.floor(transferMaxAmount * 100) / 100">全部</NButton>
+            </div>
+          </div>
+
+          <NButton
+            type="primary"
+            block
+            @click="handleTransfer"
+            :loading="transferLoading"
+            :disabled="!transferAmount || transferAmount <= 0 || transferAmount > transferMaxAmount"
+            style="margin-top: 20px;"
+          >确认划转</NButton>
+        </div>
+      </NModal>
     </div>
   </MainLayout>
 </template>
@@ -495,6 +641,172 @@ onMounted(async () => {
   font-weight: 700;
   color: #fff;
   letter-spacing: -0.5px;
+}
+
+/* ========== Dual Account Panel ========== */
+.dual-account-panel {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.account-card {
+  flex: 1;
+  background: #111113;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.06);
+  padding: 20px;
+  transition: border-color 0.2s;
+}
+.account-card.contract {
+  border-left: 3px solid rgba(139, 92, 246, 0.6);
+}
+.account-card.funding {
+  border-left: 3px solid rgba(59, 130, 246, 0.6);
+}
+.account-card:hover {
+  border-color: rgba(255,255,255,0.12);
+}
+.account-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.account-icon {
+  font-size: 18px;
+}
+.account-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #9ca3af;
+  letter-spacing: 0.5px;
+}
+.account-balance {
+  font-size: 26px;
+  font-weight: 700;
+  color: #fff;
+  font-family: 'Inter', 'SF Mono', monospace;
+  margin-bottom: 12px;
+}
+.account-balance .currency-symbol {
+  font-size: 16px;
+  color: #6b7280;
+  margin-right: 2px;
+}
+.account-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.account-detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.account-detail-item .detail-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+.account-detail-item .detail-value {
+  font-size: 13px;
+  color: #d1d5db;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.transfer-btn-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.2));
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  color: #a78bfa;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.transfer-btn-center:hover {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.35), rgba(59, 130, 246, 0.35));
+  transform: scale(1.1);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+}
+
+/* ========== Transfer Modal ========== */
+.transfer-form {
+  padding: 4px 0;
+}
+.transfer-direction {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.transfer-account-box {
+  width: 100%;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.transfer-account-label {
+  font-size: 11px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.transfer-account-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+.transfer-account-balance {
+  font-size: 12px;
+  color: #9ca3af;
+  font-family: monospace;
+}
+.transfer-swap-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #a78bfa;
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 1;
+}
+.transfer-swap-btn:hover {
+  background: rgba(139, 92, 246, 0.3);
+  transform: rotate(180deg);
+}
+.transfer-amount-section {
+  margin-top: 4px;
+}
+.transfer-input-label {
+  display: block;
+  font-size: 13px;
+  color: #9ca3af;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.transfer-quick-btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.transfer-quick-btns .n-button {
+  flex: 1;
 }
 
 /* Content */
@@ -912,6 +1224,28 @@ onMounted(async () => {
   }
   .fee-item {
     flex-wrap: wrap;
+  }
+  .dual-account-panel {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .transfer-btn-center {
+    transform: rotate(90deg);
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+  }
+  .account-card {
+    padding: 14px;
+  }
+  .account-balance {
+    font-size: 22px;
+  }
+  .account-detail-item .detail-label {
+    font-size: 11px;
+  }
+  .account-detail-item .detail-value {
+    font-size: 12px;
   }
 }
 </style>

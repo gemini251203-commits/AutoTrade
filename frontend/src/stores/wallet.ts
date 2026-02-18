@@ -27,6 +27,7 @@ export const useWalletStore = defineStore('wallet', () => {
   const totalEquity = ref<number>(0)
   const totalPnl = ref<number>(0)
   const unrealizedPnl = ref<number>(0)
+  const fundingBalance = ref<number>(0)
   const currency = ref<string>('USDT')
   const loading = ref<boolean>(false)
   const error = ref<string | null>(null)
@@ -82,6 +83,14 @@ export const useWalletStore = defineStore('wallet', () => {
   
   const isUnrealizedPnlPositive = computed(() => unrealizedPnl.value >= 0)
   
+  const formattedFundingBalance = computed(() => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'decimal',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(fundingBalance.value)
+  })
+  
   // ============================================
   // Actions
   // ============================================
@@ -105,6 +114,7 @@ export const useWalletStore = defineStore('wallet', () => {
       totalEquity.value = parseFloat(String(data.total_equity)) || 0
       totalPnl.value = parseFloat(String(data.total_pnl)) || 0
       unrealizedPnl.value = parseFloat(String(data.unrealized_pnl)) || 0
+      fundingBalance.value = parseFloat(String(data.funding_balance)) || 0
       
     } catch (e: any) {
       error.value = e.response?.data?.detail || 'Failed to fetch balance'
@@ -139,7 +149,35 @@ export const useWalletStore = defineStore('wallet', () => {
     totalEquity.value = 0
     totalPnl.value = 0
     unrealizedPnl.value = 0
+    fundingBalance.value = 0
     error.value = null
+  }
+  
+  /**
+   * Transfer funds between contract and funding accounts
+   * POST /wallet/transfer
+   */
+  async function transferFunds(amount: number, direction: 'to_funding' | 'to_contract'): Promise<{ success: boolean; message: string }> {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await request.post<{ success: boolean; contract_balance: number; funding_balance: number; message: string }>('/wallet/transfer', {
+        amount,
+        direction,
+      })
+      
+      // Refresh all balance data
+      await fetchBalance()
+      
+      return { success: true, message: response.data.message }
+    } catch (e: any) {
+      const msg = e.response?.data?.detail || '划转失败'
+      error.value = msg
+      return { success: false, message: msg }
+    } finally {
+      loading.value = false
+    }
   }
   
   // ============================================
@@ -153,6 +191,7 @@ export const useWalletStore = defineStore('wallet', () => {
     totalEquity,
     totalPnl,
     unrealizedPnl,
+    fundingBalance,
     currency,
     loading,
     error,
@@ -162,6 +201,7 @@ export const useWalletStore = defineStore('wallet', () => {
     formattedEquity,
     formattedPnl,
     formattedUnrealizedPnl,
+    formattedFundingBalance,
     pnlPercent,
     isPnlPositive,
     isUnrealizedPnlPositive,
@@ -169,6 +209,7 @@ export const useWalletStore = defineStore('wallet', () => {
     // Actions
     fetchBalance,
     initializeWallet,
+    transferFunds,
     reset,
   }
 })

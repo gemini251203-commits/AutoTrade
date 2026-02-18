@@ -388,3 +388,91 @@ class WalletManager:
         )
         
         return wallet
+
+    # ============================================
+    # 划转方法 (合约账户 ↔ 资金账户)
+    # ============================================
+    
+    @staticmethod
+    async def transfer_funds(
+        db: AsyncSession, 
+        user_id: int,
+        amount: Decimal,
+        direction: str,  # "to_funding" | "to_contract"
+    ) -> Wallet:
+        """
+        账户间划转 (合约 ↔ 资金)
+        
+        规则:
+        - to_funding: 合约 → 资金 (只能转可用余额, 冻结不可转)
+        - to_contract: 资金 → 合约
+        - 划转后需重算爆仓价
+        
+        Args:
+            db: 数据库会话
+            user_id: 用户 ID
+            amount: 划转金额 (> 0)
+            direction: "to_funding" 或 "to_contract"
+        
+        Returns:
+            更新后的 Wallet 实例
+        
+        Raises:
+            InsufficientFundsError: 来源账户余额不足
+            ValueError: 无效参数
+        """
+        if amount <= 0:
+            raise ValueError("划转金额必须大于 0")
+        
+        if direction not in ("to_funding", "to_contract"):
+            raise ValueError(f"无效划转方向: {direction}")
+        
+        # 锁定钱包行
+        wallet = await WalletManager.get_wallet(db, user_id, for_update=True)
+        
+        if wallet is None:
+            raise WalletNotFoundError(user_id)
+        
+        if direction == "to_funding":
+            # 合约 → 资金: 只能转可用余额
+            if wallet.balance < amount:
+                raise InsufficientFundsError(
+                    user_id=user_id,
+                    required=amount,
+                    available=wallet.balance,
+                )
+            wallet.balance -= amount
+            wallet.funding_balance += amount
+            tx_type = "transfer_out"
+            note = f"合约→资金 划转 {amount} USDT"
+        else:
+            # 资金 → 合约
+            if wallet.funding_balance < amount:
+                raise InsufficientFundsError(
+                    user_id=user_id,
+                    required=amount,
+                    available=wallet.funding_balance,
+                )
+            wallet.funding_balance -= amount
+            wallet.balance += amount
+            tx_type = "transfer_in"
+            note = f"资金→合约 划转 {amount} USDT"
+        
+        # 记录流水
+        from app.models.wallet_transaction import WalletTransaction
+        tx = WalletTransaction(
+            user_id=user_id,
+            type=tx_type,
+            amount=amount if direction == "to_contract" else -amount,
+            balance_after=wallet.balance,
+            note=note,
+        )
+        db.add(tx)
+        
+        logger.info(
+            f"[WalletManager] User {user_id}: Transfer {direction} {amount} USDT, "
+            f"contract_balance={wallet.balance}, funding_balance={wallet.funding_balance}"
+        )
+        
+        return wallet
+
