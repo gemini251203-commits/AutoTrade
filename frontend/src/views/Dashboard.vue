@@ -65,43 +65,54 @@ function stopResize() {
   window.removeEventListener('mousemove', handleMouseMove)
   window.removeEventListener('mouseup', stopResize)
 }
+const showTradePanel = ref(false)
 </script>
 
 <template>
   <NMessageProvider>
     <MainLayout>
-      <div class="h-full flex flex-col gap-3">
+      <div class="dashboard-root flex flex-col gap-3 md:h-full">
         <!-- Top Section: Chart + Trade Panel -->
-        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 flex-1 min-h-0 overflow-y-auto md:overflow-visible">
-          <!-- Chart Area (9 columns) -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 md:flex-1 md:min-h-0 md:overflow-visible">
+          <!-- Chart Area -->
           <div 
-            class="md:col-span-9 rounded-xl overflow-hidden glass-panel min-h-[450px] md:min-h-0"
+            class="md:col-span-9 rounded-xl overflow-hidden glass-panel h-[300px] md:h-auto"
             style="background: rgba(0, 0, 0, 0.4);"
           >
             <TradingChart />
           </div>
           
-          <!-- Trade Panel (3 columns) -->
+          <!-- Mobile Trade Toggle -->
+          <button 
+            class="md:hidden w-full py-3 rounded-xl glass-panel text-center text-sm font-medium"
+            style="background: rgba(0, 0, 0, 0.4);"
+            @click="showTradePanel = !showTradePanel"
+          >
+            {{ showTradePanel ? '▲ 收起交易面板' : '▼ 展开交易面板' }}
+          </button>
+          
+          <!-- Trade Panel -->
           <div 
             class="md:col-span-3 rounded-xl overflow-hidden overflow-y-auto glass-panel"
+            :class="{ 'hidden md:block': !showTradePanel }"
             style="max-height: 600px; background: rgba(0, 0, 0, 0.4);"
           >
             <TradePanel />
           </div>
         </div>
         
-        <!-- Bottom Section: Tabs Panel (Resizable) -->
+        <!-- Bottom Section: Tabs Panel -->
         <div 
-          class="rounded-xl overflow-hidden flex flex-col relative glass-panel"
+          class="resizable-panel rounded-xl overflow-hidden flex flex-col relative glass-panel"
           style="background: rgba(0, 0, 0, 0.4);"
           :style="{ 
             height: bottomHeight + 'px',
             transition: isResizing ? 'none' : 'height 0.2s ease'
           }"
         >
-          <!-- Resize Handle -->
+          <!-- Resize Handle (Desktop only) -->
           <div 
-            class="resize-handle"
+            class="resize-handle hidden md:flex"
             @mousedown="startResize"
           >
             <div class="handle-bar"></div>
@@ -119,15 +130,10 @@ function stopResize() {
             </button>
           </div>
           
-          <!-- Tab Content (Scrollable) -->
+          <!-- Tab Content -->
           <div class="tab-content flex-1 overflow-y-auto custom-scrollbar">
-            <!-- 当前委托 / 历史委托 -->
             <OrderList v-if="activeTab === 'orders' || activeTab === 'order_history'" />
-            
-            <!-- 仓位 -->
             <PositionList v-else-if="activeTab === 'positions'" />
-            
-            <!-- 网格交易 -->
             <GridTrading v-else-if="activeTab === 'grid'" />
           </div>
         </div>
@@ -238,5 +244,22 @@ function stopResize() {
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* Mobile Layout Overrides */
+@media (max-width: 767px) {
+  .dashboard-root {
+    height: auto !important;
+    min-height: 0;
+  }
+  
+  .resizable-panel {
+    height: auto !important;
+    min-height: 300px;
+  }
+  
+  .tab-content {
+    max-height: 500px;
+  }
 }
 </style>
