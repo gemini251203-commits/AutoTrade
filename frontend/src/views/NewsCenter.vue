@@ -5,6 +5,7 @@
  * 实时新闻流 + 情绪仪表盘 + 监控规则管理 + AI思考记录
  */
 import { ref, onMounted, computed } from 'vue'
+import MainLayout from '@/layouts/MainLayout.vue'
 import {
   NCard, NSpace, NTag, NButton, NSelect, NInput,
   NSpin, NEmpty, NGrid, NGridItem, NStatistic,
@@ -224,7 +225,8 @@ onMounted(loadAll)
 </script>
 
 <template>
-  <div class="news-center">
+  <MainLayout>
+    <div class="news-center">
     <!-- 页面标题 -->
     <div class="page-header">
       <h1>📰 新闻中心</h1>
@@ -518,13 +520,15 @@ onMounted(loadAll)
         </n-space>
       </template>
     </n-modal>
-  </div>
+    </div>
+  </MainLayout>
 </template>
 
 <style scoped>
 .news-center {
-  padding: 0;
-  max-width: 100%;
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 .page-header {
   margin-bottom: 20px;
