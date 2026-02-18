@@ -681,6 +681,45 @@ async def get_strategy_detail(
     return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False)
 
 
+async def _fetch_klines_map(symbol: str, timeframes: list) -> dict:
+    """
+    获取多时间框架 K 线数据
+    
+    Returns:
+        {"1h": [klines...], "4h": [klines...], ...}
+    """
+    from app.core.network import net_manager
+
+    klines_map = {}
+    async with net_manager.get_client(timeout=15.0) as client:
+        for tf in timeframes:
+            try:
+                resp = await client.get(
+                    "https://fapi.binance.com/fapi/v1/klines",
+                    params={
+                        "symbol": symbol,
+                        "interval": tf,
+                        "limit": 200,
+                    },
+                )
+                if resp.status_code == 200:
+                    raw = resp.json()
+                    if raw and len(raw) >= 20:
+                        klines_map[tf] = [{
+                            "open_time": k[0],
+                            "open": float(k[1]),
+                            "high": float(k[2]),
+                            "low": float(k[3]),
+                            "close": float(k[4]),
+                            "volume": float(k[5]),
+                            "close_time": k[6],
+                            "quote_volume": float(k[7]),
+                        } for k in raw]
+            except Exception as e:
+                logger.warning(f"[Tools] 获取 {tf} K线失败: {e}")
+    return klines_map
+
+
 @register_tool
 async def evaluate_strategy(
     db: AsyncSession,
@@ -696,7 +735,6 @@ async def evaluate_strategy(
         symbol: 可选, 覆盖策略默认的交易对
     """
     from app.services.quant.strategy import StrategyEngine, STRATEGY_TEMPLATES
-    from app.core.network import net_manager
 
     engine = StrategyEngine()
 
@@ -725,49 +763,28 @@ async def evaluate_strategy(
     # 如果指定了 symbol，覆盖策略默认的
     target_symbol = (symbol or config.get("symbol", "BTCUSDT")).upper()
     config["symbol"] = target_symbol
-    interval = config.get("interval", "1h")
 
-    # 获取 K 线数据
+    # 获取多时间框架 K 线数据
+    required_tfs = config.get("_required_timeframes", [config.get("interval", "1h")])
+    
     try:
-        async with net_manager.get_client(timeout=15.0) as client:
-            resp = await client.get(
-                "https://fapi.binance.com/fapi/v1/klines",
-                params={
-                    "symbol": target_symbol,
-                    "interval": interval,
-                    "limit": 200,
-                },
-            )
-            if resp.status_code != 200:
-                return json.dumps({"error": f"获取K线失败: HTTP {resp.status_code}"}, ensure_ascii=False)
-            raw = resp.json()
+        klines_map = await _fetch_klines_map(target_symbol, required_tfs)
     except Exception as e:
         return json.dumps({"error": f"获取K线异常: {str(e)}"}, ensure_ascii=False)
 
-    if not raw or len(raw) < 50:
-        return json.dumps({"error": f"K线数据不足: {len(raw) if raw else 0}"}, ensure_ascii=False)
-
-    klines = [{
-        "open_time": k[0],
-        "open": float(k[1]),
-        "high": float(k[2]),
-        "low": float(k[3]),
-        "close": float(k[4]),
-        "volume": float(k[5]),
-        "close_time": k[6],
-        "quote_volume": float(k[7]),
-    } for k in raw]
+    if not klines_map:
+        return json.dumps({"error": "无法获取任何时间框架的K线数据"}, ensure_ascii=False)
 
     # 执行策略评估
     try:
-        signal = engine.evaluate(config, klines)
+        signal = engine.evaluate(config, klines_map=klines_map)
     except Exception as e:
         return json.dumps({"error": f"策略评估失败: {str(e)}"}, ensure_ascii=False)
 
     return json.dumps({
         "strategy_name": strategy_name,
         "symbol": target_symbol,
-        "interval": interval,
+        "timeframes": required_tfs,
         "signal_type": signal.signal_type.value,
         "has_signal": signal.has_signal,
         "side": signal.side.value if signal.side else None,
@@ -794,7 +811,7 @@ async def run_strategy(
     from app.services.quant.strategy import StrategyEngine, STRATEGY_TEMPLATES
     from app.services.quant.risk_guard import RiskGuard
     from app.services.trading.position_manager import PositionManager
-    from app.core.network import net_manager
+    from app.services.quant.indicators import get_indicator
 
     engine = StrategyEngine()
     risk_guard = RiskGuard()
@@ -823,42 +840,24 @@ async def run_strategy(
 
     target_symbol = (symbol or config.get("symbol", "BTCUSDT")).upper()
     config["symbol"] = target_symbol
-    interval = config.get("interval", "1h")
 
-    # 1. 获取 K 线
+    # 1. 获取多时间框架 K 线
+    required_tfs = config.get("_required_timeframes", [config.get("interval", "1h")])
     try:
-        async with net_manager.get_client(timeout=15.0) as client:
-            resp = await client.get(
-                "https://fapi.binance.com/fapi/v1/klines",
-                params={
-                    "symbol": target_symbol,
-                    "interval": interval,
-                    "limit": 200,
-                },
-            )
-            if resp.status_code != 200:
-                return json.dumps({"error": f"获取K线失败: HTTP {resp.status_code}"}, ensure_ascii=False)
-            raw = resp.json()
+        klines_map = await _fetch_klines_map(target_symbol, required_tfs)
     except Exception as e:
         return json.dumps({"error": f"获取K线异常: {str(e)}"}, ensure_ascii=False)
 
-    if not raw or len(raw) < 50:
-        return json.dumps({"error": "K线数据不足"}, ensure_ascii=False)
+    if not klines_map:
+        return json.dumps({"error": "无法获取K线数据"}, ensure_ascii=False)
 
-    klines = [{
-        "open_time": k[0],
-        "open": float(k[1]),
-        "high": float(k[2]),
-        "low": float(k[3]),
-        "close": float(k[4]),
-        "volume": float(k[5]),
-        "close_time": k[6],
-        "quote_volume": float(k[7]),
-    } for k in raw]
+    # 取主时间框架 K 线 (用于价格和 ATR)
+    default_interval = config.get("interval", "1h")
+    main_klines = klines_map.get(default_interval, list(klines_map.values())[0])
 
     # 2. 策略评估
     try:
-        signal = engine.evaluate(config, klines)
+        signal = engine.evaluate(config, klines_map=klines_map)
     except Exception as e:
         return json.dumps({"error": f"策略评估异常: {str(e)}"}, ensure_ascii=False)
 
@@ -945,24 +944,71 @@ async def run_strategy(
         }, ensure_ascii=False, default=str)
 
     # 4. 自动下单
-    current_price = Decimal(str(klines[-1]["close"]))
+    current_price = Decimal(str(main_klines[-1]["close"]))
     leverage = risk_config.get("leverage", 1)
     position_pct = risk_config.get("position_pct", 10)
+
+    # L4: 波动率自适应仓位
+    if risk_config.get("volatility_adjust"):
+        try:
+            atr_val = get_indicator("atr", main_klines)
+            if atr_val and float(current_price) > 0:
+                atr_pct = atr_val / float(current_price) * 100
+                # ATR% < 1% 正常仓位, ATR% > 3% 缩至 1/3
+                vol_factor = max(0.33, min(1.0, 1.0 / atr_pct))
+                original_pct = position_pct
+                position_pct = round(position_pct * vol_factor, 1)
+                logger.info(
+                    f"[Strategy] 波动率调整: ATR%={atr_pct:.2f}%, "
+                    f"仓位 {original_pct}% → {position_pct}%"
+                )
+        except Exception as e:
+            logger.warning(f"[Strategy] 波动率调整失败: {e}")
+
     trade_amount = wallet_balance * position_pct / 100
     quantity = Decimal(str(round(trade_amount / float(current_price), 4)))
 
     side_map = {"buy": PositionSide.LONG, "sell": PositionSide.SHORT}
     position_side = side_map.get(signal.side.value, PositionSide.LONG) if signal.side else PositionSide.LONG
 
-    # 计算止损止盈
+    # 计算止损止盈 (L2: 支持动态止损)
+    stop_type = risk_config.get("stop_type", "fixed")
     stop_loss_pct = risk_config.get("stop_loss_pct", 3)
     take_profit_pct = risk_config.get("take_profit_pct", 9)
-    if position_side == PositionSide.LONG:
-        stop_loss = current_price * (1 - Decimal(str(stop_loss_pct)) / 100) if stop_loss_pct else None
-        take_profit = current_price * (1 + Decimal(str(take_profit_pct)) / 100) if take_profit_pct else None
+
+    if stop_type == "atr":
+        # ATR 止损: 止损距离 = ATR * multiplier
+        try:
+            atr_val = get_indicator("atr", main_klines)
+            multiplier = risk_config.get("atr_stop_multiplier", 2)
+            if atr_val:
+                atr_stop_distance = Decimal(str(atr_val * multiplier))
+                if position_side == PositionSide.LONG:
+                    stop_loss = current_price - atr_stop_distance
+                    take_profit = current_price + atr_stop_distance * Decimal("3") if take_profit_pct else None
+                else:
+                    stop_loss = current_price + atr_stop_distance
+                    take_profit = current_price - atr_stop_distance * Decimal("3") if take_profit_pct else None
+            else:
+                # ATR 计算失败，回退到固定止损
+                stop_loss, take_profit = _calc_fixed_stops(
+                    current_price, position_side, stop_loss_pct, take_profit_pct
+                )
+        except Exception:
+            stop_loss, take_profit = _calc_fixed_stops(
+                current_price, position_side, stop_loss_pct, take_profit_pct
+            )
+    elif stop_type == "trailing":
+        # 追踪止损: 先用固定止损开仓，追踪逻辑在 position_manager 层处理
+        trailing_pct = risk_config.get("trailing_pct", 1.5)
+        stop_loss, take_profit = _calc_fixed_stops(
+            current_price, position_side, trailing_pct, take_profit_pct
+        )
     else:
-        stop_loss = current_price * (1 + Decimal(str(stop_loss_pct)) / 100) if stop_loss_pct else None
-        take_profit = current_price * (1 - Decimal(str(take_profit_pct)) / 100) if take_profit_pct else None
+        # 固定止损（默认）
+        stop_loss, take_profit = _calc_fixed_stops(
+            current_price, position_side, stop_loss_pct, take_profit_pct
+        )
 
     try:
         source = agent_source_var.get()
@@ -990,12 +1036,101 @@ async def run_strategy(
             "entry_price": str(current_price),
             "leverage": leverage,
             "stop_loss": str(stop_loss) if stop_loss else None,
+            "stop_type": stop_type,
             "take_profit": str(take_profit) if take_profit else None,
+            "position_pct_actual": position_pct,
             "position_id": position.id,
             "message": f"策略 '{strategy_name}' 已执行交易",
         }, ensure_ascii=False, default=str)
     except Exception as e:
         return json.dumps({"error": f"下单失败: {str(e)}"}, ensure_ascii=False)
+
+
+def _calc_fixed_stops(
+    current_price: Decimal,
+    position_side,
+    stop_loss_pct: float,
+    take_profit_pct: float,
+) -> tuple:
+    """计算固定百分比止损止盈"""
+    if position_side.value == "long":
+        stop_loss = current_price * (1 - Decimal(str(stop_loss_pct)) / 100) if stop_loss_pct else None
+        take_profit = current_price * (1 + Decimal(str(take_profit_pct)) / 100) if take_profit_pct else None
+    else:
+        stop_loss = current_price * (1 + Decimal(str(stop_loss_pct)) / 100) if stop_loss_pct else None
+        take_profit = current_price * (1 - Decimal(str(take_profit_pct)) / 100) if take_profit_pct else None
+    return stop_loss, take_profit
+
+
+def _build_validation_report(config: dict) -> dict:
+    """生成策略验证报告 — 让 AI 和用户确认策略实际包含什么"""
+    entry = config.get("entry", {})
+    exit_block = config.get("exit", {})
+    risk = config.get("risk", {})
+
+    entry_conds = entry.get("conditions", [])
+    exit_conds = exit_block.get("conditions", [])
+
+    # 收集使用的指标
+    indicators_used = set()
+    for cond in entry_conds + exit_conds:
+        if "indicator" in cond:
+            indicators_used.add(cond["indicator"])
+        if "reference" in cond:
+            indicators_used.add(cond["reference"])
+
+    # 收集使用的功能
+    features = []
+    for cond in entry_conds + exit_conds:
+        if "timeframe" in cond:
+            features.append("多时间框架")
+        if "cross" in cond:
+            features.append("时序穿越")
+        if "expression" in cond:
+            features.append("自定义表达式")
+        if "weight" in cond:
+            features.append("权重评分")
+    if config.get("scoring"):
+        features.append(f"评分阈值={config['scoring'].get('min_score', '?')}")
+    if config.get("stages"):
+        features.append(f"分批建仓({len(config['stages'])}阶段)")
+    if config.get("time_filter"):
+        features.append("时间过滤")
+    if risk.get("stop_type") and risk["stop_type"] != "fixed":
+        features.append(f"动态止损({risk['stop_type']})")
+    if risk.get("volatility_adjust"):
+        features.append("波动率自适应")
+
+    report = {
+        "entry_conditions": len(entry_conds),
+        "exit_conditions": len(exit_conds),
+        "entry_operator": entry.get("operator", "AND"),
+        "exit_operator": exit_block.get("operator", "OR"),
+        "indicators_used": sorted(indicators_used),
+        "risk_summary": {
+            "side": risk.get("side", "未设置"),
+            "leverage": risk.get("leverage", "未设置"),
+            "position_pct": risk.get("position_pct", "未设置"),
+            "stop_loss_pct": risk.get("stop_loss_pct", "未设置"),
+            "take_profit_pct": risk.get("take_profit_pct", "未设置"),
+            "stop_type": risk.get("stop_type", "fixed"),
+        },
+        "required_timeframes": config.get("_required_timeframes", []),
+        "features": sorted(set(features)) if features else ["基础策略"],
+    }
+
+    # 警告
+    warnings = []
+    if len(entry_conds) == 0:
+        warnings.append("⚠️ 没有入场条件")
+    if len(exit_conds) == 0:
+        warnings.append("⚠️ 没有出场条件")
+    if not risk.get("side"):
+        warnings.append("⚠️ 未设置 risk.side (buy/sell)")
+    if warnings:
+        report["warnings"] = warnings
+
+    return report
 
 
 @register_tool
@@ -1039,6 +1174,9 @@ async def create_strategy(
     await db.commit()
     await db.refresh(strategy)
 
+    # 生成验证报告
+    report = _build_validation_report(config)
+
     return json.dumps({
         "action": "created",
         "id": strategy.id,
@@ -1046,6 +1184,7 @@ async def create_strategy(
         "symbol": strategy.symbol,
         "interval": strategy.interval,
         "message": f"策略 '{name}' 已创建 (ID: {strategy.id})，默认未启用",
+        "validation_report": report,
     }, ensure_ascii=False)
 
 
@@ -1099,14 +1238,26 @@ async def update_strategy(
 
     await db.commit()
 
-    return json.dumps({
+    # 生成验证报告 (用最新 YAML)
+    report = {}
+    try:
+        final_config = engine.parse_yaml(strategy.config_yaml) if config_yaml else None
+        if final_config:
+            report = _build_validation_report(final_config)
+    except Exception:
+        pass
+
+    result = {
         "action": "updated",
         "id": strategy.id,
         "name": strategy.name,
         "symbol": strategy.symbol,
         "interval": strategy.interval,
         "message": f"策略 '{strategy.name}' (ID: {strategy.id}) 已更新",
-    }, ensure_ascii=False)
+    }
+    if report:
+        result["validation_report"] = report
+    return json.dumps(result, ensure_ascii=False)
 
 
 @register_tool

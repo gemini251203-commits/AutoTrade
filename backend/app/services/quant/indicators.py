@@ -1014,6 +1014,30 @@ def get_indicator(name: str, klines: List[Dict]) -> Any:
         return None
 
 
+def get_indicator_at(name: str, klines: List[Dict], offset: int = 0) -> Any:
+    """
+    获取前 N 根 K 线位置的指标值 (用于时序条件)
+    
+    Args:
+        name: 指标名称
+        klines: K 线数据
+        offset: 0=当前, -1=前一根, -2=前两根
+    
+    Returns:
+        指标值 (float/bool/None)
+    """
+    if offset == 0:
+        return get_indicator(name, klines)
+    
+    # 截取到前 N 根位置的 K 线数据
+    end_idx = len(klines) + offset
+    if end_idx < 2:
+        return None
+    
+    truncated = klines[:end_idx]
+    return get_indicator(name, truncated)
+
+
 def calculate_all_indicators(klines: List[Dict]) -> Dict[str, Any]:
     """
     一次性计算所有常用指标快照

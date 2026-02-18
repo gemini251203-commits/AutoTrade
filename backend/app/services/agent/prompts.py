@@ -114,29 +114,87 @@ TOOLS_DESCRIPTION = """
 name: "策略名称"
 symbol: BTCUSDT
 interval: 1h          # 支持: 5m, 15m, 1h, 4h, 1d
+
 entry:                 # 开仓条件
   operator: AND        # AND=全部满足, OR=任一满足
   conditions:
-    - indicator: rsi   # 指标名称 (见下方列表)
-      compare: "<"     # 比较运算符: <, >, <=, >=, ==
-      value: 30        # 与固定数值比较
+    # 基础: 指标 vs 数值
+    - indicator: rsi
+      compare: "<"     # 运算符: <, >, <=, >=, ==
+      value: 30
+    # 基础: 指标 vs 指标
     - indicator: close
       compare: "<="
-      reference: bollinger_lower  # 或与另一个指标比较
+      reference: bollinger_lower
+    # L2: 多时间框架 — 在指定周期上评估
+    - indicator: rsi
+      timeframe: 1d    # 在日线上检查
+      compare: ">"
+      value: 50
+    # L2: 时序条件 — 检测穿越瞬间
+    - indicator: rsi
+      cross: above     # above=从下方上穿, below=从上方下穿
+      value: 30
+    # L3: 自定义表达式
+    - expression: "(ema_10 - ema_20) / atr"
+      compare: ">"
+      value: 0.5
+    # L4: 权重 — 条件带评分权重
+    - indicator: rsi
+      compare: "<"
+      value: 30
+      weight: 3        # 此条件权重为3
+
 exit:                  # 平仓条件
   operator: OR
   conditions:
     - indicator: rsi
       compare: ">"
       value: 70
-ai_prompt: |           # 可选: AI 执行前的额外检查提示
-  请额外确认趋势和成交量
+
+# L4: 评分模式 (与 weight 配合)
+scoring:
+  min_score: 5         # 条件权重之和 >= 5 才触发信号
+
+# L3: 分批建仓 (替代 entry)
+stages:
+  - name: "初始建仓"
+    position_pct: 30
+    conditions:
+      operator: AND
+      conditions:
+        - indicator: rsi
+          compare: "<"
+          value: 30
+  - name: "确认加仓"
+    position_pct: 30
+    conditions:
+      operator: AND
+      conditions:
+        - indicator: rsi
+          cross: above
+          value: 30
+
+# L3: 时间过滤
+time_filter:
+  trading_hours: ["08:00-12:00", "20:00-02:00"]  # UTC
+  skip_weekends: true
+
+ai_prompt: |           # 可选: AI 执行前额外检查
+  请确认趋势和成交量
+
 risk:                  # 风控参数
   side: buy            # buy=做多, sell=做空
   leverage: 3          # 杠杆 (1-10)
   position_pct: 10     # 仓位占比 (%)
   stop_loss_pct: 3     # 止损百分比
   take_profit_pct: 9   # 止盈百分比
+  # L2: 动态止损 (三选一)
+  stop_type: fixed     # fixed(默认) / trailing / atr
+  trailing_pct: 1.5    # stop_type=trailing 时: 回撤1.5%止损
+  atr_stop_multiplier: 2  # stop_type=atr 时: 止损=入场-2*ATR
+  # L4: 波动率自适应
+  volatility_adjust: true  # ATR高时自动缩小仓位
 ```
 
 ### 可用指标名称 (indicator 字段):
@@ -151,6 +209,8 @@ risk:                  # 风控参数
 - 成交量: volume_ratio (当前/平均)
 - 支撑阻力: near_support (bool), near_resistance (bool), pinbar_at_support (bool)
 - K线形态: pattern_pinbar (bool), pattern_engulfing (bool), pattern_hammer (bool), pattern_doji (bool), pattern_morning_star (bool), pattern_evening_star (bool)
+
+⚠️ 所有 YAML 字段都有严格白名单校验，写入未知字段会被系统拒绝。如果用户需要的功能不在上述格式中，请明确告知"当前系统不支持此功能"。
 
 重要规则:
 - 金额和数量使用数字，不加单位
