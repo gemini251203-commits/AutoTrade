@@ -246,7 +246,7 @@ onMounted(loadAll)
 
 <template>
   <MainLayout>
-    <div class="news-center">
+    <div class="news-center mobile-safe-pb">
     <!-- 页面标题 -->
     <div class="page-header">
       <h1>📰 新闻中心</h1>

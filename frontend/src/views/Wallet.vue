@@ -831,11 +831,13 @@ onMounted(async () => {
 /* ========== Responsive ========== */
 @media (max-width: 768px) {
   .portfolio-page {
-    padding: 16px;
+    padding: 12px;
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom)); /* Ensure navigation doesn't cover content */
   }
   .overview-row {
     grid-template-columns: 1fr;
     padding: 16px;
+    gap: 16px;
   }
   .overview-left {
     border-right: none;
@@ -843,8 +845,37 @@ onMounted(async () => {
     padding-right: 0;
     padding-bottom: 16px;
   }
+  .overview-value {
+    font-size: 28px;
+  }
+  
+  /* Calendar Mobile Optimization */
+  .calendar-section {
+    margin-top: 8px;
+  }
+  .pnl-calendar {
+    border-spacing: 3px; /* Reduce spacing to fit */
+  }
+  .pnl-calendar th {
+    font-size: 10px;
+    padding: 4px 2px;
+  }
+  .pnl-calendar td {
+    height: 56px; /* Shorter cells */
+    padding: 4px;
+    border-radius: 6px;
+  }
+  .cal-day {
+    font-size: 10px;
+    margin-bottom: 2px;
+  }
+  .cal-pnl {
+    font-size: 10px; /* Smaller font to properly fit */
+    letter-spacing: -0.5px;
+  }
+  
   .summary-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr; /* Stack summary cards */
   }
   .summary-header {
     flex-direction: column;
@@ -854,7 +885,8 @@ onMounted(async () => {
   .page-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
+    gap: 8px;
+    margin-bottom: 16px;
   }
   .fee-item {
     flex-wrap: wrap;
