@@ -32,16 +32,34 @@ TOOLS_DESCRIPTION = """
 
 可用工具列表:
 
+## 行情工具
 1. get_price(symbol) - 查询实时价格
    示例: [TOOL_CALL: get_price(symbol=BTCUSDT)]
 
-2. get_balance() - 查询账户余额
+2. get_indicators(symbol, interval) - 获取完整技术指标 (RSI/MACD/布林带/KDJ/ATR/支撑阻力/K线形态等)
+   示例: [TOOL_CALL: get_indicators(symbol=BTCUSDT, interval=1h)]
+
+3. analyze_market(symbol) - 综合市场分析 (多智能体)
+   示例: [TOOL_CALL: analyze_market(symbol=BTCUSDT)]
+
+4. analyze_trend(symbol) - 多周期趋势分析 (15m/1h/4h/1d 四周期) + 策略推荐
+   示例: [TOOL_CALL: analyze_trend(symbol=BTCUSDT)]
+
+5. get_klines(symbol, interval, limit) - 获取 K 线数据
+   示例: [TOOL_CALL: get_klines(symbol=BTCUSDT, interval=1h, limit=50)]
+
+## 账户工具
+6. get_balance() - 查询账户余额
    示例: [TOOL_CALL: get_balance()]
 
-3. get_positions() - 查询当前持仓
+7. get_positions() - 查询当前持仓
    示例: [TOOL_CALL: get_positions()]
 
-4. place_order(symbol, side, order_type, quantity, leverage, price, stop_loss, take_profit) - 下单
+8. get_open_orders() - 查询挂单
+   示例: [TOOL_CALL: get_open_orders()]
+
+## 交易工具
+9. place_order(symbol, side, order_type, quantity, leverage, price, stop_loss, take_profit) - 下单
    - symbol: 交易对 (如 BTCUSDT)
    - side: buy 或 sell
    - order_type: market(市价) 或 limit(限价)
@@ -52,34 +70,49 @@ TOOLS_DESCRIPTION = """
    - take_profit: 止盈价格 (可选)
    示例: [TOOL_CALL: place_order(symbol=BTCUSDT, side=buy, order_type=market, quantity=0.008, leverage=20, stop_loss=67500, take_profit=70000)]
 
-5. close_position(position_id, close_price) - 平仓
-   示例: [TOOL_CALL: close_position(position_id=1, close_price=98000)]
+10. close_position(position_id, close_price) - 平仓
+    示例: [TOOL_CALL: close_position(position_id=1, close_price=98000)]
 
-6. cancel_order(order_id) - 取消订单
-   示例: [TOOL_CALL: cancel_order(order_id=5)]
+11. cancel_order(order_id) - 取消订单
+    示例: [TOOL_CALL: cancel_order(order_id=5)]
 
-7. get_open_orders() - 查询挂单
-   示例: [TOOL_CALL: get_open_orders()]
+## 策略工具
+12. list_strategies() - 列出所有可用策略 (用户自定义 + 预设模板)
+    示例: [TOOL_CALL: list_strategies()]
 
-8. get_indicators(symbol, interval) - 获取技术指标 (RSI/MACD/布林带等)
-   示例: [TOOL_CALL: get_indicators(symbol=BTCUSDT, interval=1h)]
+13. get_strategy_detail(strategy_id) - 查看策略完整配置和 YAML
+    - strategy_id: 用户策略的数字 ID，或预设模板的字符串 ID
+    示例: [TOOL_CALL: get_strategy_detail(strategy_id=1)]
 
-9. analyze_market(symbol) - 综合市场分析
-   示例: [TOOL_CALL: analyze_market(symbol=BTCUSDT)]
+14. evaluate_strategy(strategy_id, symbol) - 评估策略在当前行情下的信号 (不下单)
+    - strategy_id: 策略 ID
+    - symbol: 可选, 覆盖策略默认交易对
+    示例: [TOOL_CALL: evaluate_strategy(strategy_id=rsi_oversold)]
 
-10. query_memories(symbol) - 查询交易记忆 (AI 总结的历史交易经验)
+15. run_strategy(strategy_id, symbol) - 完整执行策略: 评估 → 风控 → 自动下单
+    - 只有入场信号 + 风控通过才会自动下单
+    示例: [TOOL_CALL: run_strategy(strategy_id=1)]
+
+16. create_strategy(name, symbol, interval, config_yaml) - 创建新策略保存到数据库
+    - name: 策略名称
+    - config_yaml: YAML 格式策略配置
+    示例: [TOOL_CALL: create_strategy(name=RSI超卖策略, symbol=BTCUSDT, interval=1h, config_yaml=...)]
+
+17. update_strategy(strategy_id, name, symbol, interval, config_yaml) - 修改已有策略
+    - 只传需要修改的字段，不传的保持不变
+    示例: [TOOL_CALL: update_strategy(strategy_id=1, config_yaml=...)]
+
+## 记忆工具
+18. query_memories(symbol) - 查询所有交易记忆 (包含手动/AI/信号/量化策略所有来源)
     示例: [TOOL_CALL: query_memories(symbol=BTCUSDT)]
 
-11. get_klines(symbol, interval, limit) - 获取 K 线数据
-    示例: [TOOL_CALL: get_klines(symbol=BTCUSDT, interval=1h, limit=50)]
-
 重要规则:
-- 每次只调用一个工具
-- 等工具返回结果后再回复
 - 金额和数量使用数字，不加单位
 - symbol 全大写 (如 BTCUSDT)
 - 下单前建议先查价格和余额
+- 可以在一条消息中调用多个工具
 """
+
 
 # ==================== 交易所规则 (注入所有角色) ====================
 TRADING_RULES = """

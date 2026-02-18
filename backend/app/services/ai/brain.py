@@ -35,6 +35,7 @@ class MarketContext:
     price_change_24h: float = 0.0
     high_24h: float = 0.0
     low_24h: float = 0.0
+    volume_24h: float = 0.0
 
 
 @dataclass
@@ -305,6 +306,7 @@ class AIBrain:
                     price_change_24h=float(ticker.get("priceChangePercent", 0)),
                     high_24h=float(ticker.get("highPrice", 0)),
                     low_24h=float(ticker.get("lowPrice", 0)),
+                    volume_24h=float(ticker.get("volume", 0)),
                 )
         except Exception as e:
             logger.warning(f"[AIBrain] Failed to get market data: {e}")
@@ -667,7 +669,7 @@ class AIBrain:
                 "price_change_24h": context.market.price_change_24h if context.market else 0,
                 "high_24h": context.market.high_24h if context.market else 0,
                 "low_24h": context.market.low_24h if context.market else 0,
-                "volume_24h": 0,
+                "volume_24h": context.market.volume_24h if context.market else 0,
             } if context.market else {},
             "wallet": {
                 "balance": context.wallet.balance if context.wallet else 0,

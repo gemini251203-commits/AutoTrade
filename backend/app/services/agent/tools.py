@@ -24,7 +24,7 @@ from app.models.order import Order, OrderSide, OrderType, OrderStatus
 from app.models.position import Position, PositionSide, PositionStatus, MarginMode
 from app.models.wallet import Wallet
 from app.models.market import Kline
-from app.models.strategy import TradeMemory
+from app.models.strategy import TradeMemory, Strategy
 
 # ==================== 来源上下文 ====================
 # Autopilot 调用前设置此变量，tools 自动使用正确的 note 前缀
@@ -423,10 +423,10 @@ async def get_indicators(
     symbol: str = "BTCUSDT",
     interval: str = "1h",
 ) -> str:
-    """获取技术指标"""
+    """获取技术指标 (增强版 — 使用完整指标库)"""
     from app.core.network import net_manager
+    from app.services.quant.indicators import calculate_all_indicators
 
-    # 使用 net_manager 获取带代理的 httpx client
     try:
         async with net_manager.get_client(timeout=15.0) as client:
             resp = await client.get(
@@ -434,41 +434,63 @@ async def get_indicators(
                 params={
                     "symbol": symbol.upper(),
                     "interval": interval,
-                    "limit": 100,
+                    "limit": 200,
                 },
             )
             if resp.status_code == 200:
                 raw = resp.json()
-                if raw and len(raw) >= 15:
-                    closes = [float(k[4]) for k in raw]  # index 4 = close
+                if raw and len(raw) >= 50:
+                    # 转换为 indicators.py 要求的 kline dict 格式
+                    klines = []
+                    for k in raw:
+                        klines.append({
+                            "open_time": k[0],
+                            "open": float(k[1]),
+                            "high": float(k[2]),
+                            "low": float(k[3]),
+                            "close": float(k[4]),
+                            "volume": float(k[5]),
+                            "close_time": k[6],
+                            "quote_volume": float(k[7]),
+                        })
 
-                    # RSI(14)
-                    changes = [closes[i] - closes[i-1] for i in range(1, len(closes))]
-                    gains = [c if c > 0 else 0 for c in changes[-14:]]
-                    losses = [-c if c < 0 else 0 for c in changes[-14:]]
-                    avg_gain = sum(gains) / 14
-                    avg_loss = sum(losses) / 14
-                    rsi = round(100 - (100 / (1 + avg_gain / avg_loss)), 2) if avg_loss > 0 else 100.0
+                    # 调用完整指标计算
+                    indicators = calculate_all_indicators(klines)
 
-                    # MA
-                    ma7 = round(sum(closes[-7:]) / 7, 2)
-                    ma25 = round(sum(closes[-25:]) / 25, 2) if len(closes) >= 25 else None
-
-                    current_price = round(closes[-1], 2)
-                    trend = "neutral"
-                    if ma7 and ma25:
-                        if rsi > 50 and current_price > ma7 > ma25:
-                            trend = "bullish"
-                        elif rsi < 50 and current_price < ma7 < ma25:
-                            trend = "bearish"
-
-                    return json.dumps({
+                    # 格式化输出 — 只保留关键数据，避免过长
+                    result = {
                         "symbol": symbol.upper(),
                         "interval": interval,
-                        "current_price": current_price,
-                        "trend": trend,
-                        "indicators": {"rsi": rsi, "ma7": ma7, "ma25": ma25},
-                    }, ensure_ascii=False)
+                        "current_price": indicators["price"]["close"],
+                        "rsi": indicators.get("rsi"),
+                        "macd": indicators.get("macd"),
+                        "bollinger": indicators.get("bollinger"),
+                        "kdj": indicators.get("kdj"),
+                        "atr": indicators.get("atr"),
+                        "volume_ratio": indicators.get("volume_ratio"),
+                        "support_resistance": {
+                            "nearest_support": indicators.get("support_resistance", {}).get("nearest_support"),
+                            "nearest_resistance": indicators.get("support_resistance", {}).get("nearest_resistance"),
+                        },
+                        "ema": indicators.get("ema"),
+                        "patterns": {k: v for k, v in (indicators.get("patterns") or {}).items() if v},
+                    }
+
+                    # 判断趋势
+                    rsi = result.get("rsi")
+                    ema = result.get("ema") or {}
+                    price = result["current_price"]
+                    ema20 = ema.get("ema_20")
+                    ema50 = ema.get("ema_50")
+                    trend = "neutral"
+                    if rsi and ema20 and ema50:
+                        if rsi > 50 and price > ema20 > ema50:
+                            trend = "bullish"
+                        elif rsi < 50 and price < ema20 < ema50:
+                            trend = "bearish"
+                    result["trend"] = trend
+
+                    return json.dumps(result, ensure_ascii=False)
             else:
                 logger.warning(f"[AgentTools] Binance klines HTTP {resp.status_code}: {resp.text[:200]}")
     except Exception as e:
@@ -550,3 +572,673 @@ async def query_memories(
     ]
     return json.dumps({"memories": data, "total": len(data)}, ensure_ascii=False)
 
+
+# ==================== 策略管理工具 ====================
+
+
+@register_tool
+async def list_strategies(
+    db: AsyncSession,
+    user_id: int,
+) -> str:
+    """列出所有可用策略 (用户创建的 + 预设模板)"""
+    from app.services.quant.strategy import list_templates
+
+    # 1. 用户自己的策略
+    result = await db.execute(
+        select(Strategy)
+        .where(Strategy.user_id == user_id)
+        .order_by(desc(Strategy.updated_at))
+    )
+    user_strategies = result.scalars().all()
+
+    strategies = []
+    for s in user_strategies:
+        strategies.append({
+            "id": s.id,
+            "name": s.name,
+            "symbol": s.symbol,
+            "interval": s.interval,
+            "is_active": s.is_active,
+            "total_trades": s.total_trades,
+            "win_trades": s.win_trades,
+            "total_pnl": s.total_pnl,
+            "last_signal": s.last_signal,
+            "type": "user",
+        })
+
+    # 2. 预设模板
+    templates = list_templates()
+    for t in templates:
+        strategies.append({
+            "id": t["id"],
+            "name": t["name"],
+            "symbol": t["symbol"],
+            "interval": t["interval"],
+            "type": "template",
+        })
+
+    return json.dumps({
+        "strategies": strategies,
+        "user_count": len(user_strategies),
+        "template_count": len(templates),
+    }, ensure_ascii=False)
+
+
+@register_tool
+async def get_strategy_detail(
+    db: AsyncSession,
+    user_id: int,
+    strategy_id: str = "",
+) -> str:
+    """查看策略详细配置 (支持用户策略 ID 或模板 ID)"""
+    from app.services.quant.strategy import StrategyEngine, STRATEGY_TEMPLATES
+
+    engine = StrategyEngine()
+
+    # 尝试作为数据库 ID 查询
+    if strategy_id.isdigit():
+        result = await db.execute(
+            select(Strategy).where(
+                Strategy.id == int(strategy_id),
+                Strategy.user_id == user_id,
+            )
+        )
+        strategy = result.scalar_one_or_none()
+        if strategy:
+            try:
+                config = engine.parse_yaml(strategy.config_yaml)
+            except Exception:
+                config = {}
+            return json.dumps({
+                "id": strategy.id,
+                "name": strategy.name,
+                "symbol": strategy.symbol,
+                "interval": strategy.interval,
+                "config_yaml": strategy.config_yaml,
+                "config_parsed": config,
+                "is_active": strategy.is_active,
+                "total_trades": strategy.total_trades,
+                "win_trades": strategy.win_trades,
+                "total_pnl": strategy.total_pnl,
+                "type": "user",
+            }, ensure_ascii=False, default=str)
+
+    # 尝试作为模板 ID 查询
+    if strategy_id in STRATEGY_TEMPLATES:
+        yaml_content = STRATEGY_TEMPLATES[strategy_id].strip()
+        config = engine.parse_yaml(yaml_content)
+        return json.dumps({
+            "id": strategy_id,
+            "name": config.get("name", strategy_id),
+            "symbol": config.get("symbol", ""),
+            "interval": config.get("interval", "1h"),
+            "config_yaml": yaml_content,
+            "config_parsed": config,
+            "type": "template",
+        }, ensure_ascii=False, default=str)
+
+    return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False)
+
+
+@register_tool
+async def evaluate_strategy(
+    db: AsyncSession,
+    user_id: int,
+    strategy_id: str = "",
+    symbol: str = "",
+) -> str:
+    """
+    评估策略在当前行情下的信号 (不会下单)
+
+    参数:
+        strategy_id: 用户策略 ID (数字) 或模板 ID (字符串)
+        symbol: 可选, 覆盖策略默认的交易对
+    """
+    from app.services.quant.strategy import StrategyEngine, STRATEGY_TEMPLATES
+    from app.core.network import net_manager
+
+    engine = StrategyEngine()
+
+    # 获取策略配置
+    config = None
+    strategy_name = strategy_id
+
+    if strategy_id.isdigit():
+        result = await db.execute(
+            select(Strategy).where(
+                Strategy.id == int(strategy_id),
+                Strategy.user_id == user_id,
+            )
+        )
+        strategy = result.scalar_one_or_none()
+        if strategy:
+            config = engine.parse_yaml(strategy.config_yaml)
+            strategy_name = strategy.name
+    elif strategy_id in STRATEGY_TEMPLATES:
+        config = engine.parse_yaml(STRATEGY_TEMPLATES[strategy_id].strip())
+        strategy_name = config.get("name", strategy_id)
+
+    if not config:
+        return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False)
+
+    # 如果指定了 symbol，覆盖策略默认的
+    target_symbol = (symbol or config.get("symbol", "BTCUSDT")).upper()
+    config["symbol"] = target_symbol
+    interval = config.get("interval", "1h")
+
+    # 获取 K 线数据
+    try:
+        async with net_manager.get_client(timeout=15.0) as client:
+            resp = await client.get(
+                "https://fapi.binance.com/fapi/v1/klines",
+                params={
+                    "symbol": target_symbol,
+                    "interval": interval,
+                    "limit": 200,
+                },
+            )
+            if resp.status_code != 200:
+                return json.dumps({"error": f"获取K线失败: HTTP {resp.status_code}"}, ensure_ascii=False)
+            raw = resp.json()
+    except Exception as e:
+        return json.dumps({"error": f"获取K线异常: {str(e)}"}, ensure_ascii=False)
+
+    if not raw or len(raw) < 50:
+        return json.dumps({"error": f"K线数据不足: {len(raw) if raw else 0}"}, ensure_ascii=False)
+
+    klines = [{
+        "open_time": k[0],
+        "open": float(k[1]),
+        "high": float(k[2]),
+        "low": float(k[3]),
+        "close": float(k[4]),
+        "volume": float(k[5]),
+        "close_time": k[6],
+        "quote_volume": float(k[7]),
+    } for k in raw]
+
+    # 执行策略评估
+    try:
+        signal = engine.evaluate(config, klines)
+    except Exception as e:
+        return json.dumps({"error": f"策略评估失败: {str(e)}"}, ensure_ascii=False)
+
+    return json.dumps({
+        "strategy_name": strategy_name,
+        "symbol": target_symbol,
+        "interval": interval,
+        "signal_type": signal.signal_type.value,
+        "has_signal": signal.has_signal,
+        "side": signal.side.value if signal.side else None,
+        "confidence": round(signal.confidence, 2),
+        "conditions_met": [str(c) for c in signal.conditions_met],
+        "conditions_failed": [str(c) for c in signal.conditions_failed],
+        "risk_config": signal.risk_config,
+        "summary": signal.summary(),
+    }, ensure_ascii=False, default=str)
+
+
+@register_tool
+async def run_strategy(
+    db: AsyncSession,
+    user_id: int,
+    strategy_id: str = "",
+    symbol: str = "",
+) -> str:
+    """
+    完整执行策略: 评估 → 风控 → 下单
+
+    只有当策略产生入场信号 AND 通过风控时才下单。
+    """
+    from app.services.quant.strategy import StrategyEngine, STRATEGY_TEMPLATES
+    from app.services.quant.risk_guard import RiskGuard
+    from app.services.trading.position_manager import PositionManager
+    from app.core.network import net_manager
+
+    engine = StrategyEngine()
+    risk_guard = RiskGuard()
+
+    # 获取策略配置
+    config = None
+    strategy_name = strategy_id
+
+    if strategy_id.isdigit():
+        result = await db.execute(
+            select(Strategy).where(
+                Strategy.id == int(strategy_id),
+                Strategy.user_id == user_id,
+            )
+        )
+        strategy = result.scalar_one_or_none()
+        if strategy:
+            config = engine.parse_yaml(strategy.config_yaml)
+            strategy_name = strategy.name
+    elif strategy_id in STRATEGY_TEMPLATES:
+        config = engine.parse_yaml(STRATEGY_TEMPLATES[strategy_id].strip())
+        strategy_name = config.get("name", strategy_id)
+
+    if not config:
+        return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False)
+
+    target_symbol = (symbol or config.get("symbol", "BTCUSDT")).upper()
+    config["symbol"] = target_symbol
+    interval = config.get("interval", "1h")
+
+    # 1. 获取 K 线
+    try:
+        async with net_manager.get_client(timeout=15.0) as client:
+            resp = await client.get(
+                "https://fapi.binance.com/fapi/v1/klines",
+                params={
+                    "symbol": target_symbol,
+                    "interval": interval,
+                    "limit": 200,
+                },
+            )
+            if resp.status_code != 200:
+                return json.dumps({"error": f"获取K线失败: HTTP {resp.status_code}"}, ensure_ascii=False)
+            raw = resp.json()
+    except Exception as e:
+        return json.dumps({"error": f"获取K线异常: {str(e)}"}, ensure_ascii=False)
+
+    if not raw or len(raw) < 50:
+        return json.dumps({"error": "K线数据不足"}, ensure_ascii=False)
+
+    klines = [{
+        "open_time": k[0],
+        "open": float(k[1]),
+        "high": float(k[2]),
+        "low": float(k[3]),
+        "close": float(k[4]),
+        "volume": float(k[5]),
+        "close_time": k[6],
+        "quote_volume": float(k[7]),
+    } for k in raw]
+
+    # 2. 策略评估
+    try:
+        signal = engine.evaluate(config, klines)
+    except Exception as e:
+        return json.dumps({"error": f"策略评估异常: {str(e)}"}, ensure_ascii=False)
+
+    if not signal.has_signal:
+        return json.dumps({
+            "action": "no_signal",
+            "strategy_name": strategy_name,
+            "symbol": target_symbol,
+            "message": f"策略 '{strategy_name}' 当前无交易信号",
+            "conditions_met": [str(c) for c in signal.conditions_met],
+            "conditions_failed": [str(c) for c in signal.conditions_failed],
+        }, ensure_ascii=False, default=str)
+
+    if signal.signal_type.value == "exit":
+        return json.dumps({
+            "action": "exit_signal",
+            "strategy_name": strategy_name,
+            "symbol": target_symbol,
+            "message": f"策略 '{strategy_name}' 建议平仓",
+            "side": signal.side.value if signal.side else None,
+            "conditions_met": [str(c) for c in signal.conditions_met],
+        }, ensure_ascii=False, default=str)
+
+    # 3. 风控检查
+    risk_config = signal.risk_config
+    risk_config = risk_guard.clamp_params(risk_config)
+
+    # 获取钱包余额
+    wallet_result = await db.execute(
+        select(Wallet).where(Wallet.user_id == user_id)
+    )
+    wallet = wallet_result.scalar_one_or_none()
+    wallet_balance = float(wallet.balance) if wallet else 0.0
+
+    if wallet_balance <= 0:
+        return json.dumps({"error": "钱包余额不足"}, ensure_ascii=False)
+
+    # 获取持仓
+    pos_result = await db.execute(
+        select(Position).where(
+            Position.user_id == user_id,
+            Position.status == PositionStatus.OPEN,
+        )
+    )
+    open_positions = [
+        {"symbol": p.symbol, "side": p.side.value, "margin": float(p.margin)}
+        for p in pos_result.scalars().all()
+    ]
+
+    # 获取今日统计
+    from datetime import datetime, timedelta
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_orders = await db.execute(
+        select(Order).where(
+            Order.user_id == user_id,
+            Order.created_at >= today_start,
+            Order.status == OrderStatus.FILLED,
+        )
+    )
+    today_trades = len(today_orders.scalars().all())
+
+    risk_passed, risk_results = risk_guard.check_all(
+        signal_side=signal.side.value if signal.side else "buy",
+        symbol=target_symbol,
+        position_pct=risk_config.get("position_pct", 10),
+        leverage=risk_config.get("leverage", 1),
+        stop_loss_pct=risk_config.get("stop_loss_pct", 3),
+        take_profit_pct=risk_config.get("take_profit_pct", 9),
+        wallet_balance=wallet_balance,
+        open_positions=open_positions,
+        today_trades=today_trades,
+        today_pnl=0.0,
+    )
+
+    if not risk_passed:
+        failed_rules = [str(r) for r in risk_results if not r.passed]
+        return json.dumps({
+            "action": "risk_blocked",
+            "strategy_name": strategy_name,
+            "symbol": target_symbol,
+            "message": "信号被风控拦截",
+            "risk_failed": failed_rules,
+            "signal": signal.summary(),
+        }, ensure_ascii=False, default=str)
+
+    # 4. 自动下单
+    current_price = Decimal(str(klines[-1]["close"]))
+    leverage = risk_config.get("leverage", 1)
+    position_pct = risk_config.get("position_pct", 10)
+    trade_amount = wallet_balance * position_pct / 100
+    quantity = Decimal(str(round(trade_amount / float(current_price), 4)))
+
+    side_map = {"buy": PositionSide.LONG, "sell": PositionSide.SHORT}
+    position_side = side_map.get(signal.side.value, PositionSide.LONG) if signal.side else PositionSide.LONG
+
+    # 计算止损止盈
+    stop_loss_pct = risk_config.get("stop_loss_pct", 3)
+    take_profit_pct = risk_config.get("take_profit_pct", 9)
+    if position_side == PositionSide.LONG:
+        stop_loss = current_price * (1 - Decimal(str(stop_loss_pct)) / 100) if stop_loss_pct else None
+        take_profit = current_price * (1 + Decimal(str(take_profit_pct)) / 100) if take_profit_pct else None
+    else:
+        stop_loss = current_price * (1 + Decimal(str(stop_loss_pct)) / 100) if stop_loss_pct else None
+        take_profit = current_price * (1 - Decimal(str(take_profit_pct)) / 100) if take_profit_pct else None
+
+    try:
+        source = agent_source_var.get()
+        position = await PositionManager.open_position(
+            db=db,
+            user_id=user_id,
+            symbol=target_symbol,
+            side=position_side,
+            quantity=quantity,
+            entry_price=current_price,
+            leverage=leverage,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            source=source,
+            open_reason=f"策略 '{strategy_name}' 信号: {signal.summary()}",
+        )
+        await db.commit()
+
+        return json.dumps({
+            "action": "executed",
+            "strategy_name": strategy_name,
+            "symbol": target_symbol,
+            "side": position_side.value,
+            "quantity": str(quantity),
+            "entry_price": str(current_price),
+            "leverage": leverage,
+            "stop_loss": str(stop_loss) if stop_loss else None,
+            "take_profit": str(take_profit) if take_profit else None,
+            "position_id": position.id,
+            "message": f"策略 '{strategy_name}' 已执行交易",
+        }, ensure_ascii=False, default=str)
+    except Exception as e:
+        return json.dumps({"error": f"下单失败: {str(e)}"}, ensure_ascii=False)
+
+
+@register_tool
+async def create_strategy(
+    db: AsyncSession,
+    user_id: int,
+    name: str = "",
+    symbol: str = "BTCUSDT",
+    interval: str = "1h",
+    config_yaml: str = "",
+) -> str:
+    """
+    创建新策略并保存到数据库
+
+    参数:
+        name: 策略名称
+        symbol: 交易对
+        interval: K 线周期
+        config_yaml: YAML 格式的策略配置
+    """
+    from app.services.quant.strategy import StrategyEngine
+
+    if not name or not config_yaml:
+        return json.dumps({"error": "缺少必要参数: name 和 config_yaml"}, ensure_ascii=False)
+
+    engine = StrategyEngine()
+    try:
+        config = engine.parse_yaml(config_yaml)
+    except ValueError as e:
+        return json.dumps({"error": f"YAML 配置验证失败: {str(e)}"}, ensure_ascii=False)
+
+    strategy = Strategy(
+        user_id=user_id,
+        name=name,
+        symbol=symbol.upper(),
+        interval=interval,
+        config_yaml=config_yaml,
+        is_active=False,
+    )
+    db.add(strategy)
+    await db.commit()
+    await db.refresh(strategy)
+
+    return json.dumps({
+        "action": "created",
+        "id": strategy.id,
+        "name": strategy.name,
+        "symbol": strategy.symbol,
+        "interval": strategy.interval,
+        "message": f"策略 '{name}' 已创建 (ID: {strategy.id})，默认未启用",
+    }, ensure_ascii=False)
+
+
+@register_tool
+async def update_strategy(
+    db: AsyncSession,
+    user_id: int,
+    strategy_id: str = "",
+    name: str = "",
+    symbol: str = "",
+    interval: str = "",
+    config_yaml: str = "",
+) -> str:
+    """
+    修改已有策略配置
+
+    参数:
+        strategy_id: 策略 ID (数字)
+        name/symbol/interval/config_yaml: 要更新的字段 (空字符串表示不修改)
+    """
+    from app.services.quant.strategy import StrategyEngine
+
+    if not strategy_id.isdigit():
+        return json.dumps({"error": f"无效的策略 ID: {strategy_id}"}, ensure_ascii=False)
+
+    result = await db.execute(
+        select(Strategy).where(
+            Strategy.id == int(strategy_id),
+            Strategy.user_id == user_id,
+        )
+    )
+    strategy = result.scalar_one_or_none()
+    if not strategy:
+        return json.dumps({"error": f"找不到策略 ID: {strategy_id}"}, ensure_ascii=False)
+
+    # 验证新的 YAML (如果提供了)
+    if config_yaml:
+        engine = StrategyEngine()
+        try:
+            engine.parse_yaml(config_yaml)
+        except ValueError as e:
+            return json.dumps({"error": f"YAML 配置验证失败: {str(e)}"}, ensure_ascii=False)
+        strategy.config_yaml = config_yaml
+
+    if name:
+        strategy.name = name
+    if symbol:
+        strategy.symbol = symbol.upper()
+    if interval:
+        strategy.interval = interval
+
+    await db.commit()
+
+    return json.dumps({
+        "action": "updated",
+        "id": strategy.id,
+        "name": strategy.name,
+        "symbol": strategy.symbol,
+        "interval": strategy.interval,
+        "message": f"策略 '{strategy.name}' (ID: {strategy.id}) 已更新",
+    }, ensure_ascii=False)
+
+
+@register_tool
+async def analyze_trend(
+    db: AsyncSession,
+    user_id: int,
+    symbol: str = "BTCUSDT",
+) -> str:
+    """
+    多周期趋势分析 — 分别在 15m/1h/4h/1d 四个周期判断趋势
+
+    并推荐适合当前趋势的策略类型
+    """
+    from app.core.network import net_manager
+    from app.services.quant.indicators import (
+        calculate_rsi, calculate_ema, calculate_macd,
+        calculate_bollinger, calculate_atr,
+    )
+
+    timeframes = ["15m", "1h", "4h", "1d"]
+    trends = {}
+
+    for tf in timeframes:
+        try:
+            async with net_manager.get_client(timeout=15.0) as client:
+                resp = await client.get(
+                    "https://fapi.binance.com/fapi/v1/klines",
+                    params={
+                        "symbol": symbol.upper(),
+                        "interval": tf,
+                        "limit": 100,
+                    },
+                )
+                if resp.status_code != 200:
+                    trends[tf] = {"trend": "unknown", "error": f"HTTP {resp.status_code}"}
+                    continue
+                raw = resp.json()
+        except Exception as e:
+            trends[tf] = {"trend": "unknown", "error": str(e)}
+            continue
+
+        if not raw or len(raw) < 30:
+            trends[tf] = {"trend": "unknown", "error": "数据不足"}
+            continue
+
+        closes = [float(k[4]) for k in raw]
+        klines_data = [{
+            "open": float(k[1]), "high": float(k[2]),
+            "low": float(k[3]), "close": float(k[4]),
+            "volume": float(k[5]),
+        } for k in raw]
+
+        rsi = calculate_rsi(closes)
+        ema20 = calculate_ema(closes, 20)
+        ema50 = calculate_ema(closes, 50)
+        macd = calculate_macd(closes)
+        atr = calculate_atr(klines_data)
+        price = closes[-1]
+
+        # 判断趋势
+        trend = "neutral"
+        signals = []
+
+        if ema20 and ema50:
+            if price > ema20 > ema50:
+                signals.append("bullish")
+            elif price < ema20 < ema50:
+                signals.append("bearish")
+            else:
+                signals.append("neutral")
+
+        if rsi:
+            if rsi > 60:
+                signals.append("bullish")
+            elif rsi < 40:
+                signals.append("bearish")
+            else:
+                signals.append("neutral")
+
+        if macd:
+            if macd["histogram"] and macd["histogram"] > 0:
+                signals.append("bullish")
+            elif macd["histogram"] and macd["histogram"] < 0:
+                signals.append("bearish")
+            else:
+                signals.append("neutral")
+
+        bullish = signals.count("bullish")
+        bearish = signals.count("bearish")
+        if bullish >= 2:
+            trend = "bullish"
+        elif bearish >= 2:
+            trend = "bearish"
+        else:
+            trend = "neutral"
+
+        trends[tf] = {
+            "trend": trend,
+            "price": round(price, 2),
+            "rsi": round(rsi, 1) if rsi else None,
+            "ema_20": round(ema20, 2) if ema20 else None,
+            "ema_50": round(ema50, 2) if ema50 else None,
+            "macd_histogram": round(macd["histogram"], 4) if macd and macd.get("histogram") else None,
+            "atr": round(atr, 2) if atr else None,
+        }
+
+    # 综合判断
+    macro_trends = [trends.get(tf, {}).get("trend", "unknown") for tf in ["4h", "1d"]]
+    micro_trends = [trends.get(tf, {}).get("trend", "unknown") for tf in ["15m", "1h"]]
+
+    macro = "bullish" if macro_trends.count("bullish") >= 1 else \
+            "bearish" if macro_trends.count("bearish") >= 1 else "neutral"
+    micro = "bullish" if micro_trends.count("bullish") >= 1 else \
+            "bearish" if micro_trends.count("bearish") >= 1 else "neutral"
+
+    # 策略推荐
+    recommendations = []
+    if macro == "bullish" and micro == "bullish":
+        recommendations = ["趋势跟踪策略 (顺势做多)", "均线金叉策略", "RSI 回调买入"]
+    elif macro == "bearish" and micro == "bearish":
+        recommendations = ["趋势跟踪策略 (顺势做空)", "RSI 超买做空", "均线死叉策略"]
+    elif macro == "bullish" and micro in ["neutral", "bearish"]:
+        recommendations = ["逢低买入策略", "RSI 超卖反弹 (大趋势看涨，短期回调)", "支撑位反弹"]
+    elif macro == "bearish" and micro in ["neutral", "bullish"]:
+        recommendations = ["逢高做空策略", "阻力位反弹做空 (大趋势看跌，短期反弹)"]
+    else:
+        recommendations = ["区间震荡策略", "布林带突破", "等待趋势明确再入场"]
+
+    return json.dumps({
+        "symbol": symbol.upper(),
+        "macro_trend": macro,
+        "micro_trend": micro,
+        "timeframes": trends,
+        "recommendations": recommendations,
+    }, ensure_ascii=False, default=str)

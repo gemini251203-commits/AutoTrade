@@ -24,6 +24,7 @@ from loguru import logger
 from app.db.session import AsyncSessionLocal
 from app.models.agent import ChatConversation, ChatMessage
 from app.models.autopilot_log import AutopilotLog, AutopilotDecision
+from app.models.strategy import Strategy
 from app.services.agent.agent import chat_complete
 
 
@@ -383,17 +384,76 @@ class AgentAutopilot:
                 # 预取技术指标 (使用用户选择的多个 K 线级别)
                 indicator_text = await self._fetch_indicators(symbol, intervals)
 
-                # 构造分析指令 (直接注入指标数据)
+                # 预取策略信号 (从量化策略引擎)
+                strategy_text = ""
+                try:
+                    from app.services.quant.strategy import StrategyEngine
+                    from app.core.network import net_manager
+                    from sqlalchemy import select as _select
+
+                    engine = StrategyEngine()
+                    strat_result = await db.execute(
+                        _select(Strategy).where(
+                            Strategy.user_id == user_id,
+                            Strategy.is_active == True,
+                        )
+                    )
+                    active_strategies = strat_result.scalars().all()
+
+                    if active_strategies:
+                        # 获取 K 线用于策略评估
+                        async with net_manager.get_client(timeout=15.0) as client:
+                            resp = await client.get(
+                                "https://fapi.binance.com/fapi/v1/klines",
+                                params={"symbol": symbol, "interval": "1h", "limit": 200},
+                            )
+                            if resp.status_code == 200:
+                                raw = resp.json()
+                                klines = [{
+                                    "open_time": k[0],
+                                    "open": float(k[1]),
+                                    "high": float(k[2]),
+                                    "low": float(k[3]),
+                                    "close": float(k[4]),
+                                    "volume": float(k[5]),
+                                    "close_time": k[6],
+                                    "quote_volume": float(k[7]),
+                                } for k in raw]
+
+                                signals = []
+                                for strat in active_strategies:
+                                    try:
+                                        config = engine.parse_yaml(strat.config_yaml)
+                                        config["symbol"] = symbol
+                                        signal = engine.evaluate(config, klines)
+                                        signals.append(
+                                            f"  - {strat.name}: {signal.summary()}"
+                                        )
+                                    except Exception as se:
+                                        signals.append(
+                                            f"  - {strat.name}: 评估异常 ({se})"
+                                        )
+
+                                if signals:
+                                    strategy_text = (
+                                        "\n📊 量化策略信号:\n"
+                                        + "\n".join(signals)
+                                    )
+                except Exception as e:
+                    logger.warning(f"[Autopilot] Strategy evaluation failed: {e}")
+
+                # 构造分析指令 (直接注入指标数据 + 策略信号)
                 now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
                 prompt = (
                     f"[Autopilot {now}] "
                     f"请分析 {symbol} 当前市场状况并做出交易决策。\n\n"
-                    f"{indicator_text}\n\n"
+                    f"{indicator_text}\n"
+                    f"{strategy_text}\n\n"
                     f"请按以下步骤操作:\n"
                     f"1. 查询 {symbol} 实时价格 (如需更新)\n"
                     f"2. 查看当前持仓和余额\n"
                     f"3. 查询历史交易经验\n"
-                    f"4. 结合上方技术指标综合分析后给出决策: 开仓/平仓/观望\n"
+                    f"4. 结合上方技术指标和策略信号综合分析后给出决策: 开仓/平仓/观望\n"
                     f"5. 如果决定交易, 直接执行\n\n"
                     f"回复要简洁, 列出关键数据和理由。\n"
                     f"最后一行请明确写出你的决策: 观望/开多/开空/平多/平空"
