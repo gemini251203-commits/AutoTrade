@@ -159,6 +159,187 @@ async def initialize_wallet(
     return wallet
 
 
+# ==================== Portfolio Stats ====================
+
+class DailyPnlItem(BaseModel):
+    """每日盈亏"""
+    date: str
+    pnl: float
+
+class TradeSummary(BaseModel):
+    """交易摘要"""
+    total_trades: int = 0
+    long_trades: int = 0
+    short_trades: int = 0
+    total_volume: float = 0.0
+    long_volume: float = 0.0
+    short_volume: float = 0.0
+    total_commission: float = 0.0
+    latest_commission: float = 0.0
+
+class PortfolioStatsResponse(BaseModel):
+    """投资组合统计响应"""
+    total_value: float
+    pnl_7d: float
+    volume_7d: float
+    perpetual_count: int
+    daily_pnl: list[DailyPnlItem]
+    summary: TradeSummary
+    taker_fee_rate: str = "0.05%"
+    maker_fee_rate: str = "0.02%"
+
+
+@router.get("/portfolio-stats")
+async def get_portfolio_stats(
+    current_user: CurrentUser,
+    db: DbSession,
+    period: str = "7d",  # 24h, 7d, 14d, 30d, all
+):
+    """
+    投资组合统计
+
+    返回:
+    - 总价值、近7天PnL、交易量
+    - 日历PnL (当月每日已实现盈亏)
+    - 交易摘要 (按时间范围筛选)
+    - 吃单/挂单费率
+    """
+    from sqlalchemy import select, func, case, and_, extract
+    from app.models.position import Position, PositionSide, PositionStatus
+    import calendar as cal_module
+    from datetime import timedelta
+
+    now = datetime.utcnow()
+
+    # ---------- 1. 总价值 ----------
+    wallet = await WalletManager.get_wallet(db, current_user.id)
+    if not wallet:
+        wallet = await WalletManager.initialize_wallet(db, current_user.id)
+        await db.commit()
+
+    total_value = float(wallet.balance) + float(wallet.frozen)
+
+    # ---------- 2. 永续合约持仓数 ----------
+    open_count_q = await db.execute(
+        select(func.count()).where(
+            Position.user_id == current_user.id,
+            Position.status == PositionStatus.OPEN,
+        )
+    )
+    perpetual_count = open_count_q.scalar() or 0
+
+    # ---------- 3. 7天 PnL 和交易量 ----------
+    seven_days_ago = now - timedelta(days=7)
+    pnl_7d_q = await db.execute(
+        select(
+            func.coalesce(func.sum(Position.realized_pnl), 0),
+            func.coalesce(func.sum(Position.size * Position.entry_price), 0),
+        ).where(
+            Position.user_id == current_user.id,
+            Position.status == PositionStatus.CLOSED,
+            Position.closed_at >= seven_days_ago,
+        )
+    )
+    row = pnl_7d_q.one()
+    pnl_7d = float(row[0])
+    volume_7d = float(row[1])
+
+    # ---------- 4. 日历 PnL (当月) ----------
+    first_day = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    _, last_day_num = cal_module.monthrange(now.year, now.month)
+    last_day = first_day.replace(day=last_day_num, hour=23, minute=59, second=59)
+
+    daily_pnl_q = await db.execute(
+        select(
+            func.date(Position.closed_at).label("day"),
+            func.sum(Position.realized_pnl).label("pnl"),
+        ).where(
+            Position.user_id == current_user.id,
+            Position.status == PositionStatus.CLOSED,
+            Position.closed_at >= first_day,
+            Position.closed_at <= last_day,
+        ).group_by(func.date(Position.closed_at))
+    )
+    daily_pnl_map = {str(r.day): float(r.pnl) for r in daily_pnl_q.all()}
+
+    # 填充完整月份
+    daily_pnl_list = []
+    for d in range(1, last_day_num + 1):
+        date_str = f"{now.year}-{now.month:02d}-{d:02d}"
+        daily_pnl_list.append(DailyPnlItem(
+            date=date_str,
+            pnl=daily_pnl_map.get(date_str, 0.0),
+        ))
+
+    # ---------- 5. 交易摘要 (按时间范围) ----------
+    period_map = {
+        "24h": timedelta(hours=24),
+        "7d": timedelta(days=7),
+        "14d": timedelta(days=14),
+        "30d": timedelta(days=30),
+    }
+
+    filters = [
+        Position.user_id == current_user.id,
+        Position.status == PositionStatus.CLOSED,
+    ]
+    if period != "all" and period in period_map:
+        cutoff = now - period_map[period]
+        filters.append(Position.closed_at >= cutoff)
+
+    summary_q = await db.execute(
+        select(
+            func.count().label("total"),
+            func.count(case(
+                (Position.side == PositionSide.LONG, 1),
+            )).label("long_count"),
+            func.count(case(
+                (Position.side == PositionSide.SHORT, 1),
+            )).label("short_count"),
+            func.coalesce(func.sum(Position.size * Position.entry_price), 0).label("total_vol"),
+            func.coalesce(func.sum(case(
+                (Position.side == PositionSide.LONG, Position.size * Position.entry_price),
+                else_=0,
+            )), 0).label("long_vol"),
+            func.coalesce(func.sum(case(
+                (Position.side == PositionSide.SHORT, Position.size * Position.entry_price),
+                else_=0,
+            )), 0).label("short_vol"),
+            func.coalesce(func.sum(Position.total_commission), 0).label("total_comm"),
+        ).where(*filters)
+    )
+    s = summary_q.one()
+
+    # 最近一笔手续费
+    latest_q = await db.execute(
+        select(Position.total_commission).where(
+            Position.user_id == current_user.id,
+            Position.status == PositionStatus.CLOSED,
+        ).order_by(Position.closed_at.desc()).limit(1)
+    )
+    latest_comm = latest_q.scalar() or 0
+
+    summary = TradeSummary(
+        total_trades=s.total,
+        long_trades=s.long_count,
+        short_trades=s.short_count,
+        total_volume=float(s.total_vol),
+        long_volume=float(s.long_vol),
+        short_volume=float(s.short_vol),
+        total_commission=float(s.total_comm),
+        latest_commission=float(latest_comm),
+    )
+
+    return PortfolioStatsResponse(
+        total_value=total_value,
+        pnl_7d=pnl_7d,
+        volume_7d=volume_7d,
+        perpetual_count=perpetual_count,
+        daily_pnl=daily_pnl_list,
+        summary=summary,
+    )
+
+
 # ==================== Transaction Endpoints ====================
 
 class TransactionResponse(BaseModel):
