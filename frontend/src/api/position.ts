@@ -17,6 +17,7 @@ export async function setPositionTpSl(
   params: {
     stop_loss?: string | null
     take_profit?: string | null
+    mark_price?: string
   }
 ) {
   const resp = await request.post(`/position/${positionId}/tp-sl`, params)

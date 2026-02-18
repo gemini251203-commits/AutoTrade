@@ -50,6 +50,7 @@ class SetTpSlRequest(BaseModel):
     """设置止盈止损"""
     stop_loss: Optional[Decimal] = Field(default=None)
     take_profit: Optional[Decimal] = Field(default=None)
+    mark_price: Optional[Decimal] = Field(default=None, description="当前标记价格 (用于校验)")
 
 
 class PositionResponse(BaseModel):
@@ -351,6 +352,57 @@ async def set_tp_sl(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot modify closed position",
         )
+    
+    # ========== 止盈止损价格合理性校验 ==========
+    # 使用前端传来的标记价格，若没有则用开仓价
+    ref_price = request.mark_price or position.entry_price
+    is_long = position.side == PositionSide.LONG
+    
+    new_sl = request.stop_loss
+    new_tp = request.take_profit
+    
+    if new_sl is not None and new_sl > 0:
+        if is_long and new_sl >= ref_price:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"多单止损价 ({new_sl}) 必须低于当前标记价 ({ref_price})，"
+                       f"否则会立即触发或变成止盈",
+            )
+        if not is_long and new_sl <= ref_price:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"空单止损价 ({new_sl}) 必须高于当前标记价 ({ref_price})，"
+                       f"否则会立即触发或变成止盈",
+            )
+    
+    if new_tp is not None and new_tp > 0:
+        if is_long and new_tp <= ref_price:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"多单止盈价 ({new_tp}) 必须高于当前标记价 ({ref_price})，"
+                       f"否则会立即触发或变成止损",
+            )
+        if not is_long and new_tp >= ref_price:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"空单止盈价 ({new_tp}) 必须低于当前标记价 ({ref_price})，"
+                       f"否则会立即触发或变成止损",
+            )
+    
+    # 止盈止损不能交叉
+    final_sl = new_sl if new_sl is not None else position.stop_loss
+    final_tp = new_tp if new_tp is not None else position.take_profit
+    if final_sl and final_tp and final_sl > 0 and final_tp > 0:
+        if is_long and final_sl >= final_tp:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"多单止损 ({final_sl}) 不能高于止盈 ({final_tp})",
+            )
+        if not is_long and final_sl <= final_tp:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"空单止损 ({final_sl}) 不能低于止盈 ({final_tp})",
+            )
     
     if request.stop_loss is not None:
         position.stop_loss = request.stop_loss

@@ -153,11 +153,53 @@ function openTpSlModal(position: PositionRisk) {
 async function saveTpSl() {
   if (!tpSlEditing.value) return
   
+  const pos = tpSlEditing.value
+  const markPrice = parseFloat(pos.mark_price)
+  const isLong = pos.side === 'long'
+  const sl = tpSlForm.value.stop_loss
+  const tp = tpSlForm.value.take_profit
+  
+  // ========== 前端校验 ==========
+  if (sl && sl > 0) {
+    if (isLong && sl >= markPrice) {
+      message.error(`多单止损价 (${sl}) 必须低于当前标记价 (${markPrice})`)
+      return
+    }
+    if (!isLong && sl <= markPrice) {
+      message.error(`空单止损价 (${sl}) 必须高于当前标记价 (${markPrice})`)
+      return
+    }
+  }
+  
+  if (tp && tp > 0) {
+    if (isLong && tp <= markPrice) {
+      message.error(`多单止盈价 (${tp}) 必须高于当前标记价 (${markPrice})`)
+      return
+    }
+    if (!isLong && tp >= markPrice) {
+      message.error(`空单止盈价 (${tp}) 必须低于当前标记价 (${markPrice})`)
+      return
+    }
+  }
+  
+  // 止盈止损不能交叉
+  if (sl && tp && sl > 0 && tp > 0) {
+    if (isLong && sl >= tp) {
+      message.error('多单止损不能高于或等于止盈')
+      return
+    }
+    if (!isLong && sl <= tp) {
+      message.error('空单止损不能低于或等于止盈')
+      return
+    }
+  }
+
   tpSlSaving.value = true
   try {
     await setPositionTpSl(tpSlEditing.value.position_id, {
       stop_loss: tpSlForm.value.stop_loss?.toString() ?? null,
       take_profit: tpSlForm.value.take_profit?.toString() ?? null,
+      mark_price: markPrice.toString(),
     })
     message.success('止盈止损已更新')
     showTpSlModal.value = false
