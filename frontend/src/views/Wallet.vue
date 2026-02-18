@@ -635,17 +635,14 @@ onMounted(async () => {
 }
 .pnl-calendar td {
   padding: 8px;
-  text-align: right;
+  text-align: center;
   vertical-align: top;
-  border: 1px solid rgba(255,255,255,0.05); /* Subtle border for definition */
+  border: 1px solid rgba(255,255,255,0.05);
   background: rgba(255,255,255,0.03);
   border-radius: 8px;
-  height: 72px; /* Taller cells */
+  height: 64px;
   transition: all 0.2s ease;
   position: relative;
-  display: flex;       /* Use flexbox for internal layout */
-  flex-direction: column;
-  justify-content: space-between;
 }
 .pnl-calendar td:hover:not(.empty) {
   background: rgba(255,255,255,0.08); /* Brighter hover */
@@ -671,25 +668,28 @@ onMounted(async () => {
 }
 
 .cal-day {
-  font-size: 12px;     /* Larger font */
+  display: block;
+  font-size: 12px;
   font-weight: 600;
-  color: #71717a;      /* Lighter than before (zinc-500) */
+  color: #71717a;
   text-align: left;
   line-height: 1;
+  margin-bottom: 4px; /* Add spacing */
 }
 /* Highlight date on active days */
 .pnl-positive .cal-day, .pnl-negative .cal-day {
-  color: #a1a1aa; /* Even lighter on colored cells */
+  color: #a1a1aa;
 }
 
 .cal-pnl {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
+  display: block; /* Back to block */
+  text-align: right; /* Align right */
   font-size: 13px;
   font-family: 'Inter', monospace;
-  font-weight: 700;    /* Bolder PnL */
+  font-weight: 700;
   letter-spacing: -0.5px;
+  margin-top: auto; /* Push to bottom if height allows, or just margin */
+  padding-top: 12px; /* Ensure separation */
 }
 .pnl-positive .cal-pnl { text-shadow: 0 0 10px rgba(0, 230, 118, 0.3); } /* Glow effect */
 .pnl-negative .cal-pnl { text-shadow: 0 0 10px rgba(255, 23, 68, 0.3); }
