@@ -170,13 +170,17 @@ class NewsCrawler:
         
         published_str = post.get("published_at", "")
         
-        # 解析发布时间
+        # 解析发布时间 (去除时区信息，统一存 UTC naive datetime)
         try:
-            published_at = datetime.fromisoformat(
+            dt = datetime.fromisoformat(
                 published_str.replace("Z", "+00:00")
             )
+            # 转换为 UTC 并去除 timezone info
+            if dt.tzinfo is not None:
+                dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+            published_at = dt
         except (ValueError, AttributeError):
-            published_at = datetime.now(timezone.utc)
+            published_at = datetime.utcnow()
         
         # 提取关联币种 (v2 可能没有 currencies 字段)
         currencies = []
