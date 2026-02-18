@@ -237,7 +237,9 @@ const columns = [
     width: 110,
     render: (row: PositionRisk) => {
       const notional = parseFloat(row.size) * parseFloat(row.entry_price)
-      return notional.toFixed(2) + ' USDT'
+      const leverage = row.leverage || 1
+      const margin = notional / leverage
+      return margin.toFixed(2) + ' USDT'
     },
   },
   {
