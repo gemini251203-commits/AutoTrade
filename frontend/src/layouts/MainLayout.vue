@@ -110,7 +110,7 @@ function handleLogout() {
       </div>
       
       <!-- Nagivation -->
-      <nav class="flex-1 flex flex-col items-center gap-3 w-full px-2">
+      <nav class="flex-1 flex flex-col items-center gap-3 w-full px-2 overflow-y-auto no-scrollbar py-2">
         <NTooltip 
           v-for="item in navItems" 
           :key="item.key"
