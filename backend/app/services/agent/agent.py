@@ -170,6 +170,39 @@ async def chat_stream(
             for tool_name, args_str in tool_matches:
                 tool_args = _parse_tool_args(args_str)
 
+                # ==================== 安全门禁: 交易工具需要用户确认 ====================
+                DANGEROUS_TOOLS = {"place_order", "close_position", "run_strategy"}
+                if tool_name in DANGEROUS_TOOLS and persona != "autopilot":
+                    # 检查用户消息历史中是否有明确的确认词
+                    confirm_keywords = ["确认", "执行", "下单", "开仓", "平仓", "好的", "可以", "去吧", "冲", "买", "卖", "开", "yes", "ok", "confirm", "go"]
+                    user_confirmed = False
+                    # 检查最近 3 条用户消息是否包含确认
+                    user_msgs = [m for m in history if m["role"] == "user"]
+                    for msg in user_msgs[-3:]:
+                        msg_content = msg["content"].lower().strip()
+                        if any(kw in msg_content for kw in confirm_keywords):
+                            user_confirmed = True
+                            break
+
+                    if not user_confirmed:
+                        logger.warning(f"[Agent Safety] Blocked {tool_name} - no user confirmation found")
+                        tool_result = json.dumps({
+                            "blocked": True,
+                            "error": "安全拦截: 交易操作需要用户明确确认后才能执行。请先向用户展示交易计划，等待用户确认后再调用此工具。",
+                        }, ensure_ascii=False)
+                        yield {"type": "tool_call", "tool": tool_name, "args": tool_args}
+                        yield {"type": "tool_result", "tool": tool_name, "result": tool_result}
+                        results_text_parts.append(
+                            f"[TOOL_RESULT: {tool_name}]\n{tool_result}\n[/TOOL_RESULT]"
+                        )
+                        tool_calls_log.append({
+                            "tool": tool_name,
+                            "args": tool_args,
+                            "result": tool_result,
+                        })
+                        continue
+                # ==================== 安全门禁结束 ====================
+
                 # 发送工具调用事件
                 yield {"type": "tool_call", "tool": tool_name, "args": tool_args}
 
