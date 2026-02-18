@@ -646,12 +646,33 @@ onMounted(fetchAll)
 @media (max-width: 768px) {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
   }
-  
+  .stat-card {
+    padding: 10px;
+  }
   .journal-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
+  }
+  .journal-page {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+  .memory-card {
+    padding: 12px;
+  }
+  .mem-header {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .mem-stats {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .source-breakdown {
+    flex-wrap: wrap;
+    gap: 6px;
   }
 }
 </style>

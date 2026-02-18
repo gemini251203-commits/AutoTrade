@@ -1042,13 +1042,54 @@ function renderMarkdown(text: string): string {
 /* ==================== Responsive ==================== */
 @media (max-width: 768px) {
   .sidebar {
-    width: 48px;
-    min-width: 48px;
+    display: none;
   }
   .sidebar.collapsed {
-    width: 0;
-    min-width: 0;
-    border: none;
+    display: none;
+  }
+  .chat-header {
+    padding: 8px 12px;
+  }
+  .messages-container {
+    padding: 10px;
+  }
+  .message {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .msg-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
+    border-radius: 8px;
+  }
+  .msg-bubble {
+    max-width: 85%;
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+  .msg-content {
+    font-size: 13px;
+  }
+  .input-area {
+    padding: 8px 10px;
+  }
+  .input-wrapper {
+    padding: 8px 12px;
+    border-radius: 12px;
+  }
+  .input-hint {
+    display: none;
+  }
+  .tool-status {
+    margin: 8px 0;
+    font-size: 12px;
+  }
+  .empty-icon {
+    font-size: 40px;
+  }
+  .empty-state h2 {
+    font-size: 18px;
   }
 }
 

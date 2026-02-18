@@ -702,4 +702,24 @@ onMounted(() => {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   transform: translateX(4px);
 }
+
+/* ========== Mobile Responsive ========== */
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .stat-card {
+    padding: 12px;
+  }
+  .stat-value {
+    font-size: 18px;
+  }
+  .strategy-card, .memory-card {
+    padding: 12px;
+  }
+  .strategy-card:hover, .memory-card:hover {
+    transform: none;
+  }
+}
 </style>

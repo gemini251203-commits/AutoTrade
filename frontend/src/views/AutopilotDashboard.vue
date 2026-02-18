@@ -1119,4 +1119,42 @@ function formatTime(iso: string): string {
   margin-top: 8px;
   color: var(--color-text-secondary);
 }
+
+/* ========== Mobile Responsive ========== */
+@media (max-width: 768px) {
+  .autopilot-page {
+    padding: 8px;
+  }
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .status-cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .status-card {
+    padding: 12px;
+  }
+  .card-value {
+    font-size: 20px;
+  }
+  .main-content {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    min-height: auto;
+  }
+  .config-panel {
+    position: static;
+    padding: 16px;
+  }
+  .glass-panel {
+    padding: 16px;
+  }
+  .timeline-entry {
+    padding: 12px;
+  }
+}
 </style>
