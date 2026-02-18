@@ -134,7 +134,18 @@ class NewsCrawler:
         post: Dict[str, Any],
     ) -> Optional[NewsArticle]:
         """解析单条新闻并保存 (去重)"""
-        external_id = str(post.get("id", ""))
+        # v2 API 可能没有 id 字段，用 title+published_at 生成唯一 ID
+        import hashlib
+        raw_id = post.get("id")
+        if raw_id:
+            external_id = str(raw_id)
+        else:
+            # 用 title + published_at 的 hash 作为 external_id
+            title_raw = post.get("title", "")
+            pub = post.get("published_at", "")
+            hash_input = f"{title_raw}|{pub}"
+            external_id = hashlib.md5(hash_input.encode()).hexdigest()
+        
         if not external_id:
             return None
         
@@ -152,7 +163,11 @@ class NewsCrawler:
         if not title:
             return None
         
-        url = post.get("url", "")
+        # url: v2 可能没有, 用 CryptoPanic 搜索链接
+        url = post.get("url") or post.get("source_url") or ""
+        if not url and title:
+            url = f"https://cryptopanic.com/news/click/{external_id[:8]}/"
+        
         published_str = post.get("published_at", "")
         
         # 解析发布时间
@@ -163,15 +178,18 @@ class NewsCrawler:
         except (ValueError, AttributeError):
             published_at = datetime.now(timezone.utc)
         
-        # 提取关联币种
+        # 提取关联币种 (v2 可能没有 currencies 字段)
         currencies = []
-        for curr in post.get("currencies", []):
-            code = curr.get("code", "")
+        for curr in post.get("currencies", []) or []:
+            if isinstance(curr, dict):
+                code = curr.get("code", "")
+            else:
+                code = str(curr)
             if code:
                 currencies.append(code)
         
-        # CryptoPanic 投票数据
-        votes = post.get("votes", {})
+        # CryptoPanic 投票数据 (v2 可能没有)
+        votes = post.get("votes") or {}
         votes_positive = (
             votes.get("positive", 0)
             + votes.get("important", 0)
