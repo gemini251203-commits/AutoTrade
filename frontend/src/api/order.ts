@@ -92,10 +92,10 @@ export interface OrderCreateRequest {
   price?: string
   trigger_price?: string
   leverage?: number
+  position_side?: string  // 'long' | 'short' | 'both'
   reduce_only?: boolean
   stop_loss?: string
   take_profit?: string
-  note?: string
 }
 
 export interface OrderResponse {
@@ -119,7 +119,6 @@ export interface OrderResponse {
   realized_pnl: string
   created_at: string
   filled_at: string | null
-  note?: string
 }
 
 export async function createOrder(data: OrderCreateRequest): Promise<OrderResponse> {
@@ -131,7 +130,7 @@ export async function createOrder(data: OrderCreateRequest): Promise<OrderRespon
  * 获取订单列表
  * GET /order/
  */
-export async function listOrders(params?: { status?: string, symbol?: string }): Promise<OrderResponse[]> {
+export async function listOrders(params?: { status_filter?: string, symbol?: string }): Promise<OrderResponse[]> {
   const response = await request.get<OrderResponse[]>('/order/', { params })
   return response.data
 }
