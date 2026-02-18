@@ -319,23 +319,25 @@ onMounted(async () => {
                 <div class="calendar-month">{{ monthLabel }}</div>
               </div>
 
-              <table class="pnl-calendar">
-                <thead>
-                  <tr>
-                    <th v-for="d in ['日', '一', '二', '三', '四', '五', '六']" :key="d">{{ d }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(week, wi) in calendarWeeks" :key="wi">
-                    <td v-for="(day, di) in week" :key="di" :class="day ? pnlClass(day.pnl) : 'empty'">
-                      <template v-if="day">
-                        <span class="cal-day">{{ parseInt(day.date.split('-')[2] || '0') }}</span>
-                        <span class="cal-pnl">{{ day.pnl === 0 ? '0.00' : (day.pnl > 0 ? '+' : '') + formatNum(day.pnl) }}</span>
-                      </template>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <div class="mobile-scroll-x">
+                <table class="pnl-calendar">
+                  <thead>
+                    <tr>
+                      <th v-for="d in ['日', '一', '二', '三', '四', '五', '六']" :key="d">{{ d }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(week, wi) in calendarWeeks" :key="wi">
+                      <td v-for="(day, di) in week" :key="di" :class="day ? pnlClass(day.pnl) : 'empty'">
+                        <template v-if="day">
+                          <span class="cal-day">{{ parseInt(day.date.split('-')[2] || '0') }}</span>
+                          <span class="cal-pnl">{{ day.pnl === 0 ? '0.00' : (day.pnl > 0 ? '+' : '') + formatNum(day.pnl) }}</span>
+                        </template>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 

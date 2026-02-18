@@ -76,7 +76,7 @@ const showTradePanel = ref(false)
         <div class="grid grid-cols-1 md:grid-cols-12 gap-3 md:flex-1 md:min-h-0 md:overflow-visible">
           <!-- Chart Area -->
           <div 
-            class="md:col-span-9 rounded-xl overflow-hidden glass-panel h-[300px] md:h-auto"
+            class="md:col-span-9 rounded-xl overflow-hidden glass-panel h-[45vh] md:h-auto min-h-[350px]"
             style="background: rgba(0, 0, 0, 0.4);"
           >
             <TradingChart />
@@ -84,7 +84,7 @@ const showTradePanel = ref(false)
           
           <!-- Mobile Trade Toggle -->
           <button 
-            class="md:hidden w-full py-3 rounded-xl glass-panel text-center text-sm font-medium"
+            class="md:hidden w-full py-3 rounded-xl glass-panel text-center text-sm font-medium active:scale-95 transition-transform"
             style="background: rgba(0, 0, 0, 0.4);"
             @click="showTradePanel = !showTradePanel"
           >
@@ -93,11 +93,14 @@ const showTradePanel = ref(false)
           
           <!-- Trade Panel -->
           <div 
-            class="md:col-span-3 rounded-xl overflow-hidden overflow-y-auto glass-panel"
-            :class="{ 'hidden md:block': !showTradePanel }"
-            style="max-height: 600px; background: rgba(0, 0, 0, 0.4);"
+            class="md:col-span-3 rounded-xl overflow-hidden glass-panel transision-all duration-300"
+            :class="showTradePanel ? 'block' : 'hidden md:block'"
+            style="background: rgba(0, 0, 0, 0.4);"
           >
-            <TradePanel />
+            <!-- Mobile: max-height limit to prevent taking over screen -->
+            <div class="h-full max-h-[60vh] md:max-h-[600px] overflow-y-auto">
+              <TradePanel />
+            </div>
           </div>
         </div>
         

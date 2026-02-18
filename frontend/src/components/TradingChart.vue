@@ -310,26 +310,26 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative w-full h-full min-h-[400px]">
+  <div class="relative w-full h-full">
     <!-- Chart Header -->
-    <div class="absolute top-0 left-0 right-0 z-10 flex items-center gap-4 p-4">
-      <div class="flex items-center gap-3 relative">
+    <div class="absolute top-0 left-0 right-0 z-10 flex items-center gap-2 p-2 md:gap-4 md:p-4">
+      <div class="flex items-center gap-2 md:gap-3 relative">
         <!-- Symbol Selector (Clickable) -->
         <button 
           @click="symbolMenuOpen = !symbolMenuOpen"
-          class="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
+          class="flex items-center gap-2 md:gap-3 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
         >
           <!-- Symbol Icon -->
           <div 
-            class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
+            class="w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-[10px] md:text-xs font-bold text-white"
             :style="{ background: `linear-gradient(135deg, ${currentSymbolInfo.color}, ${currentSymbolInfo.color}dd)` }"
           >
             {{ currentSymbolInfo.letter }}
           </div>
           <div>
-            <div class="flex items-center gap-2">
-              <span class="text-white font-medium">{{ currentSymbolInfo.name }}</span>
-              <span class="text-xs text-gray-600">Perpetual</span>
+            <div class="flex items-center gap-1 md:gap-2">
+              <span class="text-white font-medium text-sm md:text-base">{{ currentSymbolInfo.name }}</span>
+              <span class="hidden md:inline text-xs text-gray-600">Perpetual</span>
               <NIcon size="12" class="text-gray-500 transition-transform" :class="symbolMenuOpen ? 'rotate-180' : ''">
                 <ChevronDownOutline />
               </NIcon>

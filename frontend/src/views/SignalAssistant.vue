@@ -422,10 +422,10 @@ onMounted(() => {
       </NButton>
     </div>
 
-    <div class="main-layout">
-      <NGrid :cols="24" :x-gap="24" :y-gap="24">
+    <div class="main-layout mobile-safe-pb">
+      <NGrid item-responsive responsive="screen" :cols="24" :x-gap="12" :y-gap="12">
         <!-- 左侧: 账户与状态 -->
-        <NGi :span="6">
+        <NGi span="24 m:6">
           <div class="sidebar-col">
             <!-- 账户卡片 -->
             <NCard class="dashboard-card wallet-card" :bordered="false">
@@ -471,7 +471,7 @@ onMounted(() => {
         </NGi>
 
         <!-- 中间: AI 指令终端 -->
-        <NGi :span="12">
+        <NGi span="24 m:12">
           <div class="center-col">
             <!-- 输入终端 -->
             <NCard class="terminal-card" :bordered="false" title="指令终端">
@@ -729,7 +729,7 @@ onMounted(() => {
         </NGi>
 
         <!-- 右侧: 任务队列 -->
-        <NGi :span="6">
+        <NGi span="24 m:6">
           <NCard class="dashboard-card tasks-panel" title="任务队列" :bordered="false">
              <template v-if="pendingTasks.length">
                 <div class="task-list">

@@ -169,48 +169,65 @@ function handleLogout() {
       >
         <!-- Left: Branding & Equity -->
         <div class="flex items-center gap-6">
-          <div class="flex flex-col">
-            <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">Total Equity</span>
-            <div class="text-xl font-bold font-mono text-white tracking-tight flex items-baseline gap-2">
-              {{ walletStore.formattedEquity }} <span class="text-sm text-gray-400 font-normal">USDT</span>
+          <!-- Desktop: Full Stats -->
+          <div class="hidden md:flex items-center gap-6">
+            <div class="flex flex-col">
+              <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">Total Equity</span>
+              <div class="text-xl font-bold font-mono text-white tracking-tight flex items-baseline gap-2">
+                {{ walletStore.formattedEquity }} <span class="text-sm text-gray-400 font-normal">USDT</span>
+              </div>
+            </div>
+            
+            <div class="h-8 w-[1px] bg-white/10"></div>
+            
+            <div class="flex flex-col">
+              <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">Realized PnL</span>
+              <div class="flex items-center gap-2">
+                <span 
+                  class="font-mono font-medium transition-colors duration-500"
+                  :class="walletStore.isPnlPositive ? 'text-[#00e676]' : 'text-[#ff1744]'"
+                >
+                  {{ walletStore.formattedPnl }}
+                </span>
+                <span 
+                  class="text-xs px-1.5 rounded font-mono font-bold"
+                  :class="walletStore.isPnlPositive ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]'"
+                >
+                  {{ walletStore.pnlPercent }}
+                </span>
+              </div>
+            </div>
+            
+            <div class="h-8 w-[1px] bg-white/10"></div>
+            
+            <div class="flex flex-col">
+              <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">Unrealized PnL</span>
+              <div class="flex items-center gap-2">
+                <span 
+                  class="font-mono font-medium transition-colors duration-500"
+                  :class="walletStore.isUnrealizedPnlPositive ? 'text-[#00e676]' : 'text-[#ff1744]'"
+                >
+                  {{ walletStore.formattedUnrealizedPnl }}
+                </span>
+                <span class="text-xs text-gray-400 font-normal">USDT</span>
+              </div>
             </div>
           </div>
-          
-          <div class="h-8 w-[1px] bg-white/10"></div>
-          
-          <!-- PnL -->
-          <div class="flex flex-col">
-            <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">Realized PnL</span>
-            <div class="flex items-center gap-2">
-              <span 
-                class="font-mono font-medium transition-colors duration-500"
-                :class="walletStore.isPnlPositive ? 'text-[#00e676]' : 'text-[#ff1744]'"
-              >
-                {{ walletStore.formattedPnl }}
-              </span>
-              <span 
-                class="text-xs px-1.5 rounded font-mono font-bold"
-                :class="walletStore.isPnlPositive ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]'"
-              >
-                {{ walletStore.pnlPercent }}
-              </span>
-            </div>
-          </div>
-          
-          <div class="h-8 w-[1px] bg-white/10"></div>
-          
-          <!-- Unrealized PnL -->
-          <div class="flex flex-col">
-            <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">Unrealized PnL</span>
-            <div class="flex items-center gap-2">
-              <span 
-                class="font-mono font-medium transition-colors duration-500"
-                :class="walletStore.isUnrealizedPnlPositive ? 'text-[#00e676]' : 'text-[#ff1744]'"
-              >
-                {{ walletStore.formattedUnrealizedPnl }}
-              </span>
-              <span class="text-xs text-gray-400 font-normal">USDT</span>
-            </div>
+
+          <!-- Mobile: Simplified Equity Only -->
+          <div class="flex md:hidden flex-col">
+             <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-md bg-gradient-to-br from-[#8a2be2] to-[#6d28d9] flex items-center justify-center shadow-sm">
+                  <span class="font-bold text-white text-[10px]">AT</span>
+                </div>
+                <span class="font-bold font-mono text-white">{{ walletStore.formattedEquity }}</span>
+             </div>
+             <div class="flex items-center gap-2 text-[10px] text-gray-400">
+                <span>PnL:</span>
+                <span :class="walletStore.isPnlPositive ? 'text-[#00e676]' : 'text-[#ff1744]'">
+                  {{ walletStore.pnlPercent }}
+                </span>
+             </div>
           </div>
         </div>
         

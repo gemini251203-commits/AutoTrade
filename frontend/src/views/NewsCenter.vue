@@ -254,7 +254,7 @@ onMounted(loadAll)
     </div>
 
     <!-- 顶部统计卡片 -->
-    <n-grid :cols="4" :x-gap="16" :y-gap="16" class="stats-grid">
+    <n-grid cols="1 s:2 m:4" responsive="screen" :x-gap="16" :y-gap="16" class="stats-grid">
       <n-grid-item>
         <n-card class="stat-card stat-sentiment">
           <div class="fng-title">恐惧贪婪指数</div>
@@ -753,9 +753,6 @@ onMounted(loadAll)
 @media (max-width: 900px) {
   .main-content {
     grid-template-columns: 1fr;
-  }
-  .stats-grid :deep(.n-grid) {
-    grid-template-columns: repeat(2, 1fr) !important;
   }
 }
 </style>

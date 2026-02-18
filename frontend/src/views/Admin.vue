@@ -147,7 +147,7 @@ onMounted(() => {
     </div>
 
     <!-- Stats -->
-    <div class="grid grid-cols-3 gap-4 mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
       <div 
         class="p-4 rounded-xl"
         style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);"

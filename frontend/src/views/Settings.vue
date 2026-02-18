@@ -236,7 +236,7 @@ onMounted(() => {
 
             <!-- Cloud API 配置 -->
             <div v-show="isCloudProvider" class="config-section">
-              <NGrid :cols="2" :x-gap="24">
+              <NGrid cols="1 s:1 m:2" responsive="screen" :x-gap="24">
                 <NGi>
                   <NFormItem label="API Base URL">
                     <NInput
@@ -253,7 +253,7 @@ onMounted(() => {
                     />
                   </NFormItem>
                 </NGi>
-                <NGi :span="2">
+                <NGi span="1 m:2">
                   <NFormItem label="API Key">
                     <NInput
                       v-model:value="formData.api_key"
@@ -274,7 +274,7 @@ onMounted(() => {
 
             <!-- Ollama 配置 -->
             <div v-show="!isCloudProvider" class="config-section">
-               <NGrid :cols="2" :x-gap="24">
+               <NGrid cols="1 s:1 m:2" responsive="screen" :x-gap="24">
                 <NGi>
                   <NFormItem label="Ollama URL">
                     <NInput

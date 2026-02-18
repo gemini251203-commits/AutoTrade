@@ -137,7 +137,7 @@ function handleKeydown(e: KeyboardEvent) {
     
     <!-- Login/Register Card -->
     <div 
-      class="relative w-full max-w-md p-8 glass-panel-heavy rounded-2xl fade-in slide-up backdrop-blur-xl shadow-2xl"
+      class="relative w-full max-w-md p-6 md:p-8 glass-panel-heavy rounded-2xl fade-in slide-up backdrop-blur-xl shadow-2xl"
       style="
         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
         border: 1px solid rgba(255, 255, 255, 0.08);
