@@ -189,8 +189,12 @@ class NewsCrawler:
             title, votes_positive, votes_negative
         )
         
-        # AI 翻译标题 + 分类
-        title_zh = await translate_title(title)
+        # AI 翻译标题 + 分类 (仅在 DeepSeek API Key 配置时)
+        title_zh = None
+        if settings.deepseek_api_key:
+            title_zh = await translate_title(title)
+        
+        # 分类 (优先关键词匹配，无需 AI)
         news_category = await classify_category(title)
         
         # 判断重要性
