@@ -331,7 +331,7 @@ onMounted(async () => {
                       <td v-for="(day, di) in week" :key="di" :class="day ? pnlClass(day.pnl) : 'empty'">
                         <template v-if="day">
                           <span class="cal-day">{{ parseInt(day.date.split('-')[2] || '0') }}</span>
-                          <span class="cal-pnl">{{ day.pnl === 0 ? '0.00' : (day.pnl > 0 ? '+' : '') + formatNum(day.pnl) }}</span>
+                          <span class="cal-pnl">{{ day.pnl === 0 ? '-' : (day.pnl > 0 ? '+' : '') + formatNum(day.pnl) }}</span>
                         </template>
                       </td>
                     </tr>
@@ -619,48 +619,79 @@ onMounted(async () => {
 
 .pnl-calendar {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate; /* Changed from collapse to separate for spacing */
+  border-spacing: 4px;       /* Add spacing between cells */
   table-layout: fixed;
 }
 .pnl-calendar th {
-  color: #6b7280;
+  color: #52525b; /* Darker gray for headers */
   font-size: 12px;
-  font-weight: 500;
-  padding: 6px 4px;
-  text-align: center;
-}
-.pnl-calendar td {
+  font-weight: 600;
   padding: 8px 4px;
   text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.pnl-calendar td {
+  padding: 6px;
+  text-align: right; /* Date in top right or ensure layout handles it */
   vertical-align: top;
-  border: 1px solid rgba(255,255,255,0.04);
-  height: 52px;
-  transition: background 0.2s;
+  border: 1px solid transparent; /* Remove visible border, keep for layout */
+  background: rgba(255,255,255,0.02); /* Default subtle background */
+  border-radius: 8px; /* Rounded corners */
+  height: 64px; /* Slightly taller */
+  transition: all 0.2s ease;
+  position: relative;
 }
 .pnl-calendar td:hover:not(.empty) {
-  background: rgba(255,255,255,0.04);
+  background: rgba(255,255,255,0.05);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  z-index: 10;
 }
 .pnl-calendar td.empty {
   background: transparent;
   border-color: transparent;
+  pointer-events: none;
 }
+/* Positive Day */
 .pnl-calendar td.pnl-positive {
-  background: rgba(0, 230, 118, 0.06);
+  background: rgba(0, 230, 118, 0.05);
+  border: 1px solid rgba(0, 230, 118, 0.1);
 }
+.pnl-calendar td.pnl-positive:hover {
+  background: rgba(0, 230, 118, 0.1);
+  border-color: rgba(0, 230, 118, 0.3);
+}
+/* Negative Day */
 .pnl-calendar td.pnl-negative {
-  background: rgba(255, 23, 68, 0.06);
+  background: rgba(255, 23, 68, 0.05);
+  border: 1px solid rgba(255, 23, 68, 0.1);
 }
+.pnl-calendar td.pnl-negative:hover {
+  background: rgba(255, 23, 68, 0.1);
+  border-color: rgba(255, 23, 68, 0.3);
+}
+
 .cal-day {
   display: block;
-  font-size: 12px;
-  color: #9ca3af;
-  margin-bottom: 2px;
+  font-size: 10px;
+  color: #52525b;
+  margin-bottom: 4px;
+  text-align: left; /* Date on left */
 }
+.pnl-positive .cal-day { color: rgba(0, 230, 118, 0.6); }
+.pnl-negative .cal-day { color: rgba(255, 23, 68, 0.6); }
+
 .cal-pnl {
-  display: block;
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* PnL on right/bottom */
+  height: calc(100% - 16px);
+  font-size: 13px;
   font-family: 'Inter', monospace;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.5px;
 }
 
 /* ========== Summary ========== */
