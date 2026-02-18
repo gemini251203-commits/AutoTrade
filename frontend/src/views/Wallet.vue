@@ -619,34 +619,39 @@ onMounted(async () => {
 
 .pnl-calendar {
   width: 100%;
-  border-collapse: separate; /* Changed from collapse to separate for spacing */
-  border-spacing: 4px;       /* Add spacing between cells */
+  border-collapse: separate;
+  border-spacing: 6px;       /* Increased spacing */
   table-layout: fixed;
 }
 .pnl-calendar th {
-  color: #52525b; /* Darker gray for headers */
+  color: #a1a1aa; /* Lighter gray for headers */
   font-size: 12px;
   font-weight: 600;
   padding: 8px 4px;
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 1px;
+  opacity: 0.8;
 }
 .pnl-calendar td {
-  padding: 6px;
-  text-align: right; /* Date in top right or ensure layout handles it */
+  padding: 8px;
+  text-align: right;
   vertical-align: top;
-  border: 1px solid transparent; /* Remove visible border, keep for layout */
-  background: rgba(255,255,255,0.02); /* Default subtle background */
-  border-radius: 8px; /* Rounded corners */
-  height: 64px; /* Slightly taller */
+  border: 1px solid rgba(255,255,255,0.05); /* Subtle border for definition */
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  height: 72px; /* Taller cells */
   transition: all 0.2s ease;
   position: relative;
+  display: flex;       /* Use flexbox for internal layout */
+  flex-direction: column;
+  justify-content: space-between;
 }
 .pnl-calendar td:hover:not(.empty) {
-  background: rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.08); /* Brighter hover */
+  border-color: rgba(255,255,255,0.1);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   z-index: 10;
 }
 .pnl-calendar td.empty {
@@ -656,43 +661,38 @@ onMounted(async () => {
 }
 /* Positive Day */
 .pnl-calendar td.pnl-positive {
-  background: rgba(0, 230, 118, 0.05);
-  border: 1px solid rgba(0, 230, 118, 0.1);
-}
-.pnl-calendar td.pnl-positive:hover {
-  background: rgba(0, 230, 118, 0.1);
-  border-color: rgba(0, 230, 118, 0.3);
+  background: rgba(0, 230, 118, 0.08); /* More visible background */
+  border: 1px solid rgba(0, 230, 118, 0.2);
 }
 /* Negative Day */
 .pnl-calendar td.pnl-negative {
-  background: rgba(255, 23, 68, 0.05);
-  border: 1px solid rgba(255, 23, 68, 0.1);
-}
-.pnl-calendar td.pnl-negative:hover {
-  background: rgba(255, 23, 68, 0.1);
-  border-color: rgba(255, 23, 68, 0.3);
+  background: rgba(255, 23, 68, 0.08);
+  border: 1px solid rgba(255, 23, 68, 0.2);
 }
 
 .cal-day {
-  display: block;
-  font-size: 10px;
-  color: #52525b;
-  margin-bottom: 4px;
-  text-align: left; /* Date on left */
+  font-size: 12px;     /* Larger font */
+  font-weight: 600;
+  color: #71717a;      /* Lighter than before (zinc-500) */
+  text-align: left;
+  line-height: 1;
 }
-.pnl-positive .cal-day { color: rgba(0, 230, 118, 0.6); }
-.pnl-negative .cal-day { color: rgba(255, 23, 68, 0.6); }
+/* Highlight date on active days */
+.pnl-positive .cal-day, .pnl-negative .cal-day {
+  color: #a1a1aa; /* Even lighter on colored cells */
+}
 
 .cal-pnl {
   display: flex;
   align-items: center;
-  justify-content: flex-end; /* PnL on right/bottom */
-  height: calc(100% - 16px);
+  justify-content: flex-end;
   font-size: 13px;
   font-family: 'Inter', monospace;
-  font-weight: 600;
+  font-weight: 700;    /* Bolder PnL */
   letter-spacing: -0.5px;
 }
+.pnl-positive .cal-pnl { text-shadow: 0 0 10px rgba(0, 230, 118, 0.3); } /* Glow effect */
+.pnl-negative .cal-pnl { text-shadow: 0 0 10px rgba(255, 23, 68, 0.3); }
 
 /* ========== Summary ========== */
 .summary-section {
