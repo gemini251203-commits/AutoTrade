@@ -376,23 +376,102 @@ onUnmounted(() => {
       </NButton>
     </div>
     
-    <NDataTable
-      v-if="positions.length > 0"
-      :columns="columns"
-      :data="positions"
-      :row-key="(row: PositionRisk) => row.position_id"
-      size="small"
-      :bordered="false"
-      :single-line="false"
-      style="background: transparent;"
-      :theme-overrides="{
-        thColor: 'rgba(255,255,255,0.02)',
-        tdColor: 'transparent',
-        thTextColor: '#9ca3af',
-        tdTextColor: '#e5e7eb',
-        borderColor: 'rgba(255,255,255,0.05)',
-      }"
-    />
+    <!-- Desktop View -->
+    <div class="hidden md:block">
+      <NDataTable
+        v-if="positions.length > 0"
+        :columns="columns"
+        :data="positions"
+        :row-key="(row: PositionRisk) => row.position_id"
+        size="small"
+        :bordered="false"
+        :single-line="false"
+        style="background: transparent;"
+        :theme-overrides="{
+          thColor: 'rgba(255,255,255,0.02)',
+          tdColor: 'transparent',
+          thTextColor: '#9ca3af',
+          tdTextColor: '#e5e7eb',
+          borderColor: 'rgba(255,255,255,0.05)',
+        }"
+      />
+    </div>
+
+    <!-- Mobile View -->
+    <div class="md:hidden space-y-3" v-if="positions.length > 0">
+      <div 
+        v-for="pos in positions" 
+        :key="pos.position_id" 
+        class="glass-panel p-3 rounded-xl border border-white/5"
+      >
+        <!-- Header -->
+        <div class="flex justify-between items-start mb-3">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-white text-lg">{{ pos.symbol }}</span>
+            <NTag size="small" :type="pos.side === 'long' ? 'success' : 'error'">
+              {{ pos.side === 'long' ? '多' : '空' }}
+            </NTag>
+            <span class="text-xs text-gray-400 bg-white/5 px-1.5 py-0.5 rounded">{{ pos.leverage }}x</span>
+          </div>
+          
+          <!-- PnL Display -->
+          <div class="text-right">
+            <div 
+              class="font-mono font-bold text-base"
+              :class="parseFloat(pos.unrealized_pnl) >= 0 ? 'text-green-400' : 'text-red-400'"
+            >
+              {{ parseFloat(pos.unrealized_pnl) >= 0 ? '+' : '' }}{{ parseFloat(pos.unrealized_pnl).toFixed(2) }}
+            </div>
+            <div 
+              class="text-xs font-mono opacity-80"
+              :class="parseFloat(pos.unrealized_pnl) >= 0 ? 'text-green-400' : 'text-red-400'"
+            >
+              {{ parseFloat(pos.unrealized_pnl) >= 0 ? '+' : '' }}{{ parseFloat(pos.roe_percent).toFixed(2) }}%
+            </div>
+          </div>
+        </div>
+        
+        <!-- Details Grid -->
+        <div class="grid grid-cols-2 gap-y-2 text-xs mb-4 p-2 bg-black/20 rounded-lg">
+          <div class="text-gray-500">持仓数量</div>
+          <div class="text-right text-gray-300">{{ parseFloat(pos.size).toFixed(4) }}</div>
+          
+          <div class="text-gray-500">保证金</div>
+          <div class="text-right text-gray-300">{{ (parseFloat(pos.size) * parseFloat(pos.entry_price) / (pos.leverage || 1)).toFixed(2) }}</div>
+          
+          <div class="text-gray-500">开仓均价</div>
+          <div class="text-right text-gray-300">${{ parseFloat(pos.entry_price).toFixed(2) }}</div>
+          
+          <div class="text-gray-500">标记价格</div>
+          <div class="text-right text-gray-300">${{ parseFloat(pos.mark_price).toFixed(2) }}</div>
+        </div>
+        
+        <!-- Actions -->
+        <div class="grid grid-cols-2 gap-3">
+          <button 
+            @click="openTpSlModal(pos)"
+            class="flex flex-col items-center justify-center py-2 rounded-lg bg-white/5 active:bg-white/10 transition text-xs"
+          >
+            <span class="text-gray-400 mb-0.5">止盈/止损</span>
+            <div class="flex gap-2 font-mono scale-90">
+              <span class="text-green-400">{{ pos.take_profit ? parseFloat(pos.take_profit).toFixed(1) : '--' }}</span>
+              <span class="text-zinc-600">|</span>
+              <span class="text-red-400">{{ pos.stop_loss ? parseFloat(pos.stop_loss).toFixed(1) : '--' }}</span>
+            </div>
+          </button>
+          
+          <NButton 
+            type="error" 
+            secondary 
+            block 
+            class="h-full"
+            @click="openCloseModal(pos)"
+          >
+            平仓
+          </NButton>
+        </div>
+      </div>
+    </div>
     
     <div v-else class="text-center py-8 text-gray-500 text-sm">
       暂无仓位

@@ -29,6 +29,16 @@ body {
   font-family: var(--font-family-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  min-height: 100dvh;
+  /* Mobile address bar fix */
+  @supports (-webkit-touch-callout: none) {
+    min-height: -webkit-fill-available;
+  }
+}
+
+/* Mobile Bottom Nav Safe Area */
+.mobile-safe-pb {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom));
 }
 
 /* Scrollbar styling */

@@ -205,21 +205,80 @@ onMounted(() => {
       </NButton>
     </div>
     
-    <NDataTable
-      v-if="displayOrders.length > 0"
-      :columns="columns"
-      :data="displayOrders"
-      :row-key="(row: Order) => row.id"
-      size="small"
-      :bordered="false"
-      :theme-overrides="{
-        thColor: 'rgba(255,255,255,0.02)',
-        tdColor: 'transparent',
-        thTextColor: '#9ca3af',
-        tdTextColor: '#e5e7eb',
-        borderColor: 'rgba(255,255,255,0.05)',
-      }"
-    />
+    <!-- Desktop View -->
+    <div class="hidden md:block">
+      <NDataTable
+        v-if="displayOrders.length > 0"
+        :columns="columns"
+        :data="displayOrders"
+        :row-key="(row: Order) => row.id"
+        size="small"
+        :bordered="false"
+        :theme-overrides="{
+          thColor: 'rgba(255,255,255,0.02)',
+          tdColor: 'transparent',
+          thTextColor: '#9ca3af',
+          tdTextColor: '#e5e7eb',
+          borderColor: 'rgba(255,255,255,0.05)',
+        }"
+      />
+    </div>
+
+    <!-- Mobile View -->
+    <div class="md:hidden space-y-3" v-if="displayOrders.length > 0">
+      <div 
+        v-for="order in displayOrders" 
+        :key="order.id" 
+        class="glass-panel p-3 rounded-xl border border-white/5"
+      >
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-2">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-white">{{ order.symbol }}</span>
+            <NTag size="small" :type="order.side === 'buy' ? 'success' : 'error'">
+              {{ order.side === 'buy' ? '买入' : '卖出' }}
+            </NTag>
+            <span class="text-xs text-gray-400">{{ order.leverage }}x</span>
+          </div>
+          <div class="text-xs text-gray-500">
+            {{ new Date(order.created_at).toLocaleTimeString() }}
+          </div>
+        </div>
+        
+        <!-- Details -->
+        <div class="grid grid-cols-2 gap-y-1 text-sm mb-3">
+          <div class="text-gray-500">类型</div>
+          <div class="text-right text-gray-300">{{ getOrderTypeText(order.order_type) }}</div>
+          
+          <div class="text-gray-500">价格</div>
+          <div class="text-right font-mono">{{ order.price ? order.price : '市价' }}</div>
+          
+          <div class="text-gray-500">数量</div>
+          <div class="text-right font-mono">{{ parseFloat(order.quantity).toFixed(4) }}</div>
+          
+          <div class="text-gray-500">成交</div>
+          <div class="text-right font-mono">{{ parseFloat(order.filled_quantity).toFixed(4) }}</div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="flex justify-between items-center pt-2 border-t border-white/5">
+          <NTag size="small" :type="getStatusType(order.status)" :bordered="false">
+            {{ getStatusText(order.status) }}
+          </NTag>
+          
+          <NButton 
+            v-if="['pending', 'open', 'partially_filled'].includes(order.status)"
+            size="tiny" 
+            type="warning" 
+            secondary
+            :loading="cancelingId === order.id"
+            @click="cancelOrder(order.id)"
+          >
+            取消
+          </NButton>
+        </div>
+      </div>
+    </div>
     
     <div v-else class="text-center py-8 text-gray-500 text-sm">
       暂无{{ activeTab === 'open' ? '挂单' : '订单' }}

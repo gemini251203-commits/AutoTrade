@@ -72,10 +72,10 @@ function stopResize() {
     <MainLayout>
       <div class="h-full flex flex-col gap-3">
         <!-- Top Section: Chart + Trade Panel -->
-        <div class="grid grid-cols-12 gap-3 flex-1 min-h-0">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 flex-1 min-h-0 overflow-y-auto md:overflow-visible">
           <!-- Chart Area (9 columns) -->
           <div 
-            class="col-span-9 rounded-xl overflow-hidden glass-panel"
+            class="md:col-span-9 rounded-xl overflow-hidden glass-panel min-h-[450px] md:min-h-0"
             style="background: rgba(0, 0, 0, 0.4);"
           >
             <TradingChart />
@@ -83,7 +83,7 @@ function stopResize() {
           
           <!-- Trade Panel (3 columns) -->
           <div 
-            class="col-span-3 rounded-xl overflow-hidden overflow-y-auto glass-panel"
+            class="md:col-span-3 rounded-xl overflow-hidden overflow-y-auto glass-panel"
             style="max-height: 600px; background: rgba(0, 0, 0, 0.4);"
           >
             <TradePanel />

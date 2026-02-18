@@ -273,16 +273,29 @@ function startLiveUpdates() {
 }
 
 onMounted(() => {
-
   isDestroyed = false
   initChart()
   startLiveUpdates()
-  window.addEventListener('resize', handleResize)
+
+  // Use ResizeObserver for robust resizing
+  const resizeObserver = new ResizeObserver(() => {
+    handleResize()
+  })
+  if (chartContainer.value) {
+    resizeObserver.observe(chartContainer.value)
+  }
+  
+  // Store observer for cleanup
+  (window as any)._chartResizeObserver = resizeObserver
 })
 
 onUnmounted(() => {
+  // Cleanup observer
+  if ((window as any)._chartResizeObserver) {
+    (window as any)._chartResizeObserver.disconnect()
+  }
 
-  isDestroyed = true  // 设置销毁标志
+  isDestroyed = true
   if (updateInterval) {
     clearInterval(updateInterval)
     updateInterval = null
@@ -292,8 +305,8 @@ onUnmounted(() => {
     chart = null
   }
   candlestickSeries = null
-  window.removeEventListener('resize', handleResize)
 })
+
 </script>
 
 <template>

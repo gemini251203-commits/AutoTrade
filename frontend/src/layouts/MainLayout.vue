@@ -54,6 +54,13 @@ const activeNavKey = computed(() => {
   return 'dashboard'
 })
 
+// Mobile Nav Items (Selected subset)
+const mobileNavItems = computed(() => {
+  // Mobile priority: Dashboard, Wallet, News, Signal, Settings
+  const priorityKeys = ['dashboard', 'wallet', 'news', 'signal', 'settings']
+  return navItems.filter(item => priorityKeys.includes(item.key))
+})
+
 // Navigate to route
 function handleNav(item: typeof navItems[0]) {
   router.push(item.route)
@@ -93,9 +100,9 @@ function handleLogout() {
       <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-blue-900/10 blur-[120px]"></div>
     </div>
     
-    <!-- Sidebar -->
+    <!-- Sidebar (Desktop Only) -->
     <aside 
-      class="group relative z-20 flex flex-col w-20 py-6 items-center border-r border-white/5 bg-black/40 backdrop-blur-xl transition-all duration-300 overflow-hidden"
+      class="hidden md:flex group relative z-20 flex-col w-20 py-6 items-center border-r border-white/5 bg-black/40 backdrop-blur-xl transition-all duration-300 overflow-hidden"
     >
       <!-- Logo -->
       <div class="mb-10 w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#8a2be2] to-[#6d28d9] shadow-[0_0_15px_rgba(138,43,226,0.5)]">
@@ -226,10 +233,29 @@ function handleLogout() {
       </header>
       
       <!-- Route Content -->
-      <main class="flex-1 overflow-auto p-6 scroll-smooth">
+      <main class="flex-1 overflow-auto p-3 md:p-6 scroll-smooth pb-24 md:pb-6 mobile-safe-pb">
         <slot />
       </main>
     </div>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0a0a0f]/90 backdrop-blur-xl border-t border-white/10 flex justify-around items-center px-1 pb-[env(safe-area-inset-bottom)]">
+      <button 
+        v-for="item in mobileNavItems" 
+        :key="item.key"
+        @click="handleNav(item)"
+        class="flex flex-col items-center justify-center w-full py-2 transition-all active:scale-95"
+        :class="activeNavKey === item.key ? 'text-purple-400' : 'text-gray-500'"
+      >
+        <div 
+          class="p-1 rounded-xl transition-colors"
+          :class="activeNavKey === item.key ? 'bg-purple-500/10' : ''"
+        >
+          <NIcon size="24"><component :is="item.icon" /></NIcon>
+        </div>
+        <span class="text-[10px] mt-0.5 font-medium">{{ item.label }}</span>
+      </button>
+    </nav>
   </div>
 </template>
 
