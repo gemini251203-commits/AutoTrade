@@ -54,6 +54,16 @@ async def lifespan(app: FastAPI):
     await price_stream.start()
     logger.info("Price Stream (WebSocket) started")
     
+    # 📰 启动新闻爬虫
+    news_crawler = None
+    if settings.cryptopanic_api_key:
+        from app.services.news.crawler import NewsCrawler
+        news_crawler = NewsCrawler(api_key=settings.cryptopanic_api_key)
+        await news_crawler.start()
+        logger.info("News Crawler started")
+    else:
+        logger.warning("CRYPTOPANIC_API_KEY not set, News Crawler disabled")
+    
     yield
     
     # ==================== Graceful Shutdown ====================
@@ -62,6 +72,11 @@ async def lifespan(app: FastAPI):
     # 停止实时价格流
     await price_stream.stop()
     logger.info("Price Stream stopped")
+    
+    # 停止新闻爬虫
+    if news_crawler:
+        await news_crawler.stop()
+        logger.info("News Crawler stopped")
     
     # 停止市场数据采集器
     await market_collector.stop()
