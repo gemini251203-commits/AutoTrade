@@ -831,62 +831,84 @@ onMounted(async () => {
 /* ========== Responsive ========== */
 @media (max-width: 768px) {
   .portfolio-page {
-    padding: 12px;
-    padding-bottom: calc(5rem + env(safe-area-inset-bottom)); /* Ensure navigation doesn't cover content */
+    padding: 8px;
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
   }
   .overview-row {
     grid-template-columns: 1fr;
-    padding: 16px;
-    gap: 16px;
+    padding: 12px;
+    gap: 12px;
   }
   .overview-left {
     border-right: none;
     border-bottom: 1px solid rgba(255,255,255,0.06);
     padding-right: 0;
-    padding-bottom: 16px;
+    padding-bottom: 12px;
   }
   .overview-value {
-    font-size: 28px;
+    font-size: 26px;
+  }
+  .mini-stats {
+    gap: 12px;
+  }
+  .mini-stat {
+    flex-direction: row;
+    gap: 6px;
   }
   
-  /* Calendar Mobile Optimization */
+  /* Calendar Mobile - Force fit in screen */
   .calendar-section {
-    margin-top: 8px;
+    margin-top: 4px;
+  }
+  .calendar-header {
+    margin-bottom: 4px;
+  }
+  .mobile-scroll-x {
+    overflow-x: visible; /* Don't scroll, force fit */
   }
   .pnl-calendar {
-    border-spacing: 3px; /* Reduce spacing to fit */
+    border-spacing: 1px;
+    width: 100%;
+    table-layout: fixed; /* Force equal column widths */
   }
   .pnl-calendar th {
     font-size: 10px;
-    padding: 4px 2px;
+    padding: 2px 0;
+    letter-spacing: 0;
   }
   .pnl-calendar td {
-    height: 56px; /* Shorter cells */
-    padding: 4px;
-    border-radius: 6px;
+    height: 44px;
+    padding: 2px;
+    border-radius: 4px;
+    border-width: 0; /* Remove borders to save space */
+  }
+  .pnl-calendar td:hover:not(.empty) {
+    transform: none; /* No hover effect on mobile */
+    box-shadow: none;
   }
   .cal-day {
-    font-size: 10px;
-    margin-bottom: 2px;
+    font-size: 9px;
+    margin-bottom: 1px;
   }
   .cal-pnl {
-    font-size: 10px; /* Smaller font to properly fit */
+    font-size: 8px;
     letter-spacing: -0.5px;
+    padding-top: 4px;
   }
   
   .summary-grid {
-    grid-template-columns: 1fr; /* Stack summary cards */
+    grid-template-columns: 1fr;
   }
   .summary-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
+    gap: 8px;
   }
   .page-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
   }
   .fee-item {
     flex-wrap: wrap;
