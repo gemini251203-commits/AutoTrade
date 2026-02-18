@@ -54,12 +54,8 @@ const activeNavKey = computed(() => {
   return 'dashboard'
 })
 
-// Mobile Nav Items (Selected subset)
-const mobileNavItems = computed(() => {
-  // Mobile priority: Dashboard, Wallet, News, Signal, Settings
-  const priorityKeys = ['dashboard', 'wallet', 'news', 'signal', 'settings']
-  return navItems.filter(item => priorityKeys.includes(item.key))
-})
+// Mobile Nav Items (all items)
+const mobileNavItems = computed(() => navItems)
 
 // Navigate to route
 function handleNav(item: typeof navItems[0]) {
@@ -256,21 +252,21 @@ function handleLogout() {
     </div>
 
     <!-- Mobile Bottom Navigation -->
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-[90] bg-[#0a0a0f]/90 backdrop-blur-xl border-t border-white/10 flex justify-around items-center px-1 pb-[env(safe-area-inset-bottom)]">
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-[90] bg-[#0a0a0f]/90 backdrop-blur-xl border-t border-white/10 flex items-center overflow-x-auto no-scrollbar px-1 pb-[env(safe-area-inset-bottom)]">
       <button 
         v-for="item in mobileNavItems" 
         :key="item.key"
         @click="handleNav(item)"
-        class="flex flex-col items-center justify-center w-full py-2 transition-all active:scale-95"
+        class="flex flex-col items-center justify-center flex-shrink-0 min-w-[56px] py-2 transition-all active:scale-95"
         :class="activeNavKey === item.key ? 'text-purple-400' : 'text-gray-500'"
       >
         <div 
           class="p-1 rounded-xl transition-colors"
           :class="activeNavKey === item.key ? 'bg-purple-500/10' : ''"
         >
-          <NIcon size="24"><component :is="item.icon" /></NIcon>
+          <NIcon size="20"><component :is="item.icon" /></NIcon>
         </div>
-        <span class="text-[10px] mt-0.5 font-medium">{{ item.label }}</span>
+        <span class="text-[9px] mt-0.5 font-medium whitespace-nowrap">{{ item.label }}</span>
       </button>
     </nav>
   </div>
