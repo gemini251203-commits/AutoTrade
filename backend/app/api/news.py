@@ -16,6 +16,7 @@ News API
 
 from typing import Optional, List
 from datetime import datetime
+import httpx
 
 from fastapi import APIRouter, HTTPException, status, Query
 from pydantic import BaseModel, Field
@@ -158,6 +159,15 @@ class TradingStatsResponse(BaseModel):
     loss_count: int
     win_rate: float
     total_pnl: float
+
+
+class FearGreedResponse(BaseModel):
+    """恐惧贪婪指数响应"""
+    value: int
+    value_classification: str
+    value_classification_zh: str
+    timestamp: int
+    time_until_update: int
 
 
 # ==================== Routes ====================
@@ -331,3 +341,38 @@ async def get_trading_stats(
         user_id=current_user.id,
         alert_id=alert_id,
     )
+
+
+# Fear & Greed 分类中文映射
+_FNG_ZH_MAP = {
+    "Extreme Fear": "极度恐惧",
+    "Fear": "恐惧",
+    "Neutral": "中性",
+    "Greed": "贪婪",
+    "Extreme Greed": "极度贪婪",
+}
+
+
+@router.get("/fear-greed", response_model=FearGreedResponse)
+async def get_fear_greed_index(current_user: CurrentUser):
+    """获取加密货币恐惧贪婪指数 (数据源: alternative.me)"""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get("https://api.alternative.me/fng/?limit=1")
+            resp.raise_for_status()
+            data = resp.json()
+
+        item = data["data"][0]
+        classification = item["value_classification"]
+        return FearGreedResponse(
+            value=int(item["value"]),
+            value_classification=classification,
+            value_classification_zh=_FNG_ZH_MAP.get(classification, classification),
+            timestamp=int(item["timestamp"]),
+            time_until_update=int(item.get("time_until_update", 0)),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"获取恐惧贪婪指数失败: {str(e)}",
+        )

@@ -91,6 +91,14 @@ export interface TradingStats {
   total_pnl: number
 }
 
+export interface FearGreedIndex {
+  value: number
+  value_classification: string
+  value_classification_zh: string
+  timestamp: number
+  time_until_update: number
+}
+
 export interface CreateAlertParams {
   name: string
   keywords: string[]
@@ -191,5 +199,11 @@ export async function getNewsTradingStats(
   const resp = await request.get('/news/stats', {
     params: alertId ? { alert_id: alertId } : undefined,
   })
+  return resp.data
+}
+
+/** 获取恐惧贪婪指数 */
+export async function getFearGreedIndex(): Promise<FearGreedIndex> {
+  const resp = await request.get('/news/fear-greed')
   return resp.data
 }

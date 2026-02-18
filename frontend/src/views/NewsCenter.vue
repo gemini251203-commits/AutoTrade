@@ -13,7 +13,7 @@ import {
   NSwitch, NCollapse, NCollapseItem, NDivider,
   NPopconfirm, NTooltip, NBadge, useMessage,
 } from 'naive-ui'
-import type { NewsArticle, NewsAlert, NewsThinking, MarketSentiment, TradingStats } from '@/api/news'
+import type { NewsArticle, NewsAlert, NewsThinking, MarketSentiment, TradingStats, FearGreedIndex } from '@/api/news'
 import {
   getLatestNews,
   getMarketSentiment,
@@ -23,6 +23,7 @@ import {
   deleteNewsAlert,
   getNewsThinkings,
   getNewsTradingStats,
+  getFearGreedIndex,
 } from '@/api/news'
 
 const message = useMessage()
@@ -34,6 +35,7 @@ const alerts = ref<NewsAlert[]>([])
 const thinkings = ref<NewsThinking[]>([])
 const sentiment = ref<MarketSentiment | null>(null)
 const stats = ref<TradingStats | null>(null)
+const fearGreed = ref<FearGreedIndex | null>(null)
 
 // 筛选
 const filterCurrency = ref<string | null>(null)
@@ -85,6 +87,7 @@ async function loadAll() {
       loadAlerts(),
       loadThinkings(),
       loadStats(),
+      loadFearGreed(),
     ])
   } finally {
     loading.value = false
@@ -221,6 +224,23 @@ function sentimentPercent(s: MarketSentiment | null) {
   return Math.round((s.positive_count / s.total_articles) * 100)
 }
 
+async function loadFearGreed() {
+  try {
+    fearGreed.value = await getFearGreedIndex()
+  } catch (e: any) {
+    console.error('加载恐惧贪婪指数失败', e)
+  }
+}
+
+// 恐惧贪婪指数颜色
+function fearGreedColor(value: number): string {
+  if (value <= 24) return '#ef4444'   // 极度恐惧 - 红
+  if (value <= 49) return '#f97316'   // 恐惧 - 橙
+  if (value <= 54) return '#eab308'   // 中性 - 黄
+  if (value <= 74) return '#22c55e'   // 贪婪 - 绿
+  return '#16a34a'                     // 极度贪婪 - 深绿
+}
+
 onMounted(loadAll)
 </script>
 
@@ -237,17 +257,26 @@ onMounted(loadAll)
     <n-grid :cols="4" :x-gap="16" :y-gap="16" class="stats-grid">
       <n-grid-item>
         <n-card class="stat-card stat-sentiment">
-          <n-statistic label="市场情绪" :value="sentiment?.overall === 'positive' ? '看多' : sentiment?.overall === 'negative' ? '看空' : '中性'" />
+          <div class="fng-title">恐惧贪婪指数</div>
+          <div class="fng-value" :style="{ color: fearGreed ? fearGreedColor(fearGreed.value) : '#6b7280' }">
+            {{ fearGreed?.value ?? '--' }}
+          </div>
+          <div class="fng-label" :style="{ color: fearGreed ? fearGreedColor(fearGreed.value) : '#6b7280' }">
+            {{ fearGreed?.value_classification_zh ?? '加载中...' }}
+          </div>
           <n-progress
             type="line"
-            :percentage="sentimentPercent(sentiment)"
-            :color="sentiment?.overall === 'positive' ? '#10b981' : sentiment?.overall === 'negative' ? '#ef4444' : '#6b7280'"
+            :percentage="fearGreed?.value ?? 50"
+            :color="fearGreed ? fearGreedColor(fearGreed.value) : '#6b7280'"
             :rail-color="'rgba(255,255,255,0.1)'"
             :height="6"
-            style="margin-top: 8px"
+            :show-indicator="false"
+            style="margin-top: 10px"
           />
-          <div class="stat-detail">
-            评分: {{ sentiment?.score?.toFixed(3) || '0.000' }} · {{ sentiment?.total_articles || 0 }} 条新闻
+          <div class="fng-scale">
+            <span style="color: #ef4444">恐惧</span>
+            <span style="color: #eab308">中性</span>
+            <span style="color: #22c55e">贪婪</span>
           </div>
         </n-card>
       </n-grid-item>
@@ -560,6 +589,33 @@ onMounted(loadAll)
   font-size: 12px;
   color: #888;
   margin-top: 6px;
+}
+
+/* Fear & Greed Gauge */
+.fng-title {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+.fng-value {
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-family: 'Inter', 'Roboto Mono', monospace;
+  transition: color 0.3s ease;
+}
+.fng-label {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 2px;
+  transition: color 0.3s ease;
+}
+.fng-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  margin-top: 6px;
+  opacity: 0.7;
 }
 
 /* 主内容 */
