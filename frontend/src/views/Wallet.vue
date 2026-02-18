@@ -75,7 +75,9 @@ const calendarWeeks = computed(() => {
   if (items.length === 0) return []
 
   // Get first day of month (0=Sun)
-  const firstDate = new Date(items[0].date + 'T00:00:00')
+  const first = items[0]
+  if (!first) return []
+  const firstDate = new Date(first.date + 'T00:00:00')
   const startDow = firstDate.getDay()
 
   // Build weeks
@@ -98,7 +100,9 @@ const calendarWeeks = computed(() => {
 
 const monthLabel = computed(() => {
   if (!stats.value || stats.value.daily_pnl.length === 0) return ''
-  const d = new Date(stats.value.daily_pnl[0].date + 'T00:00:00')
+  const first = stats.value.daily_pnl[0]
+  if (!first) return ''
+  const d = new Date(first.date + 'T00:00:00')
   return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 })
 
@@ -325,7 +329,7 @@ onMounted(async () => {
                   <tr v-for="(week, wi) in calendarWeeks" :key="wi">
                     <td v-for="(day, di) in week" :key="di" :class="day ? pnlClass(day.pnl) : 'empty'">
                       <template v-if="day">
-                        <span class="cal-day">{{ parseInt(day.date.split('-')[2]) }}</span>
+                        <span class="cal-day">{{ parseInt(day.date.split('-')[2] || '0') }}</span>
                         <span class="cal-pnl">{{ day.pnl === 0 ? '0.00' : (day.pnl > 0 ? '+' : '') + formatNum(day.pnl) }}</span>
                       </template>
                     </td>
