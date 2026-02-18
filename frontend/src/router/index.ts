@@ -133,4 +133,20 @@ router.beforeEach(async (to, from, next) => {
   }
 })
 
+// ============================================
+// Chunk Loading Error Recovery
+// ============================================
+// After redeployment, cached JS may reference old chunk hashes.
+// This catches the loading error and refreshes to get new assets.
+router.onError((error, to) => {
+  if (
+    error.message.includes('Failed to fetch dynamically imported module') ||
+    error.message.includes('Loading chunk') ||
+    error.message.includes('Unable to preload CSS')
+  ) {
+    console.warn('[Router] Chunk load failed, reloading page...', error.message)
+    window.location.href = to.fullPath
+  }
+})
+
 export default router

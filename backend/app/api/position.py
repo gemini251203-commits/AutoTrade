@@ -186,6 +186,55 @@ async def open_position(
             )
         else:
             # 正常开仓模式
+            
+            # ========== 止盈止损价格合理性校验 (与 set_tp_sl 保持一致) ==========
+            if request.stop_loss is not None or request.take_profit is not None:
+                ref_price = request.entry_price
+                is_long = request.side == PositionSide.LONG
+                new_sl = request.stop_loss
+                new_tp = request.take_profit
+                
+                if new_sl is not None and new_sl > 0:
+                    if is_long and new_sl >= ref_price:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"多单止损价 ({new_sl}) 必须低于开仓价 ({ref_price})，"
+                                   f"否则会立即触发",
+                        )
+                    if not is_long and new_sl <= ref_price:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"空单止损价 ({new_sl}) 必须高于开仓价 ({ref_price})，"
+                                   f"否则会立即触发",
+                        )
+                
+                if new_tp is not None and new_tp > 0:
+                    if is_long and new_tp <= ref_price:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"多单止盈价 ({new_tp}) 必须高于开仓价 ({ref_price})，"
+                                   f"否则会立即触发",
+                        )
+                    if not is_long and new_tp >= ref_price:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"空单止盈价 ({new_tp}) 必须低于开仓价 ({ref_price})，"
+                                   f"否则会立即触发",
+                        )
+                
+                # 止盈止损不能交叉
+                if new_sl and new_tp and new_sl > 0 and new_tp > 0:
+                    if is_long and new_sl >= new_tp:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"多单止损 ({new_sl}) 不能高于止盈 ({new_tp})",
+                        )
+                    if not is_long and new_sl <= new_tp:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"空单止损 ({new_sl}) 不能低于止盈 ({new_tp})",
+                        )
+            
             position = await PositionManager.open_position(
                 db=db,
                 user_id=current_user.id,
