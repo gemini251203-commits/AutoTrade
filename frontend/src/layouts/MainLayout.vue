@@ -14,6 +14,7 @@ import {
   ChatboxEllipsesOutline,
   BookOutline,
   RocketOutline,
+  NewspaperOutline,
 } from '@vicons/ionicons5'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
@@ -32,6 +33,7 @@ const navItems = [
   { key: 'chat', label: 'AI Agent', icon: ChatboxEllipsesOutline, route: '/chat' },
   { key: 'autopilot', label: '自动交易', icon: RocketOutline, route: '/autopilot' },
   { key: 'journal', label: '交易日志', icon: BookOutline, route: '/journal' },
+  { key: 'news', label: '新闻', icon: NewspaperOutline, route: '/news' },
 
   { key: 'wallet', label: '钱包', icon: WalletOutline, route: '/wallet' },
   { key: 'settings', label: 'Settings', icon: SettingsOutline, route: '/settings' },
@@ -45,6 +47,7 @@ const activeNavKey = computed(() => {
   if (path === '/chat') return 'chat'
   if (path === '/autopilot') return 'autopilot'
   if (path === '/journal') return 'journal'
+  if (path === '/news') return 'news'
 
   if (path === '/settings') return 'settings'
   if (path === '/wallet') return 'wallet'

@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     ollama_vision_model: str = "minicpm-v"
     deepseek_api_key: str = ""
     
+    # 新闻模块
+    cryptopanic_api_key: str = ""  # CryptoPanic API Key
+    
     # 深度回填配置
     deep_backfill_enabled: bool = True       # 是否启用深度回填
     deep_backfill_days: int = 365            # 回填天数

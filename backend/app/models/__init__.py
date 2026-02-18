@@ -15,6 +15,7 @@ from .grid_bot import GridBot, GridType, GridStatus, GridDirection
 from .user_ai_config import UserAIConfig, AIProvider
 from .agent import ChatConversation, ChatMessage
 from .autopilot_log import AutopilotLog, AutopilotDecision
+from .news import NewsArticle, NewsAlert, NewsThinking
 
 
 __all__ = [
@@ -42,6 +43,9 @@ __all__ = [
     "ChatMessage",
     "AutopilotLog",
     "AutopilotDecision",
+    "NewsArticle",
+    "NewsAlert",
+    "NewsThinking",
 ]
 
 

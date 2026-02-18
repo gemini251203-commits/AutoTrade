@@ -79,6 +79,9 @@ services:
       
       # Environment
       ENV_TYPE: production
+      
+      # News Module
+      CRYPTOPANIC_API_KEY: "a77948a52701c5038a2b79b59c935bbd13881f43"
     volumes:
       - ./data_engine:/app/data_engine
       - ./backend/logs:/app/logs
