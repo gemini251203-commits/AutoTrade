@@ -192,10 +192,13 @@ async def classify_category(title: str) -> Optional[str]:
         # 返回匹配最多的分类
         return max(scores, key=scores.get)
     
-    # 没有匹配到关键词，尝试 AI 分类
+    # 没有匹配到关键词，尝试 AI 分类 (仅在 DeepSeek 配置时)
     try:
-        from app.services.ai.providers import DeepSeekProvider, ChatMessage
         from app.core.config import settings
+        if not settings.deepseek_api_key:
+            return None
+        
+        from app.services.ai.providers import DeepSeekProvider, ChatMessage
         
         provider = DeepSeekProvider(
             api_key=settings.deepseek_api_key,
