@@ -106,6 +106,52 @@ TOOLS_DESCRIPTION = """
 18. query_memories(symbol) - 查询所有交易记忆 (包含手动/AI/信号/量化策略所有来源)
     示例: [TOOL_CALL: query_memories(symbol=BTCUSDT)]
 
+## 📐 策略 YAML 格式 (create_strategy / update_strategy 时使用)
+
+创建或修改策略时, config_yaml 必须遵循以下格式:
+
+```yaml
+name: "策略名称"
+symbol: BTCUSDT
+interval: 1h          # 支持: 5m, 15m, 1h, 4h, 1d
+entry:                 # 开仓条件
+  operator: AND        # AND=全部满足, OR=任一满足
+  conditions:
+    - indicator: rsi   # 指标名称 (见下方列表)
+      compare: "<"     # 比较运算符: <, >, <=, >=, ==
+      value: 30        # 与固定数值比较
+    - indicator: close
+      compare: "<="
+      reference: bollinger_lower  # 或与另一个指标比较
+exit:                  # 平仓条件
+  operator: OR
+  conditions:
+    - indicator: rsi
+      compare: ">"
+      value: 70
+ai_prompt: |           # 可选: AI 执行前的额外检查提示
+  请额外确认趋势和成交量
+risk:                  # 风控参数
+  side: buy            # buy=做多, sell=做空
+  leverage: 3          # 杠杆 (1-10)
+  position_pct: 10     # 仓位占比 (%)
+  stop_loss_pct: 3     # 止损百分比
+  take_profit_pct: 9   # 止盈百分比
+```
+
+### 可用指标名称 (indicator 字段):
+- 价格: close, open, high, low
+- RSI: rsi (0-100)
+- MACD: macd_line, macd_signal, macd_histogram, macd_golden_cross (bool), macd_death_cross (bool)
+- 布林带: bollinger_upper, bollinger_middle, bollinger_lower, bollinger_width
+- KDJ: kdj_k, kdj_d, kdj_j
+- ATR: atr
+- 均线: ema_5, ema_10, ema_20, ema_50, ema_100, ema_200
+- 交叉: golden_cross (bool), death_cross (bool)
+- 成交量: volume_ratio (当前/平均)
+- 支撑阻力: near_support (bool), near_resistance (bool), pinbar_at_support (bool)
+- K线形态: pattern_pinbar (bool), pattern_engulfing (bool), pattern_hammer (bool), pattern_doji (bool), pattern_morning_star (bool), pattern_evening_star (bool)
+
 重要规则:
 - 金额和数量使用数字，不加单位
 - symbol 全大写 (如 BTCUSDT)
