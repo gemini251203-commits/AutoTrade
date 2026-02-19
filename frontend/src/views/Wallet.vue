@@ -1239,48 +1239,25 @@ onMounted(async () => {
     align-self: center;
   }
   .account-card {
-    flex: none !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
     padding: 14px;
+    min-width: 0;
+    width: 100%;
     box-sizing: border-box;
-    overflow: hidden;
   }
   .account-balance {
     font-size: 22px;
   }
-  .account-details {
-    width: 100%;
-    overflow: hidden;
-  }
-  .account-detail-item {
-    display: flex !important;
-    justify-content: space-between !important;
-    align-items: center !important;
-    width: 100%;
-  }
   .account-detail-item .detail-label {
     font-size: 11px;
-    flex-shrink: 0;
   }
   .account-detail-item .detail-value {
     font-size: 12px;
-    text-align: right;
-    flex-shrink: 0;
   }
   .portfolio-page {
     padding: 12px;
   }
   .overview-value {
     font-size: 28px;
-  }
-  .page-header {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .content-grid {
-    gap: 16px;
   }
 }
 </style>
