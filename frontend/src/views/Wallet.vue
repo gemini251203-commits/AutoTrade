@@ -609,6 +609,7 @@ onMounted(async () => {
   max-width: 1400px;
   margin: 0 auto;
   position: relative;
+  overflow-x: hidden;
 }
 
 /* Toast */
@@ -1228,15 +1229,20 @@ onMounted(async () => {
   .dual-account-panel {
     flex-direction: column;
     gap: 10px;
+    align-items: stretch;
   }
   .transfer-btn-center {
     transform: rotate(90deg);
     width: 36px;
     height: 36px;
     min-width: 36px;
+    align-self: center;
   }
   .account-card {
     padding: 14px;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
   }
   .account-balance {
     font-size: 22px;
@@ -1246,6 +1252,12 @@ onMounted(async () => {
   }
   .account-detail-item .detail-value {
     font-size: 12px;
+  }
+  .portfolio-page {
+    padding: 12px;
+  }
+  .overview-value {
+    font-size: 28px;
   }
 }
 </style>

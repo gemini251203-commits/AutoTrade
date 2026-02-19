@@ -705,6 +705,10 @@ onMounted(() => {
 
 /* ========== Mobile Responsive ========== */
 @media (max-width: 768px) {
+  .max-w-7xl {
+    overflow-x: hidden;
+    padding: 0 8px;
+  }
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
@@ -720,6 +724,37 @@ onMounted(() => {
   }
   .strategy-card:hover, .memory-card:hover {
     transform: none;
+  }
+  /* Header: stack title and button */
+  .flex.items-center.justify-between {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .create-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  /* Strategy card: stack info + actions vertically */
+  .strategy-card > .flex.items-center.justify-between {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .strategy-card > .flex > .flex.items-center.gap-2.flex-shrink-0 {
+    align-self: flex-end;
+  }
+  /* Template cards: scroll horizontally */
+  .flex.gap-3.overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+  }
+  .template-card {
+    min-width: 100px;
+    padding: 8px;
+    flex-shrink: 0;
+  }
+  .template-card .text-sm {
+    font-size: 11px;
   }
 }
 </style>

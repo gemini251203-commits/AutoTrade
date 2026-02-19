@@ -61,6 +61,7 @@ const chatContainerRef = ref<HTMLElement | null>(null)
 const sidebarCollapsed = ref(false)
 const loadingConversations = ref(false)
 const loadingMessages = ref(false)
+const mobileShowSidebar = ref(false)
 
 // SSE 控制器
 let abortController: AbortController | null = null
@@ -299,7 +300,7 @@ function formatTime(iso: string): string {
   <MainLayout>
     <div class="chat-agent">
       <!-- 左侧: 会话列表 -->
-      <aside :class="['sidebar', { collapsed: sidebarCollapsed }]">
+      <aside :class="['sidebar', { collapsed: sidebarCollapsed, 'mobile-open': mobileShowSidebar }]">
         <div class="sidebar-header">
           <template v-if="!sidebarCollapsed">
             <h3>对话</h3>
@@ -310,6 +311,7 @@ function formatTime(iso: string): string {
           >
             <n-icon :component="sidebarCollapsed ? ChevronForwardOutline : ChevronBackOutline" />
           </button>
+          <button class="mobile-close-btn" @click="mobileShowSidebar = false">✕</button>
         </div>
 
         <template v-if="!sidebarCollapsed">
@@ -374,6 +376,13 @@ function formatTime(iso: string): string {
       <main class="chat-main">
         <!-- 顶部栏 -->
         <div class="chat-header">
+          <button class="mobile-menu-btn" @click="mobileShowSidebar = true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="3" y1="6" x2="21" y2="6"/>
+              <line x1="3" y1="12" x2="21" y2="12"/>
+              <line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+          </button>
           <div class="header-info" v-if="activeConversation">
             <n-icon :component="PersonOutline" :size="20" />
             <span class="header-name">{{ activePersonaName }}</span>
@@ -496,6 +505,12 @@ function renderMarkdown(text: string): string {
   background: #0a0a0f;
   color: #e0e0e0;
   overflow: hidden;
+}
+
+/* Mobile-only buttons: hidden on desktop */
+.mobile-menu-btn,
+.mobile-close-btn {
+  display: none;
 }
 
 /* ==================== Sidebar ==================== */
@@ -1041,11 +1056,56 @@ function renderMarkdown(text: string): string {
 
 /* ==================== Responsive ==================== */
 @media (max-width: 768px) {
+  /* Mobile menu button (hidden on desktop) */
+  .mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.06);
+    color: #a78bfa;
+    cursor: pointer;
+    margin-right: 8px;
+    flex-shrink: 0;
+  }
+  .mobile-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.06);
+    color: #9ca3af;
+    cursor: pointer;
+    font-size: 14px;
+    margin-left: auto;
+  }
   .sidebar {
     display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 100;
+    background: #0a0a0f;
+    border: none;
+  }
+  .sidebar.mobile-open {
+    display: flex;
   }
   .sidebar.collapsed {
     display: none;
+  }
+  .sidebar.collapsed.mobile-open {
+    display: flex;
+    width: 100vw;
+    min-width: 100vw;
   }
   .chat-header {
     padding: 8px 12px;
