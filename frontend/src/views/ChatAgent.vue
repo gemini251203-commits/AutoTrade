@@ -149,6 +149,7 @@ async function handleCreateConversation() {
 
 async function selectConversation(id: number) {
   activeConversationId.value = id
+  mobileShowSidebar.value = false
   await loadMessages(id)
 }
 
@@ -1075,14 +1076,14 @@ function renderMarkdown(text: string): string {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     border: none;
-    border-radius: 8px;
-    background: rgba(255,255,255,0.06);
-    color: #9ca3af;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.08);
+    color: #d1d5db;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 18px;
     margin-left: auto;
   }
   .sidebar {
@@ -1106,6 +1107,56 @@ function renderMarkdown(text: string): string {
     display: flex;
     width: 100vw;
     min-width: 100vw;
+  }
+  /* Enlarge sidebar content for mobile */
+  .sidebar-header {
+    padding: 20px 20px 16px;
+  }
+  .sidebar-header h3 {
+    font-size: 22px;
+  }
+  .collapse-btn {
+    display: none;
+  }
+  .new-chat {
+    padding: 16px 20px;
+  }
+  .new-chat-label {
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+  .persona-select {
+    font-size: 15px;
+    padding: 10px 12px;
+    border-radius: 10px;
+  }
+  .create-chat-btn {
+    font-size: 15px;
+    padding: 12px;
+    border-radius: 12px;
+  }
+  .conv-list-header {
+    padding: 12px 20px 8px;
+    font-size: 13px;
+  }
+  .conversation-list {
+    padding: 0 12px;
+  }
+  .conversation-item {
+    padding: 14px 12px;
+    border-radius: 12px;
+    margin-bottom: 4px;
+  }
+  .conv-title {
+    font-size: 15px;
+  }
+  .conv-meta {
+    font-size: 12px;
+  }
+  .conv-delete {
+    font-size: 16px;
+    width: 32px;
+    height: 32px;
   }
   .chat-header {
     padding: 8px 12px;
