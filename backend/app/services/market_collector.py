@@ -253,7 +253,16 @@ class MarketCollector:
                             filled = await OrderExecutor.check_limit_orders(
                                 db, symbol, current_price
                             )
+                            
+                            # 🔥 网格回调: 限价单成交后触发网格策略
                             if filled:
+                                from app.services.grid import GridStrategy
+                                for order in filled:
+                                    try:
+                                        await GridStrategy.on_order_filled(db, order)
+                                    except Exception as ge:
+                                        logger.warning(f"[MarketCollector] Grid callback error: {ge}")
+                                        
                                 await db.commit()
                                 logger.info(
                                     f"[MarketCollector] {len(filled)} limit orders filled for {symbol}"

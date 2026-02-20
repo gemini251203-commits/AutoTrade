@@ -375,13 +375,17 @@ class GridStrategy:
         Returns:
             新创建的对冲订单
         """
-        # 检查是否是网格订单
-        if not order.note or "Grid bot" not in order.note:
+        # 检查是否是网格订单 (start_grid 格式: "Grid #{id} L{level} BUY/SELL")
+        if not order.note or "Grid #" not in order.note:
             return None
         
-        # 解析 bot_id 和 level
+        # 解析 bot_id 和 level (支持两种格式)
         import re
-        match = re.search(r"Grid bot #(\d+) level (\d+)", order.note)
+        # 新格式: "Grid #8289 L5 BUY"
+        match = re.search(r"Grid #(\d+) L(\d+)", order.note)
+        if not match:
+            # 旧格式兼容: "Grid bot #123 level 5"
+            match = re.search(r"Grid bot #(\d+) level (\d+)", order.note)
         if not match:
             return None
         
@@ -423,7 +427,7 @@ class GridStrategy:
                         price=sell_price,
                         leverage=bot.leverage,
                         reduce_only=True,
-                        note=f"Grid bot #{bot.id} level {level_num}",
+                        note=f"Grid #{bot.id} L{level_num} SELL",
                     )
                     level["sell_order_id"] = new_order.id
                     level["status"] = "sell_placed"
@@ -456,7 +460,7 @@ class GridStrategy:
                     quantity=bot.quantity_per_grid,
                     price=buy_price,
                     leverage=bot.leverage,
-                    note=f"Grid bot #{bot.id} level {level_num}",
+                    note=f"Grid #{bot.id} L{level_num} BUY",
                 )
                 level["buy_order_id"] = new_order.id
                 level["status"] = "buy_placed"
@@ -464,6 +468,7 @@ class GridStrategy:
                 logger.warning(f"[GridStrategy] Failed to place buy order: {e}")
         
         bot.grid_levels = grid_levels
+        flag_modified(bot, "grid_levels")
         return new_order
     
     @staticmethod

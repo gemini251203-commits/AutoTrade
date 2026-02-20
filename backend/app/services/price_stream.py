@@ -149,6 +149,15 @@ class PriceStreamService:
                     db, symbol, current_price
                 )
                 
+                # 🔥 网格回调: 限价单成交后触发网格策略
+                if filled:
+                    from app.services.grid import GridStrategy
+                    for order in filled:
+                        try:
+                            await GridStrategy.on_order_filled(db, order)
+                        except Exception as ge:
+                            logger.warning(f"[PriceStream] Grid callback error: {ge}")
+                
                 # 检查条件单
                 triggered = await OrderExecutor.check_conditional_orders(
                     db, symbol, current_price
