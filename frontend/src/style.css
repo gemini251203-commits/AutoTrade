@@ -235,3 +235,44 @@ body {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+/* ==================== Mobile Touch Optimization ==================== */
+
+/* Prevent pull-to-refresh globally */
+html {
+  overscroll-behavior-y: none;
+}
+
+@media (max-width: 768px) {
+  /* 44px minimum touch targets */
+  button, a, [role="button"], select, .n-button {
+    min-height: 44px;
+  }
+
+  /* NaiveUI Modal / Dialog responsive */
+  .n-modal, .n-dialog {
+    width: 95vw !important;
+    max-width: 420px !important;
+    margin: auto !important;
+  }
+  .n-modal .n-card, .n-dialog .n-card {
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+
+  /* NaiveUI Drawer responsive */
+  .n-drawer .n-drawer-body-content-wrapper {
+    padding: 12px !important;
+  }
+
+  /* Prevent zoom on input focus (iOS) */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Tables: always scrollable on mobile */
+  .n-data-table-wrapper {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}

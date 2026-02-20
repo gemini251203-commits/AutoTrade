@@ -743,18 +743,16 @@ onMounted(() => {
   .strategy-card > .flex > .flex.items-center.gap-2.flex-shrink-0 {
     align-self: flex-end;
   }
-  /* Template cards: scroll horizontally */
-  .flex.gap-3.overflow-x-auto {
-    -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x mandatory;
+  /* Template cards: 2 columns on mobile */
+  .grid.grid-cols-5 {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px;
   }
   .template-card {
-    min-width: 100px;
     padding: 8px;
-    flex-shrink: 0;
   }
   .template-card .text-sm {
-    font-size: 11px;
+    font-size: 12px;
   }
 }
 </style>

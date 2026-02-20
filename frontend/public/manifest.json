@@ -1,0 +1,18 @@
+{
+  "name": "AutoTrade",
+  "short_name": "AutoTrade",
+  "description": "AI 驱动的加密货币自动交易平台",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#8a2be2",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/autotrade.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

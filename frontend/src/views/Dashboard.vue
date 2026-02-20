@@ -264,5 +264,16 @@ const showTradePanel = ref(false)
   .tab-content {
     max-height: 500px;
   }
+
+  .bottom-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+  .bottom-tab {
+    min-height: 44px;
+    padding: 10px 14px;
+    flex-shrink: 0;
+  }
 }
 </style>
