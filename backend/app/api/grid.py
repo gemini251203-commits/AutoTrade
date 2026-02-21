@@ -82,6 +82,13 @@ class GridDetailResponse(GridResponse):
 
 def bot_to_response(bot: GridBot) -> GridResponse:
     """转换 GridBot 为 API 响应"""
+    # 格式化小数位: 价格2位, 数量5位, 金额2位
+    def fmt_price(v: Decimal) -> str:
+        return str(v.quantize(Decimal("0.01")))
+    
+    def fmt_qty(v: Decimal) -> str:
+        return str(v.quantize(Decimal("0.00001")))
+    
     return GridResponse(
         id=bot.id,
         name=bot.name,
@@ -89,19 +96,19 @@ def bot_to_response(bot: GridBot) -> GridResponse:
         grid_type=bot.grid_type,
         direction=bot.direction,
         status=bot.status,
-        upper_price=str(bot.upper_price),
-        lower_price=str(bot.lower_price),
+        upper_price=fmt_price(bot.upper_price),
+        lower_price=fmt_price(bot.lower_price),
         grid_count=bot.grid_count,
-        investment=str(bot.investment),
+        investment=fmt_price(bot.investment),
         leverage=bot.leverage,
-        grid_interval=str(bot.grid_interval) if bot.grid_interval else None,
-        quantity_per_grid=str(bot.quantity_per_grid) if bot.quantity_per_grid else None,
+        grid_interval=fmt_price(bot.grid_interval) if bot.grid_interval else None,
+        quantity_per_grid=fmt_qty(bot.quantity_per_grid) if bot.quantity_per_grid else None,
         current_level=bot.current_level,
         filled_buy_count=bot.filled_buy_count,
         filled_sell_count=bot.filled_sell_count,
-        total_profit=str(bot.total_profit.quantize(Decimal("0.01"))),
-        realized_pnl=str(bot.realized_pnl.quantize(Decimal("0.01"))),
-        profit_rate=str(bot.profit_rate.quantize(Decimal("0.01"))),
+        total_profit=fmt_price(bot.total_profit),
+        realized_pnl=fmt_price(bot.realized_pnl),
+        profit_rate=fmt_price(bot.profit_rate),
         created_at=bot.created_at.isoformat(),
         started_at=bot.started_at.isoformat() if bot.started_at else None,
     )

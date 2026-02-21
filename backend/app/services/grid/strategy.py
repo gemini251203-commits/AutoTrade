@@ -179,8 +179,9 @@ class GridStrategy:
             for i, price in enumerate(prices)
         ]
         
-        # 冻结投资金额
-        await WalletManager.freeze_funds(db, user_id, investment)
+        # 注意: 不在此处冻结投资金额
+        # 每个订单在 OrderExecutor.create_order 中单独冻结保证金+手续费
+        # 避免双重冻结
         
         # 创建 GridBot
         bot = GridBot(

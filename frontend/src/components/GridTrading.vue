@@ -238,6 +238,25 @@ async function deleteGrid(botId: number) {
   }
 }
 
+// 格式化数字字符串 (后端已用 quantize 格式化, 前端仅做安全兜底)
+function formatNum(val: string | null | undefined): string {
+  if (!val) return '0'
+  const n = parseFloat(val)
+  if (isNaN(n)) return val
+  // 大于1000: 无小数, 大于1: 2位, 否则根据实际
+  if (Math.abs(n) >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 })
+  if (Math.abs(n) >= 1) return n.toFixed(2)
+  return val
+}
+
+// 格式化时间
+function formatTime(iso: string | null): string {
+  if (!iso) return '-'
+  const d = new Date(iso)
+  return d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }) + ' ' +
+    d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+
 // 格式化状态
 function formatStatus(status: string) {
   const map: Record<string, { type: 'success' | 'warning' | 'error' | 'info', label: string }> = {
@@ -365,7 +384,7 @@ onMounted(() => {
             </div>
             <div class="stat-item">
               <span class="label">价格区间</span>
-              <span class="value">{{ bot.lower_price }} - {{ bot.upper_price }}</span>
+              <span class="value">{{ formatNum(bot.lower_price) }} - {{ formatNum(bot.upper_price) }}</span>
             </div>
             <div class="stat-item">
               <span class="label">网格数</span>
@@ -373,7 +392,7 @@ onMounted(() => {
             </div>
             <div class="stat-item">
               <span class="label">投资</span>
-              <span class="value">{{ bot.investment }} USDT</span>
+              <span class="value">{{ formatNum(bot.investment) }} USDT</span>
             </div>
             <div class="stat-item">
               <span class="label">成交</span>
@@ -382,12 +401,19 @@ onMounted(() => {
                 <span class="red">卖{{ bot.filled_sell_count }}</span>
               </span>
             </div>
+            <div class="stat-item">
+              <span class="label">杠杆 / 每笔</span>
+              <span class="value">{{ bot.leverage }}x / {{ bot.quantity_per_grid || '-' }}</span>
+            </div>
             <div class="stat-item highlight">
               <span class="label">总收益</span>
               <span :class="['value', parseFloat(bot.total_profit) >= 0 ? 'green' : 'red']">
-                {{ bot.total_profit }} ({{ bot.profit_rate }}%)
+                {{ formatNum(bot.total_profit) }} USDT ({{ formatNum(bot.profit_rate) }}%)
               </span>
             </div>
+          </div>
+          <div class="card-time" v-if="bot.started_at">
+            启动于 {{ formatTime(bot.started_at) }}
           </div>
         </div>
         
@@ -636,6 +662,13 @@ onMounted(() => {
   justify-content: space-between;
   padding-top: 8px;
   border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.card-time {
+  font-size: 10px;
+  color: #6b7280;
+  margin-top: 8px;
+  text-align: right;
 }
 
 .green { color: #22c55e; }
