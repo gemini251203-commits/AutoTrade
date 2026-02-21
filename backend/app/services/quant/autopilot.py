@@ -25,26 +25,10 @@ from app.models.strategy import Strategy, StrategyLog, TradeMemory
 from app.models.order import OrderSide, OrderType, PositionSideEnum
 from app.services.quant.indicators import calculate_all_indicators
 from app.services.quant.strategy import StrategyEngine, Signal, SignalType
-from app.services.quant.risk_guard import RiskGuard
+from app.services.risk.risk_model import RiskModel
 from app.services.quant.ai_reviewer import AIReviewer
 from app.services.quant.reflector import TradeReflector
-
-
-# K 线周期对应的秒数 (用于调度间隔)
-INTERVAL_SECONDS = {
-    "1m": 60,
-    "3m": 180,
-    "5m": 300,
-    "15m": 900,
-    "30m": 1800,
-    "1h": 3600,
-    "2h": 7200,
-    "4h": 14400,
-    "6h": 21600,
-    "8h": 28800,
-    "12h": 43200,
-    "1d": 86400,
-}
+from app.core.constants import INTERVAL_SECONDS
 
 
 class AutoPilot:
@@ -56,7 +40,7 @@ class AutoPilot:
 
     def __init__(self):
         self.strategy_engine = StrategyEngine()
-        self.risk_guard = RiskGuard()
+        self.risk_guard = RiskModel()
         self.ai_reviewer: Optional[AIReviewer] = None
         self.reflector: Optional[TradeReflector] = None
         self._running = False

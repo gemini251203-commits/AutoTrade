@@ -72,23 +72,7 @@ class OrderExecutor:
         notional = quantity * price
         return notional / Decimal(leverage)
     
-    @staticmethod
-    def calculate_open_cost(
-        quantity: Decimal,
-        price: Decimal,
-        leverage: int,
-        is_maker: bool = False,
-    ) -> tuple[Decimal, Decimal]:
-        """
-        计算开仓总成本 (含手续费)
-        
-        Cost = Initial Margin + Commission
-        币安公式: Notional = qty × price
-        
-        Returns:
-            (initial_margin, commission)
-        """
-        return FeeCalculator.calculate_open_cost(quantity, price, leverage, is_maker)
+    # calculate_open_cost: 已移除透传, 直接使用 FeeCalculator.calculate_open_cost
     
     @staticmethod
     async def create_order(
@@ -168,7 +152,7 @@ class OrderExecutor:
         total_freeze = Decimal("0")  # 默认值 (reduce_only 订单不冻结)
         
         if not reduce_only:
-            margin_required, commission_estimate = OrderExecutor.calculate_open_cost(
+            margin_required, commission_estimate = FeeCalculator.calculate_open_cost(
                 quantity, ref_price, leverage, is_maker
             )
             total_freeze = margin_required + commission_estimate

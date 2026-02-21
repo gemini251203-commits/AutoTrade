@@ -26,16 +26,7 @@ from app.models.agent import ChatConversation, ChatMessage
 from app.models.autopilot_log import AutopilotLog, AutopilotDecision
 from app.models.strategy import Strategy
 from app.services.agent.agent import chat_complete
-
-
-# 间隔映射 (秒)
-INTERVAL_SECONDS = {
-    "5m": 300,
-    "15m": 900,
-    "30m": 1800,
-    "1h": 3600,
-    "4h": 14400,
-}
+from app.core.constants import INTERVAL_SECONDS
 
 # Autopilot 会话标识前缀
 AUTOPILOT_TITLE_PREFIX = "[autopilot]"

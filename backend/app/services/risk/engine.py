@@ -93,10 +93,9 @@ class RiskEngine:
         mark_price: Decimal,
     ) -> Decimal:
         """
-        计算未实现盈亏
+        计算未实现盈亏 (兼容旧调用)
         
-        多头: (标记价 - 开仓价) × 数量
-        空头: (开仓价 - 标记价) × 数量
+        NOTE: 推荐直接使用 position.calculate_unrealized_pnl(mark_price)
         """
         if side == PositionSide.LONG:
             return (mark_price - entry_price) * size
@@ -152,13 +151,8 @@ class RiskEngine:
         Returns:
             PositionRisk 数据对象
         """
-        # 计算未实现盈亏
-        unrealized_pnl = RiskEngine.calculate_unrealized_pnl(
-            position.side,
-            position.size,
-            position.entry_price,
-            mark_price,
-        )
+        # 计算未实现盈亏 — 使用 Position 模型的方法 (唯一权威实现)
+        unrealized_pnl = position.calculate_unrealized_pnl(mark_price)
         
         # 计算 ROE
         roe = RiskEngine.calculate_roe(unrealized_pnl, position.margin)

@@ -536,13 +536,8 @@ async def get_liquidation_info(
             detail="Position not found or not open",
         )
     
-    # 2. 计算该仓位的未实现盈亏
-    unrealized_pnl = MarginCalculator.calculate_unrealized_pnl(
-        side=position.side,
-        quantity=position.size,
-        entry_price=position.entry_price,
-        current_price=request.current_price,
-    )
+    # 2. 计算该仓位的未实现盈亏 (使用 Position 模型方法)
+    unrealized_pnl = position.calculate_unrealized_pnl(request.current_price)
     
     # 3. 根据保证金模式计算强平价格
     if position.margin_mode == MarginMode.ISOLATED:
@@ -580,12 +575,7 @@ async def get_liquidation_info(
         
         other_positions_margin = sum(p.margin for p in other_pos_list)
         total_unrealized_pnl = unrealized_pnl + sum(
-            MarginCalculator.calculate_unrealized_pnl(
-                side=p.side,
-                quantity=p.size,
-                entry_price=p.entry_price,
-                current_price=request.current_price,  # 简化: 使用同一价格
-            )
+            p.calculate_unrealized_pnl(request.current_price)
             for p in other_pos_list
         )
         

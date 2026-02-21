@@ -804,12 +804,12 @@ async def run_strategy(
     只有当策略产生入场信号 AND 通过风控时才下单。
     """
     from app.services.quant.strategy import StrategyEngine, STRATEGY_TEMPLATES
-    from app.services.quant.risk_guard import RiskGuard
+    from app.services.risk.risk_model import RiskModel
     from app.services.trading.position_manager import PositionManager
     from app.services.quant.indicators import get_indicator
 
     engine = StrategyEngine()
-    risk_guard = RiskGuard()
+    risk_guard = RiskModel()
 
     # 获取策略配置
     config = None
