@@ -1,16 +1,16 @@
 <script setup lang="ts">
 /**
- * GridTrading.vue - 网格交易组件 (内联表单)
+ * GridTrading.vue - 网格交易组件 (对标币安)
  * ==========================================
  * 自动高抛低吸的网格机器人
  * 
  * 功能:
  * - 创建网格机器人 (内联表单)
- * - 查看网格列表
+ * - 查看网格列表 (币安风格)
  * - 启动/停止网格
- * - 查看网格盈利
+ * - 查看详细盈利数据
  */
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
 import { NButton, NInputNumber, NSelect, NTag, NPopconfirm, useMessage } from 'naive-ui'
 import request from '@/utils/request'
 import { useSymbolStore } from '@/stores/symbol'
@@ -37,8 +37,10 @@ interface GridBot {
   filled_buy_count: number
   filled_sell_count: number
   total_profit: string
+  total_fee: string
   realized_pnl: string
   profit_rate: string
+  matched_count: number
   created_at: string
   started_at: string | null
 }
@@ -48,6 +50,8 @@ const loading = ref(false)
 const gridBots = ref<GridBot[]>([])
 const showCreateForm = ref(false)
 const currentPrice = ref(0)
+const now = ref(Date.now())
+let timer: ReturnType<typeof setInterval> | null = null
 
 // 创建表单 - 默认使用 store 的当前交易对
 const form = ref({
@@ -63,7 +67,6 @@ const form = ref({
 })
 
 // ==================== 计算属性 ====================
-// 使用 store 的完整交易对列表
 const symbolOptions = computed(() => symbolStore.symbolOptions)
 
 const gridTypeOptions = [
@@ -123,7 +126,7 @@ async function fetchCurrentPrice() {
 function openCreateForm() {
   form.value = {
     name: `${symbolStore.currentSymbol} 网格 #${gridBots.value.length + 1}`,
-    symbol: symbolStore.currentSymbol,  // 使用当前选中的交易对
+    symbol: symbolStore.currentSymbol,
     lower_price: null,
     upper_price: null,
     grid_count: 10,
@@ -178,11 +181,9 @@ async function createGrid() {
 async function startGrid(botId: number) {
   loading.value = true
   try {
-    // 找到对应的 bot 获取其 symbol
     const bot = gridBots.value.find(b => b.id === botId)
-    const symbol = bot?.symbol || symbolStore.currentSymbol  // 使用 store
+    const symbol = bot?.symbol || symbolStore.currentSymbol
     
-    // 获取当前价格
     const priceResp = await request.get('/market/klines/latest', {
       params: { symbol }
     })
@@ -238,30 +239,19 @@ async function deleteGrid(botId: number) {
   }
 }
 
-// 格式化数字字符串 (后端已用 quantize 格式化, 前端仅做安全兜底)
+// ==================== 格式化 ====================
+
 function formatNum(val: string | null | undefined): string {
-  if (!val) return '0'
+  if (!val) return '0.00'
   const n = parseFloat(val)
   if (isNaN(n)) return val
-  // 大于1000: 无小数, 大于1: 2位, 否则根据实际
-  if (Math.abs(n) >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 })
-  if (Math.abs(n) >= 1) return n.toFixed(2)
-  return val
+  return n.toFixed(2)
 }
 
-// 格式化时间
-function formatTime(iso: string | null): string {
-  if (!iso) return '-'
-  const d = new Date(iso)
-  return d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }) + ' ' +
-    d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-}
-
-// 格式化状态
 function formatStatus(status: string) {
   const map: Record<string, { type: 'success' | 'warning' | 'error' | 'info', label: string }> = {
     created: { type: 'info', label: '待启动' },
-    running: { type: 'success', label: '运行中' },
+    running: { type: 'success', label: '运作中' },
     paused: { type: 'warning', label: '已暂停' },
     stopped: { type: 'warning', label: '已停止' },
     completed: { type: 'success', label: '已完成' },
@@ -269,9 +259,53 @@ function formatStatus(status: string) {
   return map[status] || { type: 'info', label: status }
 }
 
-// 初始化
+function formatDirection(dir: string) {
+  const map: Record<string, string> = {
+    long: '做多',
+    short: '做空',
+    neutral: '中性',
+  }
+  return map[dir] || dir
+}
+
+// 运行时长 (实时更新)
+function formatDuration(startIso: string | null, createdIso: string): string {
+  const from = startIso ? new Date(startIso).getTime() : new Date(createdIso).getTime()
+  const diff = now.value - from
+  if (diff < 0) return '-'
+  
+  const days = Math.floor(diff / 86400000)
+  const hours = Math.floor((diff % 86400000) / 3600000)
+  const mins = Math.floor((diff % 3600000) / 60000)
+  
+  if (days > 0) return `${days}天${hours}时${mins}分`
+  if (hours > 0) return `${hours}时${mins}分`
+  return `${mins}分`
+}
+
+function formatTime(iso: string) {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
+}
+
+function profitPct(bot: GridBot): string {
+  const inv = parseFloat(bot.investment)
+  const profit = parseFloat(bot.total_profit)
+  if (!inv) return '0.00'
+  return ((profit / inv) * 100).toFixed(2)
+}
+
+// ==================== 生命周期 ====================
 onMounted(() => {
   fetchGridBots()
+  // 每秒更新运行时长
+  timer = setInterval(() => {
+    now.value = Date.now()
+  }, 60000) // 每分钟刷新
+})
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
 })
 </script>
 
@@ -361,7 +395,7 @@ onMounted(() => {
       </div>
     </div>
     
-    <!-- 网格列表 -->
+    <!-- 网格列表 (币安风格) -->
     <div class="grid-list">
       <div v-if="gridBots.length === 0 && !showCreateForm" class="empty">
         <p>暂无网格机器人</p>
@@ -369,54 +403,91 @@ onMounted(() => {
       </div>
       
       <div v-for="bot in gridBots" :key="bot.id" class="grid-card">
+        <!-- 卡片头部: 交易对 + 标签 + 状态 -->
         <div class="card-header">
-          <span class="name">{{ bot.name }}</span>
+          <div class="header-left">
+            <span class="symbol">{{ bot.symbol }}</span>
+            <NTag size="tiny" :bordered="false" style="background: rgba(255,255,255,0.06); color: #9ca3af; font-size: 10px;">
+              {{ formatDirection(bot.direction) }} {{ bot.leverage }}x
+            </NTag>
+          </div>
           <NTag :type="formatStatus(bot.status).type" size="small">
             {{ formatStatus(bot.status).label }}
           </NTag>
         </div>
         
-        <div class="card-body">
-          <div class="stat-grid">
-            <div class="stat-item">
-              <span class="label">交易对</span>
-              <span class="value">{{ bot.symbol }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="label">价格区间</span>
-              <span class="value">{{ formatNum(bot.lower_price) }} - {{ formatNum(bot.upper_price) }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="label">网格数</span>
-              <span class="value">{{ bot.grid_count }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="label">投资</span>
-              <span class="value">{{ formatNum(bot.investment) }} USDT</span>
-            </div>
-            <div class="stat-item">
-              <span class="label">成交</span>
-              <span class="value">
-                <span class="green">买{{ bot.filled_buy_count }}</span> / 
-                <span class="red">卖{{ bot.filled_sell_count }}</span>
-              </span>
-            </div>
-            <div class="stat-item">
-              <span class="label">杠杆 / 每笔</span>
-              <span class="value">{{ bot.leverage }}x / {{ bot.quantity_per_grid || '-' }}</span>
-            </div>
-            <div class="stat-item highlight">
-              <span class="label">总收益</span>
-              <span :class="['value', parseFloat(bot.total_profit) >= 0 ? 'green' : 'red']">
-                {{ formatNum(bot.total_profit) }} USDT ({{ formatNum(bot.profit_rate) }}%)
-              </span>
-            </div>
+        <!-- 创建时间 + 运行时长 -->
+        <div class="card-meta">
+          创建于{{ formatTime(bot.created_at) }}，时长{{ formatDuration(bot.started_at, bot.created_at) }}
+        </div>
+        
+        <!-- 核心数据: 总收益 + 已投保证金 -->
+        <div class="card-main-stats">
+          <div class="main-stat">
+            <span class="main-label">总收益 (USDT)</span>
+            <span :class="['main-value', parseFloat(bot.total_profit) >= 0 ? 'green' : 'red']">
+              {{ formatNum(bot.total_profit) }}({{ profitPct(bot) }}%)
+            </span>
           </div>
-          <div class="card-time" v-if="bot.started_at">
-            启动于 {{ formatTime(bot.started_at) }}
+          <div class="main-stat right">
+            <span class="main-label">已投保证金 (USDT)</span>
+            <span class="main-value">{{ formatNum(bot.investment) }}</span>
           </div>
         </div>
         
+        <!-- 配对利润 + 资金费用 -->
+        <div class="card-detail-row three-col">
+          <div class="detail-item">
+            <span class="detail-label">已配对利润</span>
+            <span :class="['detail-value', parseFloat(bot.realized_pnl) >= 0 ? 'green' : 'red']">
+              {{ formatNum(bot.realized_pnl) }}
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">未配对盈亏</span>
+            <span class="detail-value muted">
+              {{ formatNum(String(parseFloat(bot.total_profit) - parseFloat(bot.realized_pnl))) }}
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">资金费用 (USDT)</span>
+            <span class="detail-value">{{ formatNum(bot.total_fee) }}</span>
+          </div>
+        </div>
+        
+        <!-- 价格区间 + 网格数量 + 每笔数量 -->
+        <div class="card-detail-row three-col">
+          <div class="detail-item">
+            <span class="detail-label">价格区间 (USDT)</span>
+            <span class="detail-value">{{ formatNum(bot.lower_price) }} -<br/>{{ formatNum(bot.upper_price) }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">网格数量</span>
+            <span class="detail-value">{{ bot.grid_count }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">每笔数量</span>
+            <span class="detail-value">{{ bot.quantity_per_grid || '-' }}</span>
+          </div>
+        </div>
+        
+        <!-- 总配对次数 -->
+        <div class="card-detail-row three-col">
+          <div class="detail-item">
+            <span class="detail-label">总配对次数</span>
+            <span class="detail-value">{{ bot.matched_count }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">买入成交</span>
+            <span class="detail-value green">{{ bot.filled_buy_count }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">卖出成交</span>
+            <span class="detail-value red">{{ bot.filled_sell_count }}</span>
+          </div>
+        </div>
+        
+        <!-- 操作按钮 -->
         <div class="card-actions">
           <template v-if="bot.status === 'created'">
             <NButton size="small" type="success" @click="startGrid(bot.id)" :loading="loading">
@@ -424,19 +495,15 @@ onMounted(() => {
             </NButton>
             <NPopconfirm @positive-click="deleteGrid(bot.id)">
               <template #trigger>
-                <NButton size="small" type="error" :loading="loading" style="margin-left: 8px;">
-                  删除
-                </NButton>
+                <NButton size="small" type="error" quaternary :loading="loading">删除</NButton>
               </template>
-              确定要删除这个网格吗? 此操作不可撤销!
+              确定要删除这个网格吗?
             </NPopconfirm>
           </template>
           <template v-else-if="bot.status === 'running'">
             <NPopconfirm @positive-click="stopGrid(bot.id)">
               <template #trigger>
-                <NButton size="small" type="warning" :loading="loading">
-                  停止
-                </NButton>
+                <NButton size="small" type="warning">终止</NButton>
               </template>
               确定要停止这个网格吗?
             </NPopconfirm>
@@ -447,11 +514,9 @@ onMounted(() => {
             </NButton>
             <NPopconfirm @positive-click="deleteGrid(bot.id)">
               <template #trigger>
-                <NButton size="small" type="error" :loading="loading" style="margin-left: 8px;">
-                  删除
-                </NButton>
+                <NButton size="small" type="error" quaternary :loading="loading">删除</NButton>
               </template>
-              确定要删除这个网格吗? 此操作不可撤销!
+              确定要删除吗?
             </NPopconfirm>
           </template>
         </div>
@@ -590,7 +655,9 @@ onMounted(() => {
   color: #22c55e;
 }
 
-/* 网格列表 */
+/* ============================
+   网格卡片 (币安风格)
+   ============================ */
 .grid-list {
   display: flex;
   flex-direction: column;
@@ -613,70 +680,111 @@ onMounted(() => {
 
 .grid-card {
   background: #18181b;
-  border: 1px solid rgba(255,255,255,0.05);
-  border-radius: 8px;
-  padding: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 14px 16px;
 }
 
+/* 头部: 交易对 + 状态 */
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 4px;
 }
 
-.card-header .name {
-  font-weight: 500;
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-left .symbol {
+  font-weight: 600;
+  font-size: 15px;
   color: #f5f5f5;
 }
 
-.card-body {
-  margin-bottom: 10px;
+/* 创建时间 + 运行时长 */
+.card-meta {
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 12px;
 }
 
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+/* 核心数据: 总收益 + 已投保证金 */
+.card-main-stats {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 
-.stat-item {
+.main-stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
-.stat-item .label {
-  color: #6b7280;
-  font-size: 10px;
-}
-
-.stat-item .value {
-  color: #e5e7eb;
-  font-size: 11px;
-}
-
-.stat-item.highlight {
-  grid-column: span 3;
-  flex-direction: row;
-  justify-content: space-between;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255,255,255,0.05);
-}
-
-.card-time {
-  font-size: 10px;
-  color: #6b7280;
-  margin-top: 8px;
+.main-stat.right {
   text-align: right;
 }
 
+.main-label {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.main-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #e5e7eb;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+/* 详情行 */
+.card-detail-row {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.card-detail-row.three-col {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.detail-label {
+  font-size: 10px;
+  color: #6b7280;
+}
+
+.detail-value {
+  font-size: 12px;
+  color: #d1d5db;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.detail-value.muted {
+  color: #9ca3af;
+}
+
+/* 颜色 */
 .green { color: #22c55e; }
 .red { color: #ef4444; }
 
+/* 操作按钮 */
 .card-actions {
   display: flex;
-  justify-content: flex-end;
   gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.06);
 }
 </style>

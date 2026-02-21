@@ -64,8 +64,10 @@ export interface GridResponse {
   filled_buy_count: number
   filled_sell_count: number
   total_profit: string      // Decimal -> string
+  total_fee: string         // Decimal -> string
   realized_pnl: string      // Decimal -> string
   profit_rate: string       // Decimal -> string
+  matched_count: number     // 总配对次数
   created_at: string        // ISO datetime string
   started_at: string | null // ISO datetime string
 }
