@@ -106,6 +106,29 @@ TOOLS_DESCRIPTION = """
 18. query_memories(symbol) - 查询所有交易记忆 (包含手动/AI/信号/量化策略所有来源)
     示例: [TOOL_CALL: query_memories(symbol=BTCUSDT)]
 
+## 交管中心工具
+19. manage_autopilot(action, symbols, interval) - 管理自动交易
+    - action: status(查询状态) / start(启动) / stop(停止) / run_once(执行一次) / logs(查看日志)
+    - symbols: 交易对, 逗号分隔 (默认 BTCUSDT)
+    - interval: 决策间隔 5m/15m/30m/1h/4h (默认 15m)
+    示例: [TOOL_CALL: manage_autopilot(action=start, symbols=BTCUSDT,ETHUSDT, interval=15m)]
+    示例: [TOOL_CALL: manage_autopilot(action=status)]
+
+20. manage_grid(action, symbol, upper_price, lower_price, grid_count, investment, leverage, grid_id) - 管理网格交易
+    - action: list(查看所有网格) / start(创建并启动) / stop(停止) / delete(删除)
+    - 启动需要: symbol, upper_price, lower_price, grid_count, investment
+    - 停止/删除需要: grid_id
+    示例: [TOOL_CALL: manage_grid(action=list)]
+    示例: [TOOL_CALL: manage_grid(action=start, symbol=BTCUSDT, upper_price=90000, lower_price=70000, grid_count=10, investment=500, leverage=5)]
+    示例: [TOOL_CALL: manage_grid(action=stop, grid_id=3)]
+
+21. get_trade_journal(source, result_filter, limit) - 查询交易日记 (含胜率统计)
+    - source: agent / autopilot / quant / grid / manual (空=全部)
+    - result_filter: win / loss (空=全部)
+    - limit: 返回条数 (默认 20)
+    示例: [TOOL_CALL: get_trade_journal(source=agent, limit=10)]
+    示例: [TOOL_CALL: get_trade_journal(result_filter=loss)]
+
 ## 📐 策略 YAML 格式 (create_strategy / update_strategy 时使用)
 
 创建或修改策略时, config_yaml 必须遵循以下格式:

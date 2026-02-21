@@ -1372,3 +1372,294 @@ async def analyze_trend(
         "timeframes": trends,
         "recommendations": recommendations,
     }, ensure_ascii=False, default=str)
+
+
+# ==================== 交管中心工具 ====================
+
+@register_tool
+async def manage_autopilot(
+    db: AsyncSession,
+    user_id: int,
+    action: str = "status",
+    symbols: str = "BTCUSDT",
+    interval: str = "15m",
+) -> str:
+    """
+    管理自动交易 (AutoPilot)
+    
+    action 可选:
+    - status: 查询当前状态
+    - start: 启动自动交易
+    - stop: 停止自动交易
+    - run_once: 手动触发一次决策
+    - logs: 查看最近日志
+    """
+    from app.services.agent.autopilot import autopilot
+    
+    try:
+        action = action.lower().strip()
+        
+        if action == "status":
+            status = autopilot.get_status(user_id)
+            return json.dumps({
+                "action": "status",
+                **status,
+            }, ensure_ascii=False, default=str)
+        
+        elif action == "start":
+            symbol_list = [s.strip().upper() for s in symbols.split(",")]
+            await autopilot.start(
+                user_id=user_id,
+                config={
+                    "symbols": symbol_list,
+                    "interval": interval,
+                    "intervals": [interval],
+                },
+            )
+            return json.dumps({
+                "action": "started",
+                "symbols": symbol_list,
+                "interval": interval,
+                **autopilot.get_status(user_id),
+            }, ensure_ascii=False, default=str)
+        
+        elif action == "stop":
+            await autopilot.stop(user_id)
+            return json.dumps({
+                "action": "stopped",
+                "message": "AutoPilot 已停止",
+            }, ensure_ascii=False)
+        
+        elif action == "run_once":
+            symbol = symbols.split(",")[0].strip().upper()
+            reply = await autopilot.run_once(user_id, symbol)
+            return json.dumps({
+                "action": "run_once",
+                "symbol": symbol,
+                "reply": reply,
+            }, ensure_ascii=False, default=str)
+        
+        elif action == "logs":
+            logs = await autopilot.get_logs(user_id=user_id, limit=10)
+            return json.dumps({
+                "action": "logs",
+                "count": len(logs),
+                "logs": logs,
+            }, ensure_ascii=False, default=str)
+        
+        else:
+            return json.dumps({
+                "error": f"未知操作: {action}",
+                "valid_actions": ["status", "start", "stop", "run_once", "logs"],
+            }, ensure_ascii=False)
+    
+    except Exception as e:
+        logger.error(f"[AgentTools] manage_autopilot failed: {e}")
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
+@register_tool
+async def manage_grid(
+    db: AsyncSession,
+    user_id: int,
+    action: str = "list",
+    symbol: str = "BTCUSDT",
+    upper_price: float = 0,
+    lower_price: float = 0,
+    grid_count: int = 10,
+    investment: float = 100,
+    leverage: int = 1,
+    grid_id: int = 0,
+) -> str:
+    """
+    管理网格交易
+    
+    action 可选:
+    - list: 查看所有网格机器人
+    - start: 创建并启动网格 (需要 symbol/upper_price/lower_price/grid_count/investment)
+    - stop: 停止网格 (需要 grid_id)
+    - delete: 删除网格 (需要 grid_id)
+    """
+    from app.services.grid import GridStrategy
+    
+    try:
+        action = action.lower().strip()
+        
+        if action == "list":
+            bots = await GridStrategy.get_user_grid_bots(db, user_id)
+            bot_list = []
+            for b in bots:
+                bot_list.append({
+                    "id": b.id,
+                    "name": b.name,
+                    "symbol": b.symbol,
+                    "status": b.status.value if hasattr(b.status, 'value') else str(b.status),
+                    "upper_price": str(b.upper_price),
+                    "lower_price": str(b.lower_price),
+                    "grid_count": b.grid_count,
+                    "investment": str(b.investment),
+                    "total_profit": str(b.total_profit),
+                    "filled_buy_count": b.filled_buy_count,
+                    "filled_sell_count": b.filled_sell_count,
+                })
+            return json.dumps({
+                "action": "list",
+                "count": len(bot_list),
+                "bots": bot_list,
+            }, ensure_ascii=False, default=str)
+        
+        elif action == "start":
+            if upper_price <= 0 or lower_price <= 0:
+                return json.dumps({"error": "必须提供 upper_price 和 lower_price"}, ensure_ascii=False)
+            
+            # 获取当前价格
+            from app.services.exchange import BinanceClient
+            client = BinanceClient()
+            ticker = await client.get_ticker(symbol.upper())
+            current_price = Decimal(str(ticker.get("lastPrice", 0))) if ticker else Decimal("0")
+            
+            bot = await GridStrategy.start_grid(
+                db=db,
+                user_id=user_id,
+                symbol=symbol.upper(),
+                upper_price=Decimal(str(upper_price)),
+                lower_price=Decimal(str(lower_price)),
+                grid_count=grid_count,
+                investment=Decimal(str(investment)),
+                leverage=leverage,
+                current_price=current_price,
+            )
+            await db.commit()
+            
+            return json.dumps({
+                "action": "started",
+                "grid_id": bot.id,
+                "symbol": bot.symbol,
+                "upper_price": str(bot.upper_price),
+                "lower_price": str(bot.lower_price),
+                "grid_count": bot.grid_count,
+                "investment": str(bot.investment),
+                "message": f"网格 {bot.name} 已启动",
+            }, ensure_ascii=False, default=str)
+        
+        elif action == "stop":
+            if grid_id <= 0:
+                return json.dumps({"error": "必须提供 grid_id"}, ensure_ascii=False)
+            
+            bot = await GridStrategy.stop_grid(db=db, grid_id=grid_id, user_id=user_id)
+            await db.commit()
+            
+            return json.dumps({
+                "action": "stopped",
+                "grid_id": bot.id,
+                "message": f"网格 {bot.name} 已停止",
+            }, ensure_ascii=False, default=str)
+        
+        elif action == "delete":
+            if grid_id <= 0:
+                return json.dumps({"error": "必须提供 grid_id"}, ensure_ascii=False)
+            
+            from app.models.grid_bot import GridBot, GridStatus
+            bot = await db.get(GridBot, grid_id)
+            if not bot or bot.user_id != user_id:
+                return json.dumps({"error": "网格不存在"}, ensure_ascii=False)
+            if bot.status not in (GridStatus.STOPPED, GridStatus.CREATED, GridStatus.COMPLETED):
+                return json.dumps({"error": "只能删除已停止的网格"}, ensure_ascii=False)
+            
+            await db.delete(bot)
+            await db.commit()
+            return json.dumps({
+                "action": "deleted",
+                "grid_id": grid_id,
+                "message": "网格已删除",
+            }, ensure_ascii=False)
+        
+        else:
+            return json.dumps({
+                "error": f"未知操作: {action}",
+                "valid_actions": ["list", "start", "stop", "delete"],
+            }, ensure_ascii=False)
+    
+    except Exception as e:
+        logger.error(f"[AgentTools] manage_grid failed: {e}")
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
+@register_tool
+async def get_trade_journal(
+    db: AsyncSession,
+    user_id: int,
+    source: str = "",
+    result_filter: str = "",
+    limit: int = 20,
+) -> str:
+    """
+    查询交易日记
+    
+    可选过滤:
+    - source: agent / autopilot / quant / grid / manual (空=全部)
+    - result_filter: win / loss (空=全部)
+    - limit: 返回条数 (默认20)
+    """
+    from app.models.strategy import TradeMemory
+    from sqlalchemy import desc
+    
+    try:
+        query = select(TradeMemory).where(
+            TradeMemory.user_id == user_id
+        )
+        
+        if source:
+            query = query.where(TradeMemory.source == source.lower())
+        
+        if result_filter == "win":
+            query = query.where(TradeMemory.pnl > 0)
+        elif result_filter == "loss":
+            query = query.where(TradeMemory.pnl <= 0)
+        
+        query = query.order_by(desc(TradeMemory.closed_at)).limit(limit)
+        
+        result = await db.execute(query)
+        trades = result.scalars().all()
+        
+        trade_list = []
+        total_pnl = 0.0
+        wins = 0
+        losses = 0
+        
+        for t in trades:
+            pnl = float(t.pnl) if t.pnl else 0
+            total_pnl += pnl
+            if pnl > 0:
+                wins += 1
+            else:
+                losses += 1
+            
+            trade_list.append({
+                "id": t.id,
+                "symbol": t.symbol,
+                "side": t.side,
+                "source": t.source,
+                "pnl": round(pnl, 4),
+                "pnl_pct": round(float(t.pnl_pct), 2) if t.pnl_pct else 0,
+                "duration": t.duration,
+                "open_reason": t.open_reason,
+                "closed_at": t.closed_at.isoformat() if t.closed_at else None,
+            })
+        
+        win_rate = round(wins / len(trades) * 100, 1) if trades else 0
+        
+        return json.dumps({
+            "count": len(trade_list),
+            "summary": {
+                "total_pnl": round(total_pnl, 4),
+                "wins": wins,
+                "losses": losses,
+                "win_rate": f"{win_rate}%",
+            },
+            "trades": trade_list,
+        }, ensure_ascii=False, default=str)
+    
+    except Exception as e:
+        logger.error(f"[AgentTools] get_trade_journal failed: {e}")
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
