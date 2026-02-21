@@ -216,13 +216,8 @@ async def get_open_orders(db: AsyncSession, user_id: int) -> str:
 
 # ==================== 交易工具 ====================
 
-# 完整交易规则从 exchange_rules 模块导入 (580 个交易对)
-from app.services.exchange_rules import (
-    get_min_notional,
-    get_qty_precision,
-    round_quantity_up,
-    validate_order as validate_exchange_rules,
-)
+# 统一品种管理器 (替代散落的 exchange_rules 字典)
+from app.models.security import security_manager
 
 
 @register_tool
@@ -254,8 +249,8 @@ async def place_order(
             current_price = 0
 
         if current_price > 0:
-            # 使用完整交易规则模块验证
-            validation = validate_exchange_rules(symbol, quantity, current_price, leverage)
+            # 使用统一品种管理器验证
+            validation = security_manager.validate_order(symbol, quantity, current_price, leverage)
             if not validation["valid"]:
                 return json.dumps({
                     "success": False,
@@ -277,7 +272,7 @@ async def place_order(
                 safe_notional = safe_margin * leverage
                 safe_qty = safe_notional / current_price
                 # 按步长取整
-                safe_qty = round_quantity_up(symbol, safe_qty)
+                safe_qty = float(security_manager.round_quantity_up(symbol, safe_qty))
                 return json.dumps({
                     "success": False, 
                     "error": (

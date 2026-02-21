@@ -5,8 +5,8 @@ Price Stream Service
 
 功能:
 1. 订阅多个交易对的实时价格
-2. 价格更新时立即检查限价单和条件单
-3. 毫秒级订单撮合响应
+2. 价格更新时通过 EventBus 广播 TICK 事件
+3. 各组件 (订单撮合、风控监控、策略引擎) 通过订阅 TICK 事件独立响应
 
 启动方式:
 - 应用启动时自动启动 (在 main.py 的 lifespan 中)
@@ -20,6 +20,7 @@ import json
 import websockets
 from loguru import logger
 
+from app.core.event_bus import event_bus, Event, EventType
 from app.db.session import AsyncSessionLocal
 from app.services.trading import OrderExecutor
 
@@ -58,8 +59,16 @@ class PriceStreamService:
             return
         
         self._running = True
-        logger.info("[PriceStream] Starting WebSocket price stream...")
         
+        # 🔥 注册现有订单检查逻辑为 TICK 事件订阅者
+        event_bus.subscribe(
+            EventType.TICK,
+            self._on_tick_check_orders,
+            priority=10,               # 普通优先级 (风控=100)
+            name="price_stream.order_check",
+        )
+        
+        logger.info("[PriceStream] Starting WebSocket price stream...")
         self._task = asyncio.create_task(self._run_loop())
     
     async def stop(self):
@@ -110,7 +119,7 @@ class PriceStreamService:
                     logger.warning(f"[PriceStream] Message handling error: {e}")
     
     async def _handle_message(self, raw_message: str):
-        """处理 WebSocket 消息"""
+        """处理 WebSocket 消息 → 发布 TICK 事件"""
         data = json.loads(raw_message)
         
         # aggTrade 格式: {"e": "aggTrade", "s": "BTCUSDT", "p": "77000.50", ...}
@@ -137,8 +146,12 @@ class PriceStreamService:
         if now - last >= self._check_interval:
             self._last_check[symbol] = now
             
-            # 异步检查订单
-            asyncio.create_task(self._check_orders(symbol, price))
+            # 🔥 通过 EventBus 广播 TICK 事件 (所有订阅者自动响应)
+            await event_bus.emit_fire_and_forget(Event(
+                type=EventType.TICK,
+                data={"symbol": symbol, "price": price},
+                source="price_stream",
+            ))
     
     async def _check_orders(self, symbol: str, current_price: Decimal):
         """检查该交易对的挂单 + 仓位止损止盈 + 强平"""
@@ -204,6 +217,15 @@ class PriceStreamService:
     def get_price(self, symbol: str) -> Optional[Decimal]:
         """获取缓存的最新价格"""
         return self._prices.get(symbol.upper())
+    
+    # --- EventBus 桥接 ---
+    
+    async def _on_tick_check_orders(self, event: Event) -> None:
+        """TICK 事件 → 调用已有的订单检查逻辑 (向后兼容)"""
+        symbol = event.data.get("symbol")
+        price = event.data.get("price")
+        if symbol and price:
+            await self._check_orders(symbol, price)
 
 
 # 全局单例
