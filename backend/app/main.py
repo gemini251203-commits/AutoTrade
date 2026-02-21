@@ -13,7 +13,7 @@ from loguru import logger
 from app.core.config import settings
 from app.core.log_config import setup_logging
 from app.db.session import init_db
-from app.api import auth, wallet, order, task, market, ai, position, risk, grid, user_config, admin, ws, strategy, agent, journal, news
+from app.api import auth, wallet, order, task, market, ai, position, risk, grid, user_config, admin, ws, strategy, agent, journal, news, pipeline
 from app.middleware.error_handler import setup_error_handlers
 from app.middleware.access_logger import AccessLoggerMiddleware
 from app.core.rate_limit import RateLimitMiddleware
@@ -53,6 +53,20 @@ async def lifespan(app: FastAPI):
     from app.services.price_stream import price_stream
     await price_stream.start()
     logger.info("Price Stream (WebSocket) started")
+    
+    # 🏗️ 初始化四层流水线 (Pipeline)
+    try:
+        from app.services.portfolio.model import FixedPercentModel
+        from app.services.risk.risk_model import RiskModel
+        from app.services.execution.model import ExecutionModel
+        from app.api.pipeline import pipeline_registry
+        
+        pipeline_registry.portfolio_model = FixedPercentModel()
+        pipeline_registry.risk_model = RiskModel()
+        pipeline_registry.startup_time = __import__('datetime').datetime.utcnow()
+        logger.info("Pipeline Registry initialized (4-layer architecture ready)")
+    except Exception as e:
+        logger.warning(f"Pipeline init skipped: {e}")
     
     # 📰 启动新闻爬虫
     news_crawler = None
@@ -161,6 +175,7 @@ app.include_router(strategy.router, prefix="/api/strategy", tags=["Strategy"])
 app.include_router(agent.router, prefix="/api/agent", tags=["Agent"])
 app.include_router(journal.router, prefix="/api/journal", tags=["TradeJournal"])
 app.include_router(news.router, prefix="/api/news", tags=["News"])
+app.include_router(pipeline.router, prefix="/api/pipeline", tags=["Pipeline"])
 
 
 

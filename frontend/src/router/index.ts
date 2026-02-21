@@ -19,6 +19,7 @@ const ChatAgent = () => import('@/views/ChatAgent.vue')
 const TradeJournal = () => import('@/views/TradeJournal.vue')
 const AutopilotDashboard = () => import('@/views/AutopilotDashboard.vue')
 const NewsCenter = () => import('@/views/NewsCenter.vue')
+const PipelineMonitor = () => import('@/views/PipelineMonitor.vue')
 
 
 // Route definitions
@@ -87,6 +88,12 @@ const routes: RouteRecordRaw[] = [
     path: '/news',
     name: 'NewsCenter',
     component: NewsCenter,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/pipeline',
+    name: 'PipelineMonitor',
+    component: PipelineMonitor,
     meta: { requiresAuth: true },
   },
 
