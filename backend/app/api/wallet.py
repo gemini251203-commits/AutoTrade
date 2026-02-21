@@ -611,3 +611,70 @@ async def reset_wallet(
     
     logger.info(f"[Wallet] User {user_id} account fully reset to {initial} USDT")
     return wallet
+
+
+# ==================== Admin: Fix Frozen Funds ====================
+
+@router.post("/fix-frozen", summary="修复冻结金额")
+async def fix_frozen_funds(
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """
+    重新计算冻结金额 = 所有活跃订单的 frozen_margin + frozen_commission 之和
+    
+    修复因双重冻结 bug 导致的冻结金额不一致
+    """
+    from app.models.order import Order, OrderStatus
+    from sqlalchemy import select, func
+    
+    user_id = current_user.id
+    
+    # 1. 获取当前钱包
+    wallet = await WalletManager.get_wallet(db, user_id)
+    if not wallet:
+        raise HTTPException(status_code=404, detail="钱包不存在")
+    
+    old_frozen = wallet.frozen
+    
+    # 2. 计算所有活跃订单应该冻结的总金额
+    result = await db.execute(
+        select(
+            func.coalesce(func.sum(Order.frozen_margin), 0),
+            func.coalesce(func.sum(Order.frozen_commission), 0),
+            func.count(Order.id),
+        ).where(
+            Order.user_id == user_id,
+            Order.status.in_([OrderStatus.PENDING, OrderStatus.PARTIALLY_FILLED]),
+        )
+    )
+    row = result.one()
+    correct_margin = row[0]
+    correct_commission = row[1]
+    active_order_count = row[2]
+    correct_frozen = correct_margin + correct_commission
+    
+    # 3. 计算差值并修复
+    diff = old_frozen - correct_frozen
+    
+    if diff != 0:
+        wallet.frozen = correct_frozen
+        wallet.balance = wallet.balance + diff  # 归还多冻结的部分
+        await db.commit()
+        await db.refresh(wallet)
+        logger.warning(
+            f"[Wallet] Fixed frozen for user {user_id}: "
+            f"{old_frozen} -> {correct_frozen} (diff={diff}, "
+            f"active_orders={active_order_count})"
+        )
+    
+    return {
+        "message": "冻结金额已修复" if diff != 0 else "冻结金额正确，无需修复",
+        "old_frozen": str(old_frozen),
+        "correct_frozen": str(correct_frozen),
+        "diff_returned": str(diff),
+        "active_orders": active_order_count,
+        "new_balance": str(wallet.balance),
+        "new_frozen": str(wallet.frozen),
+    }
+
