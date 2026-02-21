@@ -44,6 +44,7 @@ const sourceOptions = [
   { label: 'Autopilot', value: 'autopilot' },
   { label: '信号助手', value: 'signal' },
   { label: '量化策略', value: 'quant' },
+  { label: '网格交易', value: 'grid' },
   { label: '系统操作', value: 'system' },
 ]
 
@@ -61,6 +62,7 @@ const sourceLabels: Record<string, string> = {
   autopilot: 'Autopilot',
   signal: '信号助手',
   quant: '量化策略',
+  grid: '网格',
   system: '系统',
 }
 
@@ -70,6 +72,7 @@ const sourceColors: Record<string, string> = {
   autopilot: '#f97316',
   signal: '#3b82f6',
   quant: '#10b981',
+  grid: '#ec4899',
   system: '#f59e0b',
 }
 
