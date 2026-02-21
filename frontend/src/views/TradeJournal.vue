@@ -125,9 +125,14 @@ async function deleteMemory(id: number) {
 // ========== Helpers ==========
 function formatDuration(min: number | null): string {
   if (min === null || min === undefined) return '-'
-  if (min < 60) return `${min}分钟`
-  if (min < 1440) return `${Math.floor(min / 60)}小时${min % 60 > 0 ? (min % 60) + '分' : ''}`
-  return `${Math.floor(min / 1440)}天${Math.floor((min % 1440) / 60)}小时`
+  const m = Math.round(min)
+  if (m < 60) return `${m}分钟`
+  const hours = Math.floor(m / 60)
+  const mins = m % 60
+  if (m < 1440) return `${hours}小时${mins > 0 ? mins + '分' : ''}`
+  const days = Math.floor(m / 1440)
+  const remHours = Math.floor((m % 1440) / 60)
+  return `${days}天${remHours}小时`
 }
 
 function formatPrice(price: number | null): string {
@@ -198,7 +203,7 @@ onMounted(fetchAll)
             <NIcon size="20"><ShieldCheckmarkOutline /></NIcon>
           </div>
           <div>
-            <div class="stat-value">{{ stats.win_rate }}%</div>
+            <div class="stat-value">{{ stats.win_rate.toFixed(1) }}%</div>
             <div class="stat-label">胜率 ({{ stats.win_count }}W / {{ stats.loss_count }}L)</div>
           </div>
         </div>
@@ -208,7 +213,7 @@ onMounted(fetchAll)
             <NIcon size="20"><TrendingDownOutline /></NIcon>
           </div>
           <div>
-            <div class="stat-value">{{ stats.avg_pnl_pct >= 0 ? '+' : '' }}{{ stats.avg_pnl_pct }}%</div>
+            <div class="stat-value">{{ stats.avg_pnl_pct >= 0 ? '+' : '' }}{{ stats.avg_pnl_pct.toFixed(2) }}%</div>
             <div class="stat-label">平均收益率</div>
           </div>
         </div>
