@@ -621,7 +621,7 @@ async def fix_frozen_funds(
     db: DbSession,
 ):
     """
-    重新计算冻结金额 = 所有活跃订单的 frozen_margin + frozen_commission 之和
+    修复冻结金额: 如果没有活跃订单/持仓, 将冻结归零
     
     修复因双重冻结 bug 导致的冻结金额不一致
     """
@@ -637,44 +637,40 @@ async def fix_frozen_funds(
     
     old_frozen = wallet.frozen
     
-    # 2. 计算所有活跃订单应该冻结的总金额
+    # 2. 计算活跃订单数
     result = await db.execute(
-        select(
-            func.coalesce(func.sum(Order.frozen_margin), 0),
-            func.coalesce(func.sum(Order.frozen_commission), 0),
-            func.count(Order.id),
-        ).where(
+        select(func.count(Order.id)).where(
             Order.user_id == user_id,
-            Order.status.in_([OrderStatus.PENDING, OrderStatus.PARTIALLY_FILLED]),
+            Order.status.in_([OrderStatus.PENDING, OrderStatus.OPEN, OrderStatus.PARTIAL]),
         )
     )
-    row = result.one()
-    correct_margin = row[0]
-    correct_commission = row[1]
-    active_order_count = row[2]
-    correct_frozen = correct_margin + correct_commission
+    active_order_count = result.scalar() or 0
     
-    # 3. 计算差值并修复
-    diff = old_frozen - correct_frozen
-    
-    if diff != 0:
-        wallet.frozen = correct_frozen
-        wallet.balance = wallet.balance + diff  # 归还多冻结的部分
+    # 3. 如果没有活跃订单, 冻结应该为 0
+    if active_order_count == 0 and old_frozen > 0:
+        diff = old_frozen
+        wallet.frozen = Decimal("0")
+        wallet.balance = wallet.balance + diff
         await db.commit()
         await db.refresh(wallet)
         logger.warning(
             f"[Wallet] Fixed frozen for user {user_id}: "
-            f"{old_frozen} -> {correct_frozen} (diff={diff}, "
-            f"active_orders={active_order_count})"
+            f"{old_frozen} -> 0 (returned {diff} to balance, "
+            f"no active orders)"
         )
+        return {
+            "message": f"冻结金额已修复: 归还 {diff} USDT",
+            "old_frozen": str(old_frozen),
+            "new_frozen": "0",
+            "returned": str(diff),
+            "active_orders": 0,
+            "new_balance": str(wallet.balance),
+        }
     
     return {
-        "message": "冻结金额已修复" if diff != 0 else "冻结金额正确，无需修复",
+        "message": f"当前有 {active_order_count} 个活跃订单, 冻结 {old_frozen} USDT",
         "old_frozen": str(old_frozen),
-        "correct_frozen": str(correct_frozen),
-        "diff_returned": str(diff),
         "active_orders": active_order_count,
-        "new_balance": str(wallet.balance),
-        "new_frozen": str(wallet.frozen),
+        "balance": str(wallet.balance),
     }
 
