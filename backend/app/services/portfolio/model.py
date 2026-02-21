@@ -57,6 +57,13 @@ class PortfolioTarget:
     quantity: Decimal                       # 下单数量
     leverage: int                           # 杠杆倍数
     
+    # 订单参数 (支持所有订单类型)
+    order_type: str = "market"              # market / limit / stop_market ...
+    price: Optional[Decimal] = None         # 限价单价格
+    trigger_price: Optional[Decimal] = None # 止损/止盈触发价
+    position_side: Optional[str] = None     # long / short / both
+    reduce_only: bool = False               # 只减仓
+    
     # 风控参数
     stop_loss_price: Optional[Decimal] = None
     take_profit_price: Optional[Decimal] = None

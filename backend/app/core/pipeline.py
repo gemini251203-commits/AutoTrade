@@ -69,8 +69,8 @@ class TradingPipeline:
         self,
         alphas: List[AlphaModel],
         portfolio: Optional[PortfolioModel] = None,
-        risk: RiskModel,
-        execution: ExecutionModel,
+        risk: Optional[RiskModel] = None,
+        execution: Optional[ExecutionModel] = None,
         user_id: int = 1,
     ):
         self._alphas = alphas
@@ -241,7 +241,11 @@ class TradingPipeline:
         side: str,               # "buy" / "sell"
         quantity: Decimal,
         leverage: int = 1,
+        order_type: str = "market",
         price: Optional[Decimal] = None,
+        trigger_price: Optional[Decimal] = None,
+        position_side: Optional[str] = None,
+        reduce_only: bool = False,
         stop_loss: Optional[Decimal] = None,
         take_profit: Optional[Decimal] = None,
         source: str = "manual",
@@ -255,6 +259,7 @@ class TradingPipeline:
         
         适用于: 手动下单、AI Agent 下单、信号助手下单
         仍然经过 Risk Model 审批 + Execution 执行
+        支持所有订单类型: market, limit, stop_market, stop_limit 等
         
         Returns:
             执行结果 dict
@@ -274,12 +279,18 @@ class TradingPipeline:
             action=action,
             quantity=quantity,
             leverage=leverage,
+            order_type=order_type,
+            price=price,
+            trigger_price=trigger_price,
+            position_side=position_side,
+            reduce_only=reduce_only,
             stop_loss_price=stop_loss,
             take_profit_price=take_profit,
             notional=notional,
             required_margin=required_margin,
             source=source,
         )
+
         
         logger.info(f"[Pipeline] submit_order: {target.summary()} source={source}")
         

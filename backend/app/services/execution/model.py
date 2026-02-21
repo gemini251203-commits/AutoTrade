@@ -64,23 +64,42 @@ class ExecutionModel:
             else:
                 side = OrderSide.BUY  # INCREASE/REDUCE 暂按买卖处理
             
-            # 2. 来源标记
-            source_label = target.source or "pipeline"
-            note = f"[Pipeline:{source_label}] {target.insight.source if target.insight else 'manual'}"
+            # 2. 订单类型 (从 target 获取, 默认市价)
+            order_type_str = getattr(target, 'order_type', 'market') or 'market'
+            order_type = OrderType(order_type_str)
             
-            # 3. 执行下单  
+            # 3. 来源标记
+            source_label = target.source or "pipeline"
+            note = target.metadata.get("note", "") or f"[Pipeline:{source_label}]"
+            
+            # 4. 可选参数
+            position_side = None
+            if hasattr(target, 'position_side') and target.position_side:
+                from app.models.order import PositionSideEnum
+                position_side = PositionSideEnum(target.position_side)
+            
+            reduce_only = getattr(target, 'reduce_only', False)
+            price = getattr(target, 'price', None)
+            trigger_price = getattr(target, 'trigger_price', None)
+            
+            # 5. 执行下单  
             order = await OrderExecutor.create_order(
                 db=db,
                 user_id=user_id,
                 symbol=target.symbol,
                 side=side,
-                order_type=OrderType.MARKET,     # Pipeline 默认市价单
+                order_type=order_type,
                 quantity=target.quantity,
+                price=price,
+                trigger_price=trigger_price,
                 leverage=target.leverage,
+                position_side=position_side,
+                reduce_only=reduce_only,
                 stop_loss=target.stop_loss_price,
                 take_profit=target.take_profit_price,
                 note=note,
             )
+
             
             # 4. 发布事件
             await event_bus.emit(Event(
