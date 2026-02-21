@@ -48,7 +48,7 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 
 from app.services.alpha.base import AlphaModel, Insight
-from app.services.portfolio.model import PortfolioModel, PortfolioTarget
+from app.services.portfolio.model import PortfolioModel, PortfolioTarget, TargetAction
 from app.services.risk.risk_model import RiskModel, RiskVerdict
 from app.services.execution.model import ExecutionModel
 from app.core.event_bus import event_bus, Event, EventType
@@ -68,7 +68,7 @@ class TradingPipeline:
     def __init__(
         self,
         alphas: List[AlphaModel],
-        portfolio: PortfolioModel,
+        portfolio: Optional[PortfolioModel] = None,
         risk: RiskModel,
         execution: ExecutionModel,
         user_id: int = 1,
@@ -231,6 +231,141 @@ class TradingPipeline:
         return results
     
     # ----------------------------------------------------------
+    # 简化入口: 跳过 Alpha/Portfolio, 直走 Risk → Execution
+    # ----------------------------------------------------------
+    
+    async def submit_order(
+        self,
+        db,
+        symbol: str,
+        side: str,               # "buy" / "sell"
+        quantity: Decimal,
+        leverage: int = 1,
+        price: Optional[Decimal] = None,
+        stop_loss: Optional[Decimal] = None,
+        take_profit: Optional[Decimal] = None,
+        source: str = "manual",
+        note: str = "",
+        available_balance: Decimal = Decimal("0"),
+        total_equity: Decimal = Decimal("0"),
+        open_positions: list = None,
+    ) -> dict:
+        """
+        直接提交订单 (跳过 Alpha + Portfolio)
+        
+        适用于: 手动下单、AI Agent 下单、信号助手下单
+        仍然经过 Risk Model 审批 + Execution 执行
+        
+        Returns:
+            执行结果 dict
+        """
+        if open_positions is None:
+            open_positions = []
+        
+        # 构建 PortfolioTarget
+        action = TargetAction.OPEN_LONG if side.lower() == "buy" else TargetAction.OPEN_SHORT
+        
+        current_price = price or Decimal("0")
+        notional = quantity * current_price if current_price else Decimal("0")
+        required_margin = notional / Decimal(str(leverage)) if leverage > 0 else notional
+        
+        target = PortfolioTarget(
+            symbol=symbol,
+            action=action,
+            quantity=quantity,
+            leverage=leverage,
+            stop_loss_price=stop_loss,
+            take_profit_price=take_profit,
+            notional=notional,
+            required_margin=required_margin,
+            source=source,
+        )
+        
+        logger.info(f"[Pipeline] submit_order: {target.summary()} source={source}")
+        
+        # Risk 审批
+        verdict = await self._risk.approve_target(
+            target=target,
+            available_balance=available_balance,
+            total_equity=total_equity,
+            open_positions=open_positions,
+            user_id=self._user_id,
+        )
+        
+        if not verdict.approved:
+            self._stats["risk_rejected"] += 1
+            logger.warning(f"[Pipeline] ❌ Risk rejected submit_order: {verdict.reason}")
+            return {
+                "success": False,
+                "error": f"风控拒绝: {verdict.reason}",
+                "risk_reason": verdict.reason,
+                "symbol": symbol,
+            }
+        
+        self._stats["risk_approved"] += 1
+        final_target = verdict.adjusted_target or target
+        
+        # 如果 note 非空，附加到 target metadata
+        if note:
+            final_target.metadata["note"] = note
+        
+        # Execution
+        exec_result = await self._execution.execute(
+            target=final_target,
+            db=db,
+            user_id=self._user_id,
+        )
+        
+        if exec_result.get("success"):
+            self._stats["orders_executed"] += 1
+        else:
+            self._stats["errors"] += 1
+        
+        return exec_result
+    
+    async def submit_from_signal(
+        self,
+        db,
+        symbol: str,
+        side: str,               # "buy" / "sell" 
+        quantity: Decimal,
+        leverage: int,
+        price: Decimal,
+        stop_loss: Optional[Decimal] = None,
+        take_profit: Optional[Decimal] = None,
+        source: str = "quant",
+        strategy_name: str = "",
+        available_balance: Decimal = Decimal("0"),
+        total_equity: Decimal = Decimal("0"),
+        open_positions: list = None,
+    ) -> dict:
+        """
+        从策略信号提交订单 (跳过 Alpha, 可选 Portfolio)
+        
+        适用于: 量化策略评估结果 → 直接下单
+        仍然经过 Risk Model 审批 + Execution 执行
+        
+        Returns:
+            执行结果 dict
+        """
+        result = await self.submit_order(
+            db=db,
+            symbol=symbol,
+            side=side,
+            quantity=quantity,
+            leverage=leverage,
+            price=price,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            source=source,
+            note=f"Strategy: {strategy_name}" if strategy_name else "",
+            available_balance=available_balance,
+            total_equity=total_equity,
+            open_positions=open_positions,
+        )
+        return result
+    
+    # ----------------------------------------------------------
     # EventBus 集成
     # ----------------------------------------------------------
     
@@ -332,3 +467,32 @@ class TradingPipeline:
                 logger.info(f"[Pipeline] Removed alpha: {name}")
                 return True
         return False
+
+
+# ============================================================
+# 全局单例: 供所有调用者共享
+# ============================================================
+
+_global_pipeline: Optional[TradingPipeline] = None
+
+
+def get_pipeline(user_id: int = 1) -> TradingPipeline:
+    """
+    获取全局 Pipeline 实例
+    
+    所有交易来源 (手动/AI/策略/网格) 都应通过这个实例提交订单,
+    确保所有交易统一经过 Risk → Execution 流程。
+    """
+    global _global_pipeline
+    
+    if _global_pipeline is None or _global_pipeline._user_id != user_id:
+        _global_pipeline = TradingPipeline(
+            alphas=[],                  # submit_order 不需要 Alpha
+            portfolio=None,             # submit_order 不需要 Portfolio
+            risk=RiskModel(),
+            execution=ExecutionModel(),
+            user_id=user_id,
+        )
+        logger.info(f"[Pipeline] Global pipeline created for user_id={user_id}")
+    
+    return _global_pipeline

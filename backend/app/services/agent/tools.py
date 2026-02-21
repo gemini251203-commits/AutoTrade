@@ -297,43 +297,54 @@ async def place_order(
         sl = Decimal(str(stop_loss)) if stop_loss and float(stop_loss) > 0 else None
         tp = Decimal(str(take_profit)) if take_profit and float(take_profit) > 0 else None
 
-        # 根据来源上下文设置 note 前缀
+        # 根据来源上下文确定 source
         source_label = agent_source_var.get('agent')
-        if source_label == 'autopilot':
-            note_prefix = '[Autopilot]'
-            note_text = 'Autopilot 自动下单'
-        else:
-            note_prefix = '[Agent]'
-            note_text = 'AI Agent 下单'
 
-        order = await OrderExecutor.create_order(
+        # ==================== 通过 Pipeline 统一下单 ====================
+        from app.core.pipeline import get_pipeline
+        
+        pipeline = get_pipeline(user_id)
+        
+        # 获取余额和持仓信息用于风控
+        wallet_result2 = await db.execute(
+            select(Wallet).where(Wallet.user_id == user_id)
+        )
+        wallet2 = wallet_result2.scalar_one_or_none()
+        available_balance = Decimal(str(wallet2.balance)) if wallet2 else Decimal("0")
+        total_equity = Decimal(str(wallet2.total_equity)) if wallet2 else Decimal("0")
+        
+        pos_result = await db.execute(
+            select(Position).where(
+                Position.user_id == user_id,
+                Position.status == PositionStatus.OPEN,
+            )
+        )
+        positions = pos_result.scalars().all()
+        open_positions = [
+            {"symbol": p.symbol, "side": p.side.value, "size": float(p.size)}
+            for p in positions
+        ]
+        
+        result = await pipeline.submit_order(
             db=db,
-            user_id=user_id,
             symbol=symbol,
-            side=order_side,
-            order_type=otype,
+            side=side.lower(),
             quantity=Decimal(str(quantity)),
-            price=order_price,
             leverage=int(leverage),
+            price=Decimal(str(current_price)) if current_price else None,
             stop_loss=sl,
             take_profit=tp,
-            note=f"{note_prefix} {note_text}",
+            source=source_label,
+            note=f"[{source_label.title()}] 下单",
+            available_balance=available_balance,
+            total_equity=total_equity,
+            open_positions=open_positions,
         )
-
-        return json.dumps({
-            "success": True,
-            "order_id": order.id,
-            "symbol": order.symbol,
-            "side": order.side.value,
-            "order_type": order.order_type.value,
-            "quantity": float(order.quantity),
-            "leverage": order.leverage,
-            "status": order.status.value,
-            "avg_fill_price": float(order.avg_fill_price) if order.avg_fill_price else None,
-            "stop_loss": float(order.stop_loss) if order.stop_loss else None,
-            "take_profit": float(order.take_profit) if order.take_profit else None,
-            "message": f"{'市价' if otype == OrderType.MARKET else '限价'}单已{'成交' if order.status == OrderStatus.FILLED else '挂出'}",
-        }, ensure_ascii=False)
+        
+        if result.get("success"):
+            result["message"] = "订单已通过 Pipeline 执行"
+        
+        return json.dumps(result, ensure_ascii=False)
 
     except OrderError as e:
         return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
@@ -876,11 +887,7 @@ async def run_strategy(
             "conditions_met": [str(c) for c in signal.conditions_met],
         }, ensure_ascii=False, default=str)
 
-    # 3. 风控检查
-    risk_config = signal.risk_config
-    risk_config = risk_guard.clamp_params(risk_config)
-
-    # 获取钱包余额
+    # 3. 获取钱包余额和持仓 (供 Pipeline 风控使用)
     wallet_result = await db.execute(
         select(Wallet).where(Wallet.user_id == user_id)
     )
@@ -890,7 +897,6 @@ async def run_strategy(
     if wallet_balance <= 0:
         return json.dumps({"error": "钱包余额不足"}, ensure_ascii=False)
 
-    # 获取持仓
     pos_result = await db.execute(
         select(Position).where(
             Position.user_id == user_id,
@@ -898,47 +904,12 @@ async def run_strategy(
         )
     )
     open_positions = [
-        {"symbol": p.symbol, "side": p.side.value, "margin": float(p.margin)}
+        {"symbol": p.symbol, "side": p.side.value, "size": float(p.size), "margin": float(p.margin)}
         for p in pos_result.scalars().all()
     ]
 
-    # 获取今日统计
-    from datetime import datetime, timedelta
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_orders = await db.execute(
-        select(Order).where(
-            Order.user_id == user_id,
-            Order.created_at >= today_start,
-            Order.status == OrderStatus.FILLED,
-        )
-    )
-    today_trades = len(today_orders.scalars().all())
-
-    risk_passed, risk_results = risk_guard.check_all(
-        signal_side=signal.side.value if signal.side else "buy",
-        symbol=target_symbol,
-        position_pct=risk_config.get("position_pct", 10),
-        leverage=risk_config.get("leverage", 1),
-        stop_loss_pct=risk_config.get("stop_loss_pct", 3),
-        take_profit_pct=risk_config.get("take_profit_pct", 9),
-        wallet_balance=wallet_balance,
-        open_positions=open_positions,
-        today_trades=today_trades,
-        today_pnl=0.0,
-    )
-
-    if not risk_passed:
-        failed_rules = [str(r) for r in risk_results if not r.passed]
-        return json.dumps({
-            "action": "risk_blocked",
-            "strategy_name": strategy_name,
-            "symbol": target_symbol,
-            "message": "信号被风控拦截",
-            "risk_failed": failed_rules,
-            "signal": signal.summary(),
-        }, ensure_ascii=False, default=str)
-
-    # 4. 自动下单
+    # 4. 计算下单参数
+    risk_config = signal.risk_config
     current_price = Decimal(str(main_klines[-1]["close"]))
     leverage = risk_config.get("leverage", 1)
     position_pct = risk_config.get("position_pct", 10)
@@ -949,7 +920,6 @@ async def run_strategy(
             atr_val = get_indicator("atr", main_klines)
             if atr_val and float(current_price) > 0:
                 atr_pct = atr_val / float(current_price) * 100
-                # ATR% < 1% 正常仓位, ATR% > 3% 缩至 1/3
                 vol_factor = max(0.33, min(1.0, 1.0 / atr_pct))
                 original_pct = position_pct
                 position_pct = round(position_pct * vol_factor, 1)
@@ -972,7 +942,6 @@ async def run_strategy(
     take_profit_pct = risk_config.get("take_profit_pct", 9)
 
     if stop_type == "atr":
-        # ATR 止损: 止损距离 = ATR * multiplier
         try:
             atr_val = get_indicator("atr", main_klines)
             multiplier = risk_config.get("atr_stop_multiplier", 2)
@@ -985,7 +954,6 @@ async def run_strategy(
                     stop_loss = current_price + atr_stop_distance
                     take_profit = current_price - atr_stop_distance * Decimal("3") if take_profit_pct else None
             else:
-                # ATR 计算失败，回退到固定止损
                 stop_loss, take_profit = _calc_fixed_stops(
                     current_price, position_side, stop_loss_pct, take_profit_pct
                 )
@@ -994,49 +962,65 @@ async def run_strategy(
                 current_price, position_side, stop_loss_pct, take_profit_pct
             )
     elif stop_type == "trailing":
-        # 追踪止损: 先用固定止损开仓，追踪逻辑在 position_manager 层处理
         trailing_pct = risk_config.get("trailing_pct", 1.5)
         stop_loss, take_profit = _calc_fixed_stops(
             current_price, position_side, trailing_pct, take_profit_pct
         )
     else:
-        # 固定止损（默认）
         stop_loss, take_profit = _calc_fixed_stops(
             current_price, position_side, stop_loss_pct, take_profit_pct
         )
 
+    # 5. 通过 Pipeline 统一下单 (Risk → Execution)
     try:
+        from app.core.pipeline import get_pipeline
+        
         source = agent_source_var.get()
-        position = await PositionManager.open_position(
+        pipeline = get_pipeline(user_id)
+        
+        order_side = "buy" if position_side == PositionSide.LONG else "sell"
+        
+        result = await pipeline.submit_from_signal(
             db=db,
-            user_id=user_id,
             symbol=target_symbol,
-            side=position_side,
+            side=order_side,
             quantity=quantity,
-            entry_price=current_price,
             leverage=leverage,
+            price=current_price,
             stop_loss=stop_loss,
             take_profit=take_profit,
             source=source,
-            open_reason=f"策略 '{strategy_name}' 信号: {signal.summary()}",
+            strategy_name=strategy_name,
+            available_balance=Decimal(str(wallet_balance)),
+            total_equity=Decimal(str(wallet.total_equity)) if wallet else Decimal("0"),
+            open_positions=open_positions,
         )
-        await db.commit()
-
-        return json.dumps({
-            "action": "executed",
-            "strategy_name": strategy_name,
-            "symbol": target_symbol,
-            "side": position_side.value,
-            "quantity": str(quantity),
-            "entry_price": str(current_price),
-            "leverage": leverage,
-            "stop_loss": str(stop_loss) if stop_loss else None,
-            "stop_type": stop_type,
-            "take_profit": str(take_profit) if take_profit else None,
-            "position_pct_actual": position_pct,
-            "position_id": position.id,
-            "message": f"策略 '{strategy_name}' 已执行交易",
-        }, ensure_ascii=False, default=str)
+        
+        if result.get("success"):
+            await db.commit()
+            return json.dumps({
+                "action": "executed",
+                "strategy_name": strategy_name,
+                "symbol": target_symbol,
+                "side": position_side.value,
+                "quantity": str(quantity),
+                "entry_price": str(current_price),
+                "leverage": leverage,
+                "stop_loss": str(stop_loss) if stop_loss else None,
+                "stop_type": stop_type,
+                "take_profit": str(take_profit) if take_profit else None,
+                "position_pct_actual": position_pct,
+                "order_id": result.get("order_id"),
+                "message": f"策略 '{strategy_name}' 已通过 Pipeline 执行",
+            }, ensure_ascii=False, default=str)
+        else:
+            return json.dumps({
+                "action": "risk_blocked",
+                "strategy_name": strategy_name,
+                "symbol": target_symbol,
+                "message": result.get("error", "Pipeline 执行失败"),
+                "signal": signal.summary(),
+            }, ensure_ascii=False, default=str)
     except Exception as e:
         return json.dumps({"error": f"下单失败: {str(e)}"}, ensure_ascii=False)
 

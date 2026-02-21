@@ -415,11 +415,11 @@ class AutoPilot:
         risk_config: Dict,
         wallet_balance: float,
     ) -> Optional[int]:
-        """执行下单"""
+        """执行下单 (通过 Pipeline 统一入口)"""
         try:
-            from app.services.trading import OrderExecutor
+            from app.core.pipeline import get_pipeline
             
-            side = OrderSide.BUY if signal.side.value == "buy" else OrderSide.SELL
+            side_str = signal.side.value if signal.side else "buy"
             leverage = risk_config.get("leverage", 1)
             position_pct = risk_config.get("position_pct", 10)
             
@@ -436,37 +436,49 @@ class AutoPilot:
                 logger.error(f"[AutoPilot] 无法获取 {strategy.symbol} 价格")
                 return None
             
-            # 计算数量 (适配合约)
             quantity = Decimal(str(trade_amount * leverage / current_price))
             
             # 计算止损止盈价格
             stop_loss_pct = risk_config.get("stop_loss_pct", 3)
             take_profit_pct = risk_config.get("take_profit_pct", 9)
             
-            if side == OrderSide.BUY:
+            if side_str == "buy":
                 stop_loss = Decimal(str(current_price * (1 - stop_loss_pct / 100)))
                 take_profit = Decimal(str(current_price * (1 + take_profit_pct / 100)))
             else:
                 stop_loss = Decimal(str(current_price * (1 + stop_loss_pct / 100)))
                 take_profit = Decimal(str(current_price * (1 - take_profit_pct / 100)))
             
-            order = await OrderExecutor.create_order(
+            # 获取持仓信息
+            open_positions = await self._get_open_positions(db, strategy.user_id)
+            
+            # 通过 Pipeline 下单
+            pipeline = get_pipeline(strategy.user_id)
+            result = await pipeline.submit_from_signal(
                 db=db,
-                user_id=strategy.user_id,
                 symbol=strategy.symbol,
-                side=side,
-                order_type=OrderType.MARKET,
+                side=side_str,
                 quantity=quantity,
                 leverage=leverage,
+                price=Decimal(str(current_price)),
                 stop_loss=stop_loss,
                 take_profit=take_profit,
-                note=f"[AutoPilot] {strategy.name} | AI: {signal.ai_prompt[:50] if signal.ai_prompt else 'N/A'}",
+                source="autopilot",
+                strategy_name=strategy.name,
+                available_balance=Decimal(str(wallet_balance)),
+                total_equity=Decimal(str(wallet_balance)),
+                open_positions=open_positions,
             )
             
-            return order.id
+            if result.get("success"):
+                return result.get("order_id")
+            else:
+                logger.warning(f"[AutoPilot] Pipeline 拒绝: {result.get('error')}")
+                return None
         except Exception as e:
             logger.error(f"[AutoPilot] 下单失败: {e}")
             return None
+
 
     async def _save_log(
         self,
