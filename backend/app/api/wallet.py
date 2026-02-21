@@ -123,6 +123,39 @@ async def get_balance(
     except Exception as e:
         logger.warning(f"[Wallet] Failed to calculate unrealized PnL: {e}")
     
+    # 🔥 冻结台账审计: 校验 wallet.frozen 是否与活跃订单+持仓保证金一致
+    try:
+        from app.models.order import Order, OrderStatus as OrdStatus
+        
+        # 活跃订单的冻结金额总和
+        order_result = await db.execute(
+            select(Order).where(
+                Order.user_id == current_user.id,
+                Order.status.in_([OrdStatus.PENDING, OrdStatus.OPEN]),
+            )
+        )
+        active_orders = order_result.scalars().all()
+        orders_frozen = sum((o.frozen_amount for o in active_orders), Decimal("0"))
+        
+        # 持仓保证金总和
+        positions_margin = sum((p.margin for p in open_positions), Decimal("0")) if open_positions else Decimal("0")
+        
+        expected_frozen = orders_frozen + positions_margin
+        actual_frozen = wallet.frozen
+        
+        drift = abs(actual_frozen - expected_frozen)
+        if drift > Decimal("0.01"):
+            logger.critical(
+                f"[FROZEN AUDIT] MISMATCH! user={current_user.id}, "
+                f"wallet.frozen={actual_frozen}, expected={expected_frozen} "
+                f"(orders={orders_frozen}, positions={positions_margin}, "
+                f"drift={drift})"
+            )
+        else:
+            logger.debug(f"[FROZEN AUDIT] OK: frozen={actual_frozen}, expected={expected_frozen}")
+    except Exception as e:
+        logger.warning(f"[FROZEN AUDIT] Check failed: {e}")
+    
     return WalletBalanceResponse(
         available=wallet.balance,
         frozen=wallet.frozen,

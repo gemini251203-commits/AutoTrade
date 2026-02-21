@@ -53,6 +53,24 @@ class OrderStatus(str, Enum):
     EXPIRED = "expired"       # 已过期
 
 
+# 🔥 Fix #6: 订单状态机 — 合法的状态转换表
+# LEAN 风格: 每个状态只能转到指定的目标状态
+VALID_TRANSITIONS = {
+    OrderStatus.PENDING:   {OrderStatus.OPEN, OrderStatus.FILLED, OrderStatus.CANCELLED, OrderStatus.FAILED},
+    OrderStatus.OPEN:      {OrderStatus.FILLED, OrderStatus.PARTIAL, OrderStatus.CANCELLED, OrderStatus.EXPIRED},
+    OrderStatus.PARTIAL:   {OrderStatus.FILLED, OrderStatus.CANCELLED},
+    # 终态: FILLED, CANCELLED, FAILED, EXPIRED 不能再转换
+}
+
+
+class InvalidTransitionError(Exception):
+    """非法状态转换"""
+    def __init__(self, current: OrderStatus, target: OrderStatus):
+        super().__init__(
+            f"Invalid order transition: {current.value} → {target.value}"
+        )
+
+
 class PositionSideEnum(str, Enum):
     """仓位方向 (用于区分开仓/平仓)"""
     LONG = "long"    # 做多
@@ -203,6 +221,12 @@ class Order(Base):
         comment="已实现盈亏",
     )
     
+    frozen_amount: Mapped[Decimal] = mapped_column(
+        Numeric(precision=20, scale=8),
+        default=Decimal("0"),
+        comment="该订单冻结的保证金+手续费总额 (用于精确解冻)",
+    )
+    
     # ============================================
     # 交易所和来源
     # ============================================
@@ -317,6 +341,18 @@ class Order(Base):
         """名义价值"""
         price = self.avg_fill_price or self.price or Decimal("0")
         return self.quantity * price
+    
+    def transition_to(self, new_status: OrderStatus) -> None:
+        """
+        状态机转换 — 只允许合法的状态变更
+        
+        Raises:
+            InvalidTransitionError: 非法的状态转换
+        """
+        allowed = VALID_TRANSITIONS.get(self.status, set())
+        if new_status not in allowed:
+            raise InvalidTransitionError(self.status, new_status)
+        self.status = new_status
     
     def __repr__(self) -> str:
         return (

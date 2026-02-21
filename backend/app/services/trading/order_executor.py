@@ -165,48 +165,54 @@ class OrderExecutor:
         # 判断 Maker/Taker: 市价=Taker, 限价=Maker
         is_maker = order_type in (OrderType.LIMIT, OrderType.STOP_LIMIT, OrderType.TAKE_PROFIT_LIMIT)
         
+        total_freeze = Decimal("0")  # 默认值 (reduce_only 订单不冻结)
+        
         if not reduce_only:
             margin_required, commission_estimate = OrderExecutor.calculate_open_cost(
                 quantity, ref_price, leverage, is_maker
             )
-            
-            # 3. 冻结保证金 + 预扣手续费
             total_freeze = margin_required + commission_estimate
-            try:
-                await WalletManager.freeze_funds(db, user_id, total_freeze)
-                logger.info(
-                    f"[OrderExecutor] Frozen: margin={margin_required}, "
-                    f"commission={commission_estimate}, total={total_freeze} USDT"
-                )
-            except InsufficientFundsError as e:
-                raise OrderError(
-                    f"Insufficient funds: required={total_freeze} "
-                    f"(margin={margin_required} + fee={commission_estimate}), "
-                    f"available={e.available}"
-                )
         
-        # 4. 创建订单
-        order = Order(
-            user_id=user_id,
-            symbol=symbol,
-            side=side,
-            order_type=order_type,
-            status=OrderStatus.PENDING,
-            leverage=leverage,
-            position_side=position_side,
-            reduce_only=reduce_only,
-            price=price,
-            trigger_price=trigger_price,
-            quantity=quantity,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-            note=note,
-        )
+        # 🔥 Fix #5: 使用 savepoint 保证 freeze + create 的原子性
+        # 如果 flush 失败, freeze 也会回滚
+        async with db.begin_nested():
+            if total_freeze > 0:
+                try:
+                    await WalletManager.freeze_funds(db, user_id, total_freeze)
+                    logger.info(
+                        f"[OrderExecutor] Frozen: {total_freeze} USDT "
+                        f"(margin={margin_required}, commission={commission_estimate})"
+                    )
+                except InsufficientFundsError as e:
+                    raise OrderError(
+                        f"Insufficient funds: required={total_freeze} "
+                        f"(margin={margin_required} + fee={commission_estimate}), "
+                        f"available={e.available}"
+                    )
+            
+            # 4. 创建订单 (记录冻结金额用于精确解冻)
+            order = Order(
+                user_id=user_id,
+                symbol=symbol,
+                side=side,
+                order_type=order_type,
+                status=OrderStatus.PENDING,
+                leverage=leverage,
+                position_side=position_side,
+                reduce_only=reduce_only,
+                price=price,
+                trigger_price=trigger_price,
+                quantity=quantity,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+                note=note,
+                frozen_amount=total_freeze,
+            )
+            
+            db.add(order)
+            await db.flush()
         
-        db.add(order)
-        await db.flush()
-        
-        logger.info(f"[OrderExecutor] Order created: id={order.id}")
+        logger.info(f"[OrderExecutor] Order created: id={order.id}, frozen={total_freeze}")
         
         # 5. 市价单立即执行
         if order_type == OrderType.MARKET:
@@ -237,16 +243,16 @@ class OrderExecutor:
                         )
                         await OrderExecutor.execute_market_order(db, order, price)
                     else:
-                        order.status = OrderStatus.OPEN
+                        order.transition_to(OrderStatus.OPEN)
                 else:
                     # 无法获取价格，挂单等待
-                    order.status = OrderStatus.OPEN
+                    order.transition_to(OrderStatus.OPEN)
             except Exception as e:
                 logger.warning(f"[OrderExecutor] Price check failed, placing as pending: {e}")
-                order.status = OrderStatus.OPEN
+                order.transition_to(OrderStatus.OPEN)
         else:
             # 条件单等待触发
-            order.status = OrderStatus.PENDING
+            order.transition_to(OrderStatus.PENDING)
         
         return order
     
@@ -301,7 +307,7 @@ class OrderExecutor:
             )
         
         # 更新订单状态
-        order.status = OrderStatus.FILLED
+        order.transition_to(OrderStatus.FILLED)
         order.filled_quantity = order.quantity
         order.avg_fill_price = actual_price
         order.commission = commission
@@ -316,20 +322,46 @@ class OrderExecutor:
         price: Decimal,
         commission: Decimal = Decimal("0"),
     ) -> None:
-        """执行开仓 (含手续费扣除)"""
+        """执行开仓 (含手续费扣除)
+        
+        资金流 (优化后):
+        1. 冻结中扣除手续费 (frozen -= commission, 不退回balance)
+        2. 剩余冻结直接转为仓位保证金 (无需 unfreeze→re-freeze)
+        """
         # 确定仓位方向
         pos_side = PositionSide.LONG if order.side == OrderSide.BUY else PositionSide.SHORT
         
-        # 释放之前冻结的保证金+手续费 (PositionManager 会重新冻结保证金部分)
-        margin = OrderExecutor.calculate_required_margin(
+        # 🔥 从冻结金额中扣除手续费 (不经过 balance)
+        if commission > 0:
+            wallet = await WalletManager.get_wallet(db, order.user_id, for_update=True)
+            wallet.frozen -= commission
+            # 手续费直接作为成本消耗, 不退回 balance
+            logger.info(
+                f"[OrderExecutor] Fee deducted from frozen: {commission} USDT, "
+                f"remaining frozen for margin: {order.frozen_amount - commission}"
+            )
+        
+        # 计算仓位保证金 (按实际成交价)
+        margin_for_position = OrderExecutor.calculate_required_margin(
             order.quantity, price, order.leverage
         )
-        total_frozen = margin + commission
-        await WalletManager.unfreeze_funds(db, order.user_id, total_frozen)
         
-        # 🔥 扣除手续费 (从可用余额中直接扣除)
-        if commission > 0:
-            await WalletManager.deduct_fee(db, order.user_id, commission)
+        # 如果冻结金额 > 保证金+手续费 (因为冻结是按预估价), 退还差额
+        remaining_frozen = order.frozen_amount - commission
+        if remaining_frozen > margin_for_position:
+            excess = remaining_frozen - margin_for_position
+            wallet = await WalletManager.get_wallet(db, order.user_id, for_update=True)
+            wallet.frozen -= excess
+            wallet.balance += excess
+            logger.info(f"[OrderExecutor] Excess frozen returned: {excess} USDT")
+        elif remaining_frozen < margin_for_position:
+            # 需要额外冻结 (实际成交价高于预估)
+            shortfall = margin_for_position - remaining_frozen
+            await WalletManager.freeze_funds(db, order.user_id, shortfall)
+            logger.info(f"[OrderExecutor] Additional margin frozen: {shortfall} USDT")
+        
+        # 清除订单冻结记录 (已转为仓位保证金)
+        order.frozen_amount = Decimal("0")
         
         # 确定交易来源 (从 order.note 解析)
         source = "manual"
@@ -351,7 +383,7 @@ class OrderExecutor:
             else:
                 open_reason = note
         
-        # 调用 PositionManager 开仓
+        # 调用 PositionManager 开仓 (保证金已在冻结中, skip_freeze=True)
         position = await PositionManager.open_position(
             db=db,
             user_id=order.user_id,
@@ -365,6 +397,7 @@ class OrderExecutor:
             source=source,
             open_reason=open_reason,
             commission=commission,
+            pre_frozen_margin=margin_for_position,  # 🔥 跳过 PositionManager 重复冻结
         )
         
         order.position_id = position.id
@@ -440,27 +473,15 @@ class OrderExecutor:
         
         logger.info(f"[OrderExecutor] Cancelling order: id={order_id}")
         
-        # 释放保证金 + 手续费 (只有非 reduce_only 订单冻结了保证金)
-        if not order.reduce_only and order.price:
-            margin = OrderExecutor.calculate_required_margin(
-                order.remaining_quantity, order.price, order.leverage
+        # 释放保证金 (使用精确冻结金额, 不再重新计算)
+        if order.frozen_amount > 0:
+            await WalletManager.unfreeze_funds(db, user_id, order.frozen_amount)
+            logger.info(
+                f"[OrderExecutor] Released frozen: {order.frozen_amount} USDT"
             )
-            # 🔥 手续费也要退回 (创建时冻结了 margin + commission)
-            is_maker = order.order_type in (
-                OrderType.LIMIT, OrderType.STOP_LIMIT, OrderType.TAKE_PROFIT_LIMIT
-            )
-            commission = FeeCalculator.calculate_commission(
-                order.remaining_quantity, order.price, is_maker
-            )
-            total_unfreeze = margin + commission
-            if total_unfreeze > 0:
-                await WalletManager.unfreeze_funds(db, user_id, total_unfreeze)
-                logger.info(
-                    f"[OrderExecutor] Released: margin={margin}, "
-                    f"commission={commission}, total={total_unfreeze}"
-                )
+            order.frozen_amount = Decimal("0")
         
-        order.status = OrderStatus.CANCELLED
+        order.transition_to(OrderStatus.CANCELLED)
         return order
     
     @staticmethod
@@ -539,7 +560,7 @@ class OrderExecutor:
                     await OrderExecutor.execute_market_order(db, order, current_price)
                 else:
                     # 转换为限价单
-                    order.status = OrderStatus.OPEN
+                    order.transition_to(OrderStatus.OPEN)
                 
                 triggered_orders.append(order)
         

@@ -354,8 +354,10 @@ class GridStrategy:
                     except Exception as e:
                         logger.warning(f"[GridStrategy] Failed to cancel order: {e}")
         
-        # 释放剩余冻结资金
-        # (实际实现需要计算剩余多少资金未使用)
+        # ✅ 冻结资金说明:
+        # - 每个挂单的 frozen_amount 已通过 cancel_order → unfreeze_funds 精确释放
+        # - 已成交订单的保证金已转为仓位 (Position.margin), 由用户手动平仓释放
+        # - 无需额外处理
         
         bot.status = GridStatus.STOPPED
         bot.stopped_at = datetime.utcnow()

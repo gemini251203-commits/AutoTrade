@@ -190,6 +190,7 @@ class PositionManager:
         source: str = "manual",
         open_reason: Optional[str] = None,
         commission: Decimal = Decimal("0"),
+        pre_frozen_margin: Optional[Decimal] = None,
     ) -> Position:
         """
         开仓
@@ -249,11 +250,18 @@ class PositionManager:
             f"max_allowed_leverage={max_leverage}x"
         )
         
-        # 2. 检查并冻结保证金
-        try:
-            await WalletManager.freeze_funds(db, user_id, margin_required)
-        except InsufficientFundsError as e:
-            raise InsufficientMarginError(margin_required, e.available)
+        # 2. 检查并冻结保证金 (如果 OrderExecutor 已预冻结则跳过)
+        if pre_frozen_margin is not None:
+            # 已由 OrderExecutor 预冻结, 直接使用
+            logger.info(
+                f"[PositionManager] Using pre-frozen margin: {pre_frozen_margin} USDT "
+                f"(required: {margin_required})"
+            )
+        else:
+            try:
+                await WalletManager.freeze_funds(db, user_id, margin_required)
+            except InsufficientFundsError as e:
+                raise InsufficientMarginError(margin_required, e.available)
         
         # 2.5 检查是否有反向仓位 → 净仓位模式 (减仓/反向)
         opposite_side = PositionSide.SHORT if side == PositionSide.LONG else PositionSide.LONG
