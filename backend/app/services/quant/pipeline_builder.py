@@ -69,7 +69,10 @@ def build_pipeline_from_yaml(config: Dict[str, Any], user_id: int) -> TradingPip
                     )
                 )
             else:
-                logger.warning(f"[PipelineBuilder] Unknown alpha type: {type_}")
+                raise ValueError(
+                    f"不支持的 Alpha 类型: '{type_}'。"
+                    f"支持的类型: yaml_condition, ai_agent"
+                )
 
     # 解析 Portfolio (仓位管理层)
     portfolio_cfg = config.get("portfolio", {})
@@ -85,12 +88,13 @@ def build_pipeline_from_yaml(config: Dict[str, Any], user_id: int) -> TradingPip
         fraction = float(portfolio_params.get("fraction", 0.5))
         portfolio = KellyPortfolioModel(kelly_fraction=fraction)
     else:
-        logger.warning(f"[PipelineBuilder] Unknown portfolio type: {p_type}. Using FixedPercentModel fallback.")
-        portfolio = FixedPercentModel(risk_percent=10.0)
+        raise ValueError(
+            f"不支持的 Portfolio 类型: '{p_type}'。"
+            f"支持的类型: fixed_percent, kelly"
+        )
 
     # 解析 Risk (风控层)
     risk_cfg = config.get("risk", {})
-    r_type = risk_cfg.get("type", "standard_risk")
     risk_params = risk_cfg.get("params", {})
     
     risk_config_obj = RiskConfig()
@@ -103,9 +107,7 @@ def build_pipeline_from_yaml(config: Dict[str, Any], user_id: int) -> TradingPip
     risk_model = RiskModel(config=risk_config_obj)
 
     # 解析 Execution (执行层)
-    exec_cfg = config.get("execution", {})
-    e_type = exec_cfg.get("type", "market_order")
-    # 目前仅支持基础的 ExecutionModel
+    # 目前仅支持基础的 ExecutionModel (市价单)
     execution = ExecutionModel()
     
     pipeline = TradingPipeline(

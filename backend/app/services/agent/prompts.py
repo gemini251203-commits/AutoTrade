@@ -135,18 +135,18 @@ TOOLS_DESCRIPTION = """
     [TOOL_CALL: create_pipeline_strategy(name=多模块组合策略, symbol=BTCUSDT, interval=1h)]
 
 ## 记忆工具
-18. query_memories(symbol) - 查询所有交易记忆 (包含手动/AI/信号/量化策略所有来源)
+19. query_memories(symbol) - 查询所有交易记忆 (包含手动/AI/信号/量化策略所有来源)
     示例: [TOOL_CALL: query_memories(symbol=BTCUSDT)]
 
 ## 交管中心工具
-19. manage_autopilot(action, symbols, interval) - 管理自动交易
+20. manage_autopilot(action, symbols, interval) - 管理自动交易
     - action: status(查询状态) / start(启动) / stop(停止) / run_once(执行一次) / logs(查看日志)
     - symbols: 交易对, 逗号分隔 (默认 BTCUSDT)
     - interval: 决策间隔 5m/15m/30m/1h/4h (默认 15m)
     示例: [TOOL_CALL: manage_autopilot(action=start, symbols=BTCUSDT,ETHUSDT, interval=15m)]
     示例: [TOOL_CALL: manage_autopilot(action=status)]
 
-20. manage_grid(action, symbol, upper_price, lower_price, grid_count, investment, leverage, grid_id) - 管理网格交易
+21. manage_grid(action, symbol, upper_price, lower_price, grid_count, investment, leverage, grid_id) - 管理网格交易
     - action: list(查看所有网格) / start(创建并启动) / stop(停止) / delete(删除)
     - 启动需要: symbol, upper_price, lower_price, grid_count, investment
     - 停止/删除需要: grid_id
@@ -154,7 +154,7 @@ TOOLS_DESCRIPTION = """
     示例: [TOOL_CALL: manage_grid(action=start, symbol=BTCUSDT, upper_price=90000, lower_price=70000, grid_count=10, investment=500, leverage=5)]
     示例: [TOOL_CALL: manage_grid(action=stop, grid_id=3)]
 
-21. get_trade_journal(source, result_filter, limit) - 查询交易日记 (含胜率统计)
+22. get_trade_journal(source, result_filter, limit) - 查询交易日记 (含胜率统计)
     - source: agent / autopilot / quant / grid / manual (空=全部)
     - result_filter: win / loss (空=全部)
     - limit: 返回条数 (默认 20)
@@ -162,29 +162,29 @@ TOOLS_DESCRIPTION = """
     示例: [TOOL_CALL: get_trade_journal(result_filter=loss)]
 
 ## 自动交易管理工具
-22. start_autopilot(strategy_id) - 启动策略自动交易
+23. start_autopilot(strategy_id) - 启动策略自动交易
     - strategy_id: 策略 ID (可选，空=启动所有活跃策略)
     示例: [TOOL_CALL: start_autopilot(strategy_id=3)]
 
-23. stop_autopilot(strategy_id) - 停止自动交易
+24. stop_autopilot(strategy_id) - 停止自动交易
     - strategy_id: 可选，空=停止全部
     示例: [TOOL_CALL: stop_autopilot()]
 
-24. get_autopilot_status() - 查询自动交易运行状态
+25. get_autopilot_status() - 查询自动交易运行状态
     示例: [TOOL_CALL: get_autopilot_status()]
 
-25. get_trading_logs(symbol, limit) - 查看最近的自动交易决策日志
+26. get_trading_logs(symbol, limit) - 查看最近的自动交易决策日志
     - symbol: 可选，过滤交易对
     - limit: 返回条数 (默认 10)
     示例: [TOOL_CALL: get_trading_logs(limit=5)]
 
 ## 趋势分析工具
-26. analyze_trend_now(symbol) - 用活跃趋势方案分析当前市场趋势
+27. analyze_trend_now(symbol) - 用活跃趋势方案分析当前市场趋势
     - symbol: 交易对 (默认 BTCUSDT)
     返回: 趋势方向/强度/波动率/动量/适合的策略类型
     示例: [TOOL_CALL: analyze_trend_now(symbol=BTCUSDT)]
 
-27. get_trend_result(symbol) - 获取最近的趋势分析结果 (读缓存，不重新分析)
+28. get_trend_result(symbol) - 获取最近的趋势分析结果 (读缓存，不重新分析)
     - symbol: 可选
     示例: [TOOL_CALL: get_trend_result()]
 

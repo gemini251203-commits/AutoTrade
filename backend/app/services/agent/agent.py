@@ -53,6 +53,28 @@ def _parse_tool_args(args_str: str) -> Dict[str, str]:
     return params
 
 
+# 需要从正文中提取 YAML 的工具列表
+_YAML_BODY_TOOLS = frozenset({"create_strategy", "update_strategy", "create_pipeline_strategy"})
+
+
+def _extract_yaml_arg(
+    tool_name: str,
+    ai_content: str,
+    tool_args: Dict[str, str],
+) -> Dict[str, str]:
+    """
+    若工具需要 YAML 参数，从 AI 回复正文的 ```yaml 代码块中提取。
+
+    背景: TOOL_CALL_PATTERN 用 [^)]* 匹配参数，无法处理多行 YAML。
+    因此约定 AI 将 YAML 写在正文代码块中，而非 TOOL_CALL 参数里。
+    """
+    if tool_name in _YAML_BODY_TOOLS and "config_yaml" not in tool_args:
+        yaml_match = re.search(r"```yaml\s*\n(.*?)\n```", ai_content, re.DOTALL)
+        if yaml_match:
+            tool_args["config_yaml"] = yaml_match.group(1).strip()
+    return tool_args
+
+
 def _cast_arg(value: str) -> Any:
     """尝试将字符串参数转为合适的类型"""
     # 整数
@@ -169,12 +191,7 @@ async def chat_stream(
             results_text_parts = []
             for tool_name, args_str in tool_matches:
                 tool_args = _parse_tool_args(args_str)
-
-                # 特殊处理: 取出 ai_content 中的 ```yaml 代码块作为 config_yaml 参数
-                if tool_name in ("create_strategy", "update_strategy", "create_pipeline_strategy"):
-                    yaml_match = re.search(r"```yaml\s*\n(.*?)\n```", ai_content, re.DOTALL)
-                    if yaml_match:
-                        tool_args["config_yaml"] = yaml_match.group(1).strip()
+                tool_args = _extract_yaml_arg(tool_name, ai_content, tool_args)
 
                 # 发送工具调用事件
                 yield {"type": "tool_call", "tool": tool_name, "args": tool_args}
@@ -311,13 +328,8 @@ async def chat_complete(
             results_text_parts = []
             for tool_name, args_str in tool_matches:
                 tool_args = _parse_tool_args(args_str)
-                
-                # 特殊处理: 取出 ai_content 中的 ```yaml 代码块作为 config_yaml 参数
-                if tool_name in ("create_strategy", "update_strategy", "create_pipeline_strategy"):
-                    yaml_match = re.search(r"```yaml\s*\n(.*?)\n```", ai_content, re.DOTALL)
-                    if yaml_match:
-                        tool_args["config_yaml"] = yaml_match.group(1).strip()
-                
+                tool_args = _extract_yaml_arg(tool_name, ai_content, tool_args)
+
                 tool_result = await execute_tool(tool_name, tool_args, db, user_id)
                 results_text_parts.append(
                     f"[TOOL_RESULT: {tool_name}]\n{tool_result}\n[/TOOL_RESULT]"
