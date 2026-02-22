@@ -179,8 +179,8 @@ async def delete_scheme(
 @router.post("/schemes/{scheme_id}/run")
 async def run_analysis(
     scheme_id: int,
-    symbol: str = "BTCUSDT",
     current_user: CurrentUser,
+    symbol: str = "BTCUSDT",
     db: AsyncSession = Depends(get_db),
 ):
     """手动触发趋势分析"""
@@ -259,10 +259,10 @@ async def run_analysis(
 
 @router.get("/snapshots")
 async def list_snapshots(
+    current_user: CurrentUser,
     scheme_id: Optional[int] = None,
     symbol: Optional[str] = None,
     limit: int = 20,
-    current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
     """查看趋势分析历史快照"""
