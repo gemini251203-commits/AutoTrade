@@ -66,7 +66,7 @@ class TrendSnapshotResponse(BaseModel):
 
 @router.get("/schemes", response_model=List[TrendSchemeResponse])
 async def list_schemes(
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
     """列出用户的所有趋势分析方案"""
@@ -95,7 +95,7 @@ async def list_schemes(
 @router.post("/schemes")
 async def create_scheme(
     body: TrendSchemeCreate,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
     """创建新的趋势分析方案"""
@@ -123,7 +123,7 @@ async def create_scheme(
 async def update_scheme(
     scheme_id: int,
     body: TrendSchemeUpdate,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
     """修改趋势分析方案"""
@@ -157,7 +157,7 @@ async def update_scheme(
 @router.delete("/schemes/{scheme_id}")
 async def delete_scheme(
     scheme_id: int,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
     """删除趋势分析方案"""
@@ -180,7 +180,7 @@ async def delete_scheme(
 async def run_analysis(
     scheme_id: int,
     symbol: str = "BTCUSDT",
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
     """手动触发趋势分析"""
@@ -262,7 +262,7 @@ async def list_snapshots(
     scheme_id: Optional[int] = None,
     symbol: Optional[str] = None,
     limit: int = 20,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
     """查看趋势分析历史快照"""
@@ -300,7 +300,7 @@ async def list_snapshots(
 
 @router.post("/init-presets")
 async def init_presets(
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
     """初始化预置方案 (用户首次使用时调用)"""
