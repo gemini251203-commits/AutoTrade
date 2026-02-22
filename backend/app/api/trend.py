@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.core.auth import get_current_user, User as CurrentUser
+from app.api.deps import get_current_user, CurrentUser
 from app.models.trend_scheme import TrendScheme, TrendSnapshot
 from app.services.quant.trend_analyzer import TrendAnalyzer, PRESET_SCHEMES
 
