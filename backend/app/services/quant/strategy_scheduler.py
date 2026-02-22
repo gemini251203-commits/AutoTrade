@@ -1,12 +1,16 @@
 """
-AutoPilot - 后台自动交易调度器
-================================
-串联所有模块的完整执行管道:
+StrategyScheduler - 策略自动调度器 (原 AutoPilot)
+=================================================
+量化策略自动执行管道:
 
     调度器 → 指标计算 → 策略评估 → AI 审核 → 风控检查 → 自动下单 → AI 反思
 
+注意: 与 agent/autopilot.py (AI 对话决策) 不同:
+- 本模块: 基于 YAML 策略条件自动执行, 无需 AI 对话
+- agent/autopilot: 基于 AI Agent 自由分析决策
+
 运行方式:
-    1. 作为独立容器: python -m app.services.quant.autopilot
+    1. 作为独立容器: python -m app.services.quant.strategy_scheduler
     2. 或集成到 FastAPI 后台任务中
 """
 
