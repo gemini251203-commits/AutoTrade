@@ -271,32 +271,33 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Pipeline Status (嵌入式) -->
-      <div v-if="pipelineStatus" class="pipeline-inline">
-        <div class="pipeline-header">
-          <span class="pipeline-title">交易流水线 (Pipeline)</span>
-          <span
-            class="pipeline-badge"
-            :style="{ background: pipelineStatus.circuit_breaker ? '#ef4444' : '#22c55e' }"
-          >
-            {{ pipelineStatus.circuit_breaker ? '熔断' : '正常' }}
+      <!-- Pipeline Status -->
+      <div v-if="pipelineStatus" class="pl-panel">
+        <div class="pl-header">
+          <div class="pl-title-row">
+            <span class="pl-dot" :style="{ background: pipelineStatus.circuit_breaker ? '#ef4444' : '#22c55e' }"></span>
+            <span class="pl-title">交易流水线</span>
+          </div>
+          <span class="pl-badge" :class="pipelineStatus.circuit_breaker ? 'pl-badge-danger' : 'pl-badge-ok'">
+            {{ pipelineStatus.circuit_breaker ? '熔断中' : '运行正常' }}
           </span>
         </div>
-        <div class="pipeline-layers">
-          <div
-            v-for="layer in pipelineStatus.layers"
-            :key="layer.name"
-            class="pipeline-layer"
-          >
-            <div class="layer-dot" :style="{ background: layer.status === 'active' ? '#22c55e' : layer.status === 'error' ? '#ef4444' : '#4b5563' }"></div>
-            <div class="layer-info">
-              <span class="layer-name">{{ layer.name }}</span>
-              <span class="layer-count">{{ layer.count }}</span>
+        <div class="pl-flow">
+          <template v-for="(layer, idx) in pipelineStatus.layers" :key="layer.name">
+            <div class="pl-layer" :class="'pl-layer--' + layer.name.toLowerCase()">
+              <div class="pl-layer-icon">
+                <span class="pl-layer-dot" :class="layer.status"></span>
+              </div>
+              <div class="pl-layer-body">
+                <span class="pl-layer-name">{{ layer.name }}</span>
+                <span class="pl-layer-tag">{{ layer.status }}</span>
+              </div>
+              <span class="pl-layer-count">{{ layer.count }}</span>
             </div>
-          </div>
-          <div class="pipeline-arrow" v-for="i in 3" :key="'arrow'+i">
-            <svg width="12" height="12" viewBox="0 0 12 12"><path d="M4 2L8 6L4 10" stroke="#4b5563" stroke-width="1.5" fill="none"/></svg>
-          </div>
+            <div v-if="idx < pipelineStatus.layers.length - 1" class="pl-arrow">
+              <svg width="20" height="20" viewBox="0 0 20 20"><path d="M7 4L13 10L7 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -792,67 +793,151 @@ onMounted(() => {
   }
 }
 
-/* Pipeline Inline */
-.pipeline-inline {
-  background: rgba(255,255,255,0.02);
+/* Pipeline Panel */
+.pl-panel {
+  background: linear-gradient(135deg, rgba(30,30,40,0.8) 0%, rgba(20,20,30,0.9) 100%);
   border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 12px;
-  padding: 16px 20px;
+  border-radius: 14px;
+  padding: 18px 22px;
 }
-.pipeline-header {
+.pl-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
-.pipeline-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #d1d5db;
-}
-.pipeline-badge {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 8px;
-  color: white;
-  font-weight: 600;
-}
-.pipeline-layers {
+.pl-title-row {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
 }
-.pipeline-layer {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  background: rgba(255,255,255,0.03);
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.06);
-}
-.layer-dot {
+.pl-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
+  animation: pulse-glow 2s ease-in-out infinite;
 }
-.layer-info {
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px currentColor; }
+  50% { opacity: 0.6; box-shadow: 0 0 8px currentColor; }
+}
+.pl-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e5e7eb;
+  letter-spacing: 0.3px;
+}
+.pl-badge {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.pl-badge-ok {
+  background: rgba(34,197,94,0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34,197,94,0.25);
+}
+.pl-badge-danger {
+  background: rgba(239,68,68,0.15);
+  color: #f87171;
+  border: 1px solid rgba(239,68,68,0.25);
+}
+.pl-flow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+.pl-layer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  min-width: 120px;
+  transition: all 0.25s ease;
+}
+.pl-layer:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255,255,255,0.15);
+}
+.pl-layer--alpha { background: linear-gradient(135deg, rgba(168,85,247,0.12) 0%, rgba(139,92,246,0.06) 100%); }
+.pl-layer--portfolio { background: linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(37,99,235,0.06) 100%); }
+.pl-layer--risk { background: linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(217,119,6,0.06) 100%); }
+.pl-layer--execution { background: linear-gradient(135deg, rgba(34,197,94,0.12) 0%, rgba(22,163,74,0.06) 100%); }
+
+.pl-layer-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pl-layer-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+}
+.pl-layer-dot.active {
+  background: #22c55e;
+  border-color: rgba(34,197,94,0.3);
+  box-shadow: 0 0 6px rgba(34,197,94,0.4);
+}
+.pl-layer-dot.idle {
+  background: #4b5563;
+  border-color: rgba(75,85,99,0.3);
+}
+.pl-layer-dot.error {
+  background: #ef4444;
+  border-color: rgba(239,68,68,0.3);
+  box-shadow: 0 0 6px rgba(239,68,68,0.4);
+}
+.pl-layer-body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  flex: 1;
 }
-.layer-name {
+.pl-layer-name {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   color: #e5e7eb;
 }
-.layer-count {
-  font-size: 11px;
+.pl-layer-tag {
+  font-size: 10px;
   color: #6b7280;
-  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
-.pipeline-arrow {
+.pl-layer-count {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: #a1a1aa;
+  min-width: 20px;
+  text-align: right;
+}
+.pl-arrow {
   color: #4b5563;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .pl-flow {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .pl-layer {
+    min-width: 0;
+    flex: 1;
+    padding: 8px 10px;
+  }
+  .pl-arrow {
+    display: none;
+  }
 }
 </style>
