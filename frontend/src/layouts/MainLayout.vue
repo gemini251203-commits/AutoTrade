@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { NIcon, NTooltip } from 'naive-ui'
 import { 
   SpeedometerOutline, 
+  HardwareChipOutline,
   WalletOutline, 
   SettingsOutline,
   ChevronDownOutline,
@@ -27,6 +28,7 @@ const walletStore = useWalletStore()
 // Navigation items with icons and routes
 const navItems = [
   { key: 'dashboard', label: 'Dashboard', icon: SpeedometerOutline, route: '/' },
+  { key: 'signal', label: 'AI 信号助手', icon: HardwareChipOutline, route: '/signal' },
   { key: 'strategy', label: '量化策略', icon: AnalyticsOutline, route: '/strategy' },
   { key: 'chat', label: 'AI Agent', icon: ChatboxEllipsesOutline, route: '/chat' },
   { key: 'autopilot', label: '自动交易', icon: RocketOutline, route: '/autopilot' },
@@ -40,6 +42,7 @@ const navItems = [
 // Current active nav item
 const activeNavKey = computed(() => {
   const path = route.path
+  if (path === '/signal') return 'signal'
   if (path === '/strategy') return 'strategy'
   if (path === '/chat') return 'chat'
   if (path === '/autopilot') return 'autopilot'
