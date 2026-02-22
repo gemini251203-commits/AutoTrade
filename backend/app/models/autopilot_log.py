@@ -91,6 +91,24 @@ class AutopilotLog(Base):
         nullable=True,
         comment="关联的订单ID (如有操作)",
     )
+
+    # 策略关联
+    strategy_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="关联的策略ID (如有)",
+    )
+    strategy_name: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="策略名称",
+    )
+    signal_raw: Mapped[Optional[dict]] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="策略评估原始信号 {signal_type, conditions, ...}",
+    )
+
     error_message: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,

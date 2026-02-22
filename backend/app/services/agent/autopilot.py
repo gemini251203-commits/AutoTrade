@@ -190,6 +190,53 @@ class AgentAutopilot:
             f"interval={config.get('interval', '15m')}"
         )
 
+    async def start_scheduler(self):
+        """
+        全局策略调度器 — 在 startup 时调用
+        
+        每 30 秒扫描数据库中 is_active 的策略，
+        为每个策略所属用户自动启动 autopilot。
+        """
+        logger.info("[Autopilot] Strategy scheduler started")
+        while True:
+            try:
+                async with AsyncSessionLocal() as db:
+                    result = await db.execute(
+                        select(Strategy).where(Strategy.is_active == True)
+                    )
+                    active = result.scalars().all()
+                
+                # 按 user_id 分组
+                user_strategies: Dict[int, list] = {}
+                for s in active:
+                    user_strategies.setdefault(s.user_id, []).append(s)
+                
+                # 为每个有活跃策略的用户启动 autopilot
+                for uid, strategies in user_strategies.items():
+                    if not self.is_running(uid):
+                        symbols = list(set(s.symbol for s in strategies))
+                        intervals = list(set(s.interval for s in strategies))
+                        config = {
+                            "symbols": symbols,
+                            "interval": intervals[0] if intervals else "1h",
+                            "intervals": intervals,
+                            "strategy_ids": [s.id for s in strategies],
+                        }
+                        await self.start(uid, config)
+                        logger.info(f"[Autopilot] Auto-started for user {uid}, strategies={[s.name for s in strategies]}")
+                
+                # 停止没有活跃策略的用户
+                active_user_ids = set(user_strategies.keys())
+                for uid in list(self._tasks.keys()):
+                    if uid not in active_user_ids:
+                        await self.stop(uid)
+                        logger.info(f"[Autopilot] Auto-stopped for user {uid} (no active strategies)")
+                
+            except Exception as e:
+                logger.error(f"[Autopilot] Scheduler error: {e}")
+            
+            await asyncio.sleep(30)
+
     async def stop(self, user_id: int):
         """停止自动决策"""
         task = self._tasks.pop(user_id, None)
@@ -433,19 +480,40 @@ class AgentAutopilot:
                 except Exception as e:
                     logger.warning(f"[Autopilot] Strategy evaluation failed: {e}")
 
-                # 构造分析指令 (直接注入指标数据 + 策略信号)
+                # 预取交易记忆 (最近 5 条，供 AI 参考)
+                memory_text = ""
+                try:
+                    from app.models.strategy import TradeMemory
+                    mem_result = await db.execute(
+                        select(TradeMemory).where(
+                            TradeMemory.user_id == user_id,
+                            TradeMemory.symbol == symbol,
+                        ).order_by(TradeMemory.created_at.desc()).limit(5)
+                    )
+                    memories = mem_result.scalars().all()
+                    if memories:
+                        mem_lines = []
+                        for m in memories:
+                            pnl_str = f"+{m.realized_pnl}" if m.realized_pnl and m.realized_pnl > 0 else str(m.realized_pnl or 0)
+                            mem_lines.append(f"  - {m.side} {m.symbol} | PnL: {pnl_str} | {m.lesson or ''}")
+                        memory_text = "\n交易记忆 (最近):\n" + "\n".join(mem_lines)
+                except Exception as e:
+                    logger.debug(f"[Autopilot] Memory fetch failed: {e}")
+
+                # 构造分析指令 (直接注入指标数据 + 策略信号 + 交易记忆)
                 now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
                 prompt = (
                     f"[Autopilot {now}] "
                     f"请分析 {symbol} 当前市场状况并做出交易决策。\n\n"
                     f"{indicator_text}\n"
-                    f"{strategy_text}\n\n"
+                    f"{strategy_text}\n"
+                    f"{memory_text}\n\n"
                     f"请按以下步骤操作:\n"
                     f"1. 查询 {symbol} 实时价格 (如需更新)\n"
                     f"2. 查看当前持仓和余额\n"
-                    f"3. 查询历史交易经验\n"
-                    f"4. 结合上方技术指标和策略信号综合分析后给出决策: 开仓/平仓/观望\n"
-                    f"5. 如果决定交易, 直接执行\n\n"
+                    f"3. 结合上方技术指标、策略信号和历史交易记忆综合分析\n"
+                    f"4. 给出决策: 开仓/平仓/观望, 并说明理由\n"
+                    f"5. 如果决定交易, 直接执行 (使用 run_strategy 工具以关联策略)\n\n"
                     f"回复要简洁, 列出关键数据和理由。\n"
                     f"最后一行请明确写出你的决策: 观望/开多/开空/平多/平空"
                 )
@@ -470,7 +538,26 @@ class AgentAutopilot:
                 action_taken = check_action_taken(reply)
                 order_id = extract_order_id(reply) if action_taken else None
 
-                # 写入 AutopilotLog
+                # 写入 AutopilotLog (含策略关联)
+                # 获取匹配的策略信息
+                active_strategy_id = None
+                active_strategy_name = None
+                signal_data = None
+                try:
+                    strat_q = await db.execute(
+                        select(Strategy).where(
+                            Strategy.user_id == user_id,
+                            Strategy.symbol == symbol,
+                            Strategy.is_active == True,
+                        ).limit(1)
+                    )
+                    matched_strat = strat_q.scalar_one_or_none()
+                    if matched_strat:
+                        active_strategy_id = matched_strat.id
+                        active_strategy_name = matched_strat.name
+                except Exception:
+                    pass
+
                 log = AutopilotLog(
                     user_id=user_id,
                     symbol=symbol,
@@ -479,6 +566,8 @@ class AgentAutopilot:
                     summary=summary,
                     action_taken=action_taken,
                     order_id=order_id,
+                    strategy_id=active_strategy_id,
+                    strategy_name=active_strategy_name,
                 )
                 db.add(log)
                 await db.commit()

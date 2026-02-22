@@ -63,7 +63,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Pipeline init skipped: {e}")
     
-    # 📰 启动新闻爬虫
+    # 启动统一自动交易调度器 (扫描活跃策略)
+    try:
+        from app.services.agent.autopilot import autopilot
+        asyncio.create_task(autopilot.start_scheduler())
+        logger.info("Autopilot strategy scheduler started")
+    except Exception as e:
+        logger.warning(f"Autopilot scheduler skipped: {e}")
+    
+    # 启动新闻爬虫
     news_crawler = None
     if settings.cryptopanic_api_key:
         from app.services.news.crawler import NewsCrawler

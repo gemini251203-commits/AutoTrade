@@ -1663,3 +1663,232 @@ async def get_trade_journal(
     except Exception as e:
         logger.error(f"[AgentTools] get_trade_journal failed: {e}")
         return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
+# ==================== 自动交易管理工具 ====================
+
+
+@register_tool
+async def start_autopilot(
+    db: AsyncSession,
+    user_id: int,
+    strategy_id: str = "",
+):
+    """
+    启动策略自动交易
+
+    参数:
+        strategy_id: 策略 ID (数字)。如果为空则启动所有活跃策略
+
+    说明:
+        启动后 autopilot 调度器会自动按策略设定的周期运行评估:
+        获取行情 → 评估策略信号 → AI 审核 → Pipeline 风控 → 执行
+        每次周期的决策过程会完整记录到决策日志中。
+    """
+    from app.services.agent.autopilot import autopilot
+
+    try:
+        if strategy_id:
+            # 启动指定策略
+            sid = int(strategy_id)
+            result = await db.execute(
+                select(Strategy).where(
+                    Strategy.id == sid,
+                    Strategy.user_id == user_id,
+                )
+            )
+            strategy = result.scalar_one_or_none()
+            if not strategy:
+                return json.dumps({"error": f"策略 ID {sid} 不存在"}, ensure_ascii=False)
+
+            strategy.is_active = True
+            await db.commit()
+
+            # 如果 autopilot 未运行，立即启动
+            if not autopilot.is_running(user_id):
+                config = {
+                    "symbols": [strategy.symbol],
+                    "interval": strategy.interval,
+                    "intervals": [strategy.interval],
+                    "strategy_ids": [strategy.id],
+                }
+                await autopilot.start(user_id, config)
+
+            return json.dumps({
+                "action": "started",
+                "strategy_id": strategy.id,
+                "strategy_name": strategy.name,
+                "symbol": strategy.symbol,
+                "interval": strategy.interval,
+                "message": f"策略 '{strategy.name}' 自动交易已启动",
+            }, ensure_ascii=False)
+
+        else:
+            # 启动所有活跃策略
+            result = await db.execute(
+                select(Strategy).where(
+                    Strategy.user_id == user_id,
+                    Strategy.is_active == True,
+                )
+            )
+            active = result.scalars().all()
+            if not active:
+                return json.dumps({"error": "没有活跃的策略，请先启动一个策略"}, ensure_ascii=False)
+
+            if not autopilot.is_running(user_id):
+                symbols = list(set(s.symbol for s in active))
+                intervals = list(set(s.interval for s in active))
+                config = {
+                    "symbols": symbols,
+                    "interval": intervals[0],
+                    "intervals": intervals,
+                    "strategy_ids": [s.id for s in active],
+                }
+                await autopilot.start(user_id, config)
+
+            return json.dumps({
+                "action": "started",
+                "strategies": [{"id": s.id, "name": s.name} for s in active],
+                "message": f"已启动 {len(active)} 个策略的自动交易",
+            }, ensure_ascii=False)
+
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
+@register_tool
+async def stop_autopilot(
+    db: AsyncSession,
+    user_id: int,
+    strategy_id: str = "",
+):
+    """
+    停止自动交易
+
+    参数:
+        strategy_id: 策略 ID (可选)。如果为空则停止所有自动交易
+    """
+    from app.services.agent.autopilot import autopilot
+
+    try:
+        if strategy_id:
+            sid = int(strategy_id)
+            result = await db.execute(
+                select(Strategy).where(
+                    Strategy.id == sid,
+                    Strategy.user_id == user_id,
+                )
+            )
+            strategy = result.scalar_one_or_none()
+            if strategy:
+                strategy.is_active = False
+                await db.commit()
+                return json.dumps({
+                    "action": "stopped",
+                    "strategy_id": sid,
+                    "message": f"策略 '{strategy.name}' 已停止",
+                }, ensure_ascii=False)
+            return json.dumps({"error": f"策略 ID {sid} 不存在"}, ensure_ascii=False)
+        else:
+            await autopilot.stop(user_id)
+            # 标记所有策略为非活跃
+            result = await db.execute(
+                select(Strategy).where(
+                    Strategy.user_id == user_id,
+                    Strategy.is_active == True,
+                )
+            )
+            for s in result.scalars().all():
+                s.is_active = False
+            await db.commit()
+            return json.dumps({
+                "action": "stopped",
+                "message": "所有自动交易已停止",
+            }, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
+@register_tool
+async def get_autopilot_status(
+    db: AsyncSession,
+    user_id: int,
+):
+    """
+    查询自动交易运行状态
+
+    返回:
+        运行状态、监控交易对、运行时长、周期次数、执行操作数
+    """
+    from app.services.agent.autopilot import autopilot
+
+    status = autopilot.get_status(user_id)
+
+    # 获取活跃策略列表
+    result = await db.execute(
+        select(Strategy).where(
+            Strategy.user_id == user_id,
+            Strategy.is_active == True,
+        )
+    )
+    active = result.scalars().all()
+    status["active_strategies"] = [
+        {"id": s.id, "name": s.name, "symbol": s.symbol}
+        for s in active
+    ]
+
+    return json.dumps(status, ensure_ascii=False, default=str)
+
+
+@register_tool
+async def get_trading_logs(
+    db: AsyncSession,
+    user_id: int,
+    symbol: str = "",
+    limit: int = 10,
+):
+    """
+    查看最近的自动交易决策日志
+
+    参数:
+        symbol: 可选，过滤交易对
+        limit: 返回条数 (默认 10)
+
+    返回:
+        每条日志包含: 时间、交易对、策略名、决策、AI思考摘要、是否执行
+    """
+    from app.models.autopilot_log import AutopilotLog
+
+    try:
+        query = (
+            select(AutopilotLog)
+            .where(AutopilotLog.user_id == user_id)
+        )
+        if symbol:
+            query = query.where(AutopilotLog.symbol == symbol)
+        query = query.order_by(AutopilotLog.created_at.desc()).limit(int(limit))
+
+        result = await db.execute(query)
+        logs = result.scalars().all()
+
+        log_list = []
+        for l in logs:
+            log_list.append({
+                "id": l.id,
+                "time": l.created_at.isoformat() if l.created_at else None,
+                "symbol": l.symbol,
+                "strategy": l.strategy_name,
+                "decision": l.decision,
+                "summary": l.summary,
+                "action_taken": l.action_taken,
+                "order_id": l.order_id,
+            })
+
+        return json.dumps({
+            "count": len(log_list),
+            "logs": log_list,
+        }, ensure_ascii=False, default=str)
+
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
