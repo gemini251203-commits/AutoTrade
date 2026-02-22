@@ -237,3 +237,66 @@ async def get_ticker(symbol: str, db: DbSession):
         status_code=503,
         detail=f"Unable to fetch ticker for {symbol} (no data in database either)"
     )
+
+
+@router.get("/support-resistance")
+async def get_support_resistance(
+    db: DbSession,
+    symbol: str = Query(default="BTCUSDT", description="交易对"),
+    interval: str = Query(default="1h", description="时间周期"),
+):
+    """
+    获取支撑/阻力位
+
+    基于指定时间周期的 K 线数据，计算当前的支撑和阻力位。
+    
+    Returns:
+    - support: 支撑位列表 [{level, strength, distance_pct}]
+    - resistance: 阻力位列表 [{level, strength, distance_pct}]
+    - current_price: 当前价格
+    - nearest_support: 最近支撑位
+    - nearest_resistance: 最近阻力位
+    """
+    from app.services.quant.indicators import find_support_resistance
+
+    # 获取足够多的 K 线数据 (200 根用于计算)
+    query = (
+        select(Kline)
+        .where(Kline.symbol == symbol.upper())
+        .where(Kline.interval == interval)
+        .order_by(desc(Kline.open_time))
+        .limit(200)
+    )
+    result = await db.execute(query)
+    klines_raw = list(reversed(result.scalars().all()))
+
+    if len(klines_raw) < 20:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Not enough kline data for {symbol} {interval} (need 20+, got {len(klines_raw)})"
+        )
+
+    # 转换为 indicators 需要的格式
+    klines = [
+        {
+            "open_time": k.open_time,
+            "open": float(k.open),
+            "high": float(k.high),
+            "low": float(k.low),
+            "close": float(k.close),
+            "volume": float(k.volume),
+        }
+        for k in klines_raw
+    ]
+
+    sr = find_support_resistance(klines)
+
+    return {
+        "symbol": symbol.upper(),
+        "interval": interval,
+        "current_price": sr["current_price"],
+        "nearest_support": sr["nearest_support"],
+        "nearest_resistance": sr["nearest_resistance"],
+        "support": sr["support"],
+        "resistance": sr["resistance"],
+    }

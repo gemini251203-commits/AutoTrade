@@ -24,6 +24,11 @@ const priceChange = ref(0)
 const isPositive = ref(true)
 const isLoading = ref(true)
 
+// 支撑阻力线
+const showSR = ref(false)
+const srLines: any[] = []  // 保存 priceLine 引用以便清除
+const srData = ref<any>(null)
+
 // 当前选中的时间周期
 const selectedTimeframe = ref('1h')
 const timeframes = ['1m', '5m', '15m', '1h', '4h', '1d']
@@ -53,6 +58,8 @@ async function handleSymbolChange(symbolCode: string) {
       console.warn('[TradingChart] No data to display')
     }
   }
+  // 刷新支撑阻力线
+  if (showSR.value) await refreshSR()
 }
 
 // 使用封装的 request (自动携带 Token 和处理认证)
@@ -207,6 +214,84 @@ async function changeTimeframe(tf: string) {
       chart?.timeScale().fitContent()
     }
   }
+  // 刷新支撑阻力线
+  if (showSR.value) await refreshSR()
+}
+
+// ==================== 支撑阻力线 ====================
+
+async function fetchSR() {
+  try {
+    const res = await request.get('/market/support-resistance', {
+      params: {
+        symbol: symbolStore.currentSymbol,
+        interval: selectedTimeframe.value,
+      }
+    })
+    srData.value = res.data
+    return res.data
+  } catch (e) {
+    console.warn('[TradingChart] 获取支撑阻力失败:', e)
+    return null
+  }
+}
+
+function drawSR(data: any) {
+  if (!candlestickSeries || isDestroyed || !data) return
+  clearSR()
+  
+  // 画支撑线 (绿色)
+  for (const s of (data.support || []).slice(0, 3)) {
+    const line = candlestickSeries.createPriceLine({
+      price: s.level,
+      color: 'rgba(34, 197, 94, 0.6)',
+      lineWidth: 1,
+      lineStyle: 2,  // dashed
+      axisLabelVisible: true,
+      title: `S ${s.strength}x`,
+    })
+    srLines.push(line)
+  }
+  
+  // 画阻力线 (红色)
+  for (const r of (data.resistance || []).slice(0, 3)) {
+    const line = candlestickSeries.createPriceLine({
+      price: r.level,
+      color: 'rgba(239, 68, 68, 0.6)',
+      lineWidth: 1,
+      lineStyle: 2,  // dashed
+      axisLabelVisible: true,
+      title: `R ${r.strength}x`,
+    })
+    srLines.push(line)
+  }
+}
+
+function clearSR() {
+  if (!candlestickSeries) return
+  for (const line of srLines) {
+    try {
+      candlestickSeries.removePriceLine(line)
+    } catch { /* already removed */ }
+  }
+  srLines.length = 0
+}
+
+async function toggleSR() {
+  showSR.value = !showSR.value
+  if (showSR.value) {
+    const data = await fetchSR()
+    drawSR(data)
+  } else {
+    clearSR()
+    srData.value = null
+  }
+}
+
+async function refreshSR() {
+  if (!showSR.value) return
+  const data = await fetchSR()
+  drawSR(data)
 }
 
 // Handle resize
@@ -378,6 +463,16 @@ onUnmounted(() => {
         </div>
       </div>
       
+      <!-- SR Toggle -->
+      <button
+        @click="toggleSR"
+        class="sr-toggle-btn"
+        :class="{ active: showSR }"
+        title="支撑/阻力线"
+      >
+        S/R
+      </button>
+
       <!-- Timeframe Selector -->
       <div class="flex gap-1">
         <button
@@ -408,5 +503,30 @@ onUnmounted(() => {
 :deep(.tv-lightweight-charts) {
   width: 100% !important;
   height: 100% !important;
+}
+
+.sr-toggle-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.5px;
+}
+
+.sr-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #a855f7;
+}
+
+.sr-toggle-btn.active {
+  background: rgba(138, 43, 226, 0.15);
+  border-color: rgba(138, 43, 226, 0.4);
+  color: #a855f7;
+  box-shadow: 0 0 8px rgba(138, 43, 226, 0.15);
 }
 </style>
