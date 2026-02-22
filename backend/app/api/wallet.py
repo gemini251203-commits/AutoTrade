@@ -542,65 +542,122 @@ async def reset_wallet(
     """
     重置账户 (仅模拟盘)
     
-    将账户完全重置:
-    - 删除所有订单
-    - 删除所有仓位
-    - 删除所有网格机器人
-    - 删除所有AI任务
+    将账户完全重置到初始化状态:
+    - 删除所有订单、仓位、网格机器人
+    - 删除所有策略、策略日志、自动交易日志
+    - 删除所有AI对话、新闻监控规则
+    - 删除所有趋势分析快照
     - 重置钱包余额
     """
-    from sqlalchemy import delete
+    from sqlalchemy import delete, update, select
     from app.models.wallet_transaction import WalletTransaction, TransactionType
     from app.models.order import Order
     from app.models.position import Position
     from app.models.grid_bot import GridBot
     from app.models.task import TaskTicket
+    from app.models.strategy import Strategy, StrategyLog, TradeMemory
+    from app.models.autopilot_log import AutopilotLog
+    from app.models.news import NewsAlert, NewsThinking
+    from app.models.agent import ChatConversation, ChatMessage
+    from app.models.trend_scheme import TrendScheme, TrendSnapshot
     import os
     
     user_id = current_user.id
     
     logger.info(f"[Wallet] User {user_id} starting full account reset...")
     
-    # 1. 删除所有订单
-    await db.execute(
-        delete(Order).where(Order.user_id == user_id)
-    )
-    logger.info(f"[Wallet] Deleted all orders for user {user_id}")
+    # ==================== 清空所有用户数据 ====================
     
-    # 2. 删除所有仓位
-    await db.execute(
-        delete(Position).where(Position.user_id == user_id)
-    )
-    logger.info(f"[Wallet] Deleted all positions for user {user_id}")
+    # 1. 订单
+    await db.execute(delete(Order).where(Order.user_id == user_id))
+    logger.info(f"[Wallet] Deleted all orders")
     
-    # 3. 删除所有网格机器人
-    await db.execute(
-        delete(GridBot).where(GridBot.user_id == user_id)
-    )
-    logger.info(f"[Wallet] Deleted all grid bots for user {user_id}")
+    # 2. 仓位
+    await db.execute(delete(Position).where(Position.user_id == user_id))
+    logger.info(f"[Wallet] Deleted all positions")
     
-    # 4. 删除所有AI任务
-    await db.execute(
-        delete(TaskTicket).where(TaskTicket.user_id == user_id)
-    )
-    logger.info(f"[Wallet] Deleted all AI tasks for user {user_id}")
+    # 3. 网格机器人
+    await db.execute(delete(GridBot).where(GridBot.user_id == user_id))
+    logger.info(f"[Wallet] Deleted all grid bots")
     
-    # 5. 删除所有交易记忆 (Trade Journal)
-    from app.models.strategy import TradeMemory
-    await db.execute(
-        delete(TradeMemory).where(TradeMemory.user_id == user_id)
-    )
-    logger.info(f"[Wallet] Deleted all trade memories for user {user_id}")
+    # 4. AI 任务
+    await db.execute(delete(TaskTicket).where(TaskTicket.user_id == user_id))
+    logger.info(f"[Wallet] Deleted all AI tasks")
     
-    # 6. 删除所有流水记录
-    await db.execute(
-        delete(WalletTransaction).where(WalletTransaction.user_id == user_id)
-    )
-    logger.info(f"[Wallet] Deleted all transactions for user {user_id}")
+    # 5. 交易记忆 / 日记
+    await db.execute(delete(TradeMemory).where(TradeMemory.user_id == user_id))
+    logger.info(f"[Wallet] Deleted all trade memories")
     
-    # 6. 重置钱包
+    # 6. 钱包流水
+    await db.execute(delete(WalletTransaction).where(WalletTransaction.user_id == user_id))
+    logger.info(f"[Wallet] Deleted all transactions")
+    
+    # 7. 策略日志
+    # 先删日志再删策略 (外键依赖)
+    user_strategy_ids = (
+        await db.execute(
+            select(Strategy.id).where(Strategy.user_id == user_id)
+        )
+    ).scalars().all()
+    if user_strategy_ids:
+        await db.execute(
+            delete(StrategyLog).where(StrategyLog.strategy_id.in_(user_strategy_ids))
+        )
+    logger.info(f"[Wallet] Deleted all strategy logs")
+    
+    # 8. 策略
+    await db.execute(delete(Strategy).where(Strategy.user_id == user_id))
+    logger.info(f"[Wallet] Deleted all strategies")
+    
+    # 9. 自动交易日志
+    await db.execute(delete(AutopilotLog).where(AutopilotLog.user_id == user_id))
+    logger.info(f"[Wallet] Deleted all autopilot logs")
+    
+    # 10. 新闻 AI 思考记录
+    await db.execute(delete(NewsThinking).where(NewsThinking.user_id == user_id))
+    logger.info(f"[Wallet] Deleted all news thinkings")
+    
+    # 11. 新闻监控规则
+    await db.execute(delete(NewsAlert).where(NewsAlert.user_id == user_id))
+    logger.info(f"[Wallet] Deleted all news alerts")
+    
+    # 12. AI 对话消息 (先删消息再删会话)
+    user_conv_ids = (
+        await db.execute(
+            select(ChatConversation.id).where(ChatConversation.user_id == user_id)
+        )
+    ).scalars().all()
+    if user_conv_ids:
+        await db.execute(
+            delete(ChatMessage).where(ChatMessage.conversation_id.in_(user_conv_ids))
+        )
+    await db.execute(delete(ChatConversation).where(ChatConversation.user_id == user_id))
+    logger.info(f"[Wallet] Deleted all chat conversations and messages")
+    
+    # 13. 趋势分析快照
+    user_scheme_ids = (
+        await db.execute(
+            select(TrendScheme.id).where(TrendScheme.user_id == user_id)
+        )
+    ).scalars().all()
+    if user_scheme_ids:
+        await db.execute(
+            delete(TrendSnapshot).where(TrendSnapshot.scheme_id.in_(user_scheme_ids))
+        )
+    logger.info(f"[Wallet] Deleted all trend snapshots")
+    
+    # 14. 重置趋势方案缓存 (保留方案本身，但清空结果)
+    await db.execute(
+        update(TrendScheme).where(TrendScheme.user_id == user_id).values(
+            last_result=None,
+            last_run_at=None,
+        )
+    )
+    logger.info(f"[Wallet] Reset all trend scheme results")
+    
+    # ==================== 重置钱包 ====================
     initial = req.initial_balance if (req and req.initial_balance) else Decimal(
-        os.getenv("SIMULATION_INITIAL_BALANCE", "100")  # 🔥 改为 100U
+        os.getenv("SIMULATION_INITIAL_BALANCE", "100")
     )
     
     wallet = await WalletManager.get_wallet(db, user_id)
@@ -613,6 +670,8 @@ async def reset_wallet(
     wallet.balance = initial
     wallet.frozen = Decimal("0")
     wallet.total_pnl = Decimal("0")
+    wallet.total_equity = initial
+    wallet.unrealized_pnl = Decimal("0")
     
     # 记录重置流水
     tx = WalletTransaction(
@@ -624,25 +683,10 @@ async def reset_wallet(
     )
     db.add(tx)
     
-    # 🔥 记录到交易日志 (让 journal 页面对账)
-    from app.models.strategy import TradeMemory
-    journal_entry = TradeMemory(
-        user_id=user_id,
-        symbol="ACCOUNT",
-        source="system",
-        trade_result="breakeven",
-        pnl_pct=0,
-        pnl_usdt=float(initial - old_balance),
-        close_reason="account_reset",
-        open_reason=f"账户重置: {old_balance} → {initial} USDT",
-        lesson=f"Full account reset to {initial} USDT",
-    )
-    db.add(journal_entry)
-    
     await db.commit()
     await db.refresh(wallet)
     
-    logger.info(f"[Wallet] User {user_id} account fully reset to {initial} USDT")
+    logger.info(f"[Wallet] User {user_id} account fully reset to {initial} USDT (cleared 14 tables)")
     return wallet
 
 
