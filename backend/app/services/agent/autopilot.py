@@ -345,6 +345,10 @@ class AgentAutopilot:
                 # 每 10 个周期做一次数据一致性检查
                 if cycle_count % 10 == 0:
                     await self._health_check(user_id)
+                
+                # 每 5 个周期触发策略反思 (AI 回顾表现并优化)
+                if cycle_count % 5 == 0:
+                    await self._strategy_reflection(user_id)
 
                 await asyncio.sleep(seconds)
         except asyncio.CancelledError:
@@ -399,6 +403,70 @@ class AgentAutopilot:
                 )
         except Exception as e:
             logger.warning(f"[Autopilot] Health check failed: {e}")
+
+    async def _strategy_reflection(self, user_id: int):
+        """
+        策略反思 — AI 主理人回顾近期表现并提出优化
+
+        每 5 个周期触发一次，通过 Agent 对话引擎完成反思。
+        """
+        try:
+            async with AsyncSessionLocal() as db:
+                # 获取最近的决策日志
+                recent_logs = await db.execute(
+                    select(AutopilotLog).where(
+                        AutopilotLog.user_id == user_id,
+                    ).order_by(AutopilotLog.created_at.desc()).limit(10)
+                )
+                logs = recent_logs.scalars().all()
+                if not logs:
+                    return
+
+                # 构建反思 prompt
+                actions = [l for l in logs if l.action_taken]
+                holds = [l for l in logs if not l.action_taken]
+
+                reflection_prompt = (
+                    "[策略反思] 请回顾最近的自动交易表现:\n\n"
+                    f"最近 {len(logs)} 次决策: {len(actions)} 次执行, {len(holds)} 次观望\n"
+                )
+
+                # 添加最近交易摘要
+                for log in logs[:5]:
+                    reflection_prompt += f"  - {log.symbol} | {log.decision} | {log.summary}\n"
+
+                reflection_prompt += (
+                    "\n请:\n"
+                    "1. 查询交易记忆分析最近的盈亏情况\n"
+                    "2. 查看当前活跃策略配置\n"
+                    "3. 如果发现策略参数需要调整 (如止损/止盈/指标阈值), 直接修改\n"
+                    "4. 给出一句话总结当前策略表现\n"
+                    "\n最后写出: 策略优化建议: [无需调整/已优化参数/建议暂停]"
+                )
+
+                # 获取 autopilot 会话
+                conv_id = await self._get_or_create_conversation(db, user_id)
+
+                from app.services.agent.tools import agent_source_var
+                token = agent_source_var.set('autopilot_reflection')
+                try:
+                    reply = await chat_complete(
+                        db=db,
+                        user_id=user_id,
+                        conversation_id=conv_id,
+                        user_message=reflection_prompt,
+                        persona="autopilot",
+                    )
+                finally:
+                    agent_source_var.reset(token)
+
+                logger.info(
+                    f"[Autopilot] Strategy reflection done for user {user_id}, "
+                    f"reply_len={len(reply)}"
+                )
+
+        except Exception as e:
+            logger.warning(f"[Autopilot] Strategy reflection failed: {e}")
 
     async def _run_cycle(self, user_id: int, symbol: str, intervals: list = None) -> str:
         """

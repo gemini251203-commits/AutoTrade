@@ -47,6 +47,10 @@ import {
   getPipelineStatus,
   type PipelineStatusResponse,
 } from '@/api/pipeline'
+import {
+  getAutopilotLogs,
+  type AutopilotLogResponse,
+} from '@/api/chat'
 
 // ==================== State ====================
 
@@ -56,6 +60,7 @@ const memories = ref<TradeMemoryResponse[]>([])
 const loading = ref(false)
 const error = ref('')
 const pipelineStatus = ref<PipelineStatusResponse | null>(null)
+const decisionLogs = ref<AutopilotLogResponse[]>([])
 
 // Modal state
 const showCreateModal = ref(false)
@@ -74,7 +79,7 @@ const formYaml = ref('')
 const formSaving = ref(false)
 
 // Tab state
-type TabKey = 'strategies' | 'memories'
+type TabKey = 'strategies' | 'memories' | 'timeline'
 const activeTab = ref<TabKey>('strategies')
 
 // ==================== Computed ====================
@@ -224,6 +229,30 @@ function pnlColor(v: number) {
   return '#6b7280'
 }
 
+async function fetchDecisionLogs() {
+  try {
+    decisionLogs.value = await getAutopilotLogs(20)
+  } catch (e) {
+    console.warn('Failed to fetch decision logs', e)
+  }
+}
+
+function decisionColor(d: string) {
+  if (d === 'open_long') return '#22c55e'
+  if (d === 'open_short') return '#ef4444'
+  if (d === 'close_long' || d === 'close_short') return '#f59e0b'
+  if (d === 'error') return '#ef4444'
+  return '#6b7280'
+}
+
+function decisionLabel(d: string) {
+  const map: Record<string, string> = {
+    hold: '观望', open_long: '做多', open_short: '做空',
+    close_long: '平多', close_short: '平空', error: '异常',
+  }
+  return map[d] || d
+}
+
 onMounted(() => {
   fetchAll()
   // 加载 Pipeline 状态
@@ -322,6 +351,16 @@ onMounted(() => {
           }"
         >
           交易记忆
+        </button>
+        <button
+          @click="activeTab = 'timeline'; fetchDecisionLogs()"
+          class="px-4 py-2 rounded-md text-sm transition-all"
+          :style="{
+            background: activeTab === 'timeline' ? 'rgba(138,43,226,0.15)' : 'transparent',
+            color: activeTab === 'timeline' ? '#a855f7' : '#6b7280',
+          }"
+        >
+          决策时间线
         </button>
       </div>
 
@@ -517,6 +556,38 @@ onMounted(() => {
             </div>
             <div class="text-sm text-gray-300 mb-1">{{ m.lesson }}</div>
             <div v-if="m.open_reason" class="text-xs text-gray-500">{{ m.open_reason }}</div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Decision Timeline Tab -->
+      <template v-else-if="activeTab === 'timeline'">
+        <div v-if="decisionLogs.length === 0" class="text-center py-16">
+          <p class="text-gray-500 mt-4">暂无决策记录</p>
+          <p class="text-gray-600 text-sm mt-1">启动策略自动交易后，AI 的每次决策将显示在此</p>
+        </div>
+        <div v-else class="tl-list">
+          <div
+            v-for="log in decisionLogs"
+            :key="log.id"
+            class="tl-item"
+          >
+            <div class="tl-dot" :style="{ background: decisionColor(log.decision) }"></div>
+            <div class="tl-content">
+              <div class="tl-header">
+                <span class="tl-badge" :style="{ color: decisionColor(log.decision), borderColor: decisionColor(log.decision) + '40' }">
+                  {{ decisionLabel(log.decision) }}
+                </span>
+                <span class="tl-symbol">{{ log.symbol }}</span>
+                <span v-if="log.strategy_name" class="tl-strategy">策略: {{ log.strategy_name }}</span>
+                <span class="tl-time">{{ formatDate(log.created_at) }}</span>
+              </div>
+              <div class="tl-summary">{{ log.summary }}</div>
+              <details v-if="log.thinking" class="tl-thinking">
+                <summary>查看 AI 思考过程</summary>
+                <pre class="tl-pre">{{ log.thinking }}</pre>
+              </details>
+            </div>
           </div>
         </div>
       </template>
@@ -939,5 +1010,87 @@ onMounted(() => {
   .pl-arrow {
     display: none;
   }
+}
+
+/* Decision Timeline */
+.tl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.tl-item {
+  display: flex;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.tl-item:last-child { border-bottom: none; }
+.tl-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
+.tl-content { flex: 1; min-width: 0; }
+.tl-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.tl-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 4px;
+  border: 1px solid;
+}
+.tl-symbol {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e5e7eb;
+  font-family: 'JetBrains Mono', monospace;
+}
+.tl-strategy {
+  font-size: 11px;
+  color: #a78bfa;
+  background: rgba(139,92,246,0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.tl-time {
+  font-size: 11px;
+  color: #4b5563;
+  margin-left: auto;
+}
+.tl-summary {
+  font-size: 13px;
+  color: #d1d5db;
+  line-height: 1.5;
+}
+.tl-thinking {
+  margin-top: 8px;
+}
+.tl-thinking summary {
+  font-size: 11px;
+  color: #6b7280;
+  cursor: pointer;
+  user-select: none;
+}
+.tl-thinking summary:hover { color: #a78bfa; }
+.tl-pre {
+  font-size: 12px;
+  color: #9ca3af;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: rgba(0,0,0,0.2);
+  padding: 10px;
+  border-radius: 8px;
+  margin-top: 6px;
+  max-height: 300px;
+  overflow-y: auto;
 }
 </style>

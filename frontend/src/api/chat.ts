@@ -186,6 +186,9 @@ export interface AutopilotLogResponse {
   market_snapshot: Record<string, unknown> | null
   action_taken: boolean
   order_id: number | null
+  strategy_id: number | null
+  strategy_name: string | null
+  signal_raw: Record<string, unknown> | null
   error_message: string | null
   created_at: string
 }
