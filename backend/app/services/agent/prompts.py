@@ -93,14 +93,22 @@ TOOLS_DESCRIPTION = """
     - 只有入场信号 + 风控通过才会自动下单
     示例: [TOOL_CALL: run_strategy(strategy_id=1)]
 
-16. create_strategy(name, symbol, interval, config_yaml) - 创建新策略保存到数据库
+16. create_strategy(name, symbol, interval) - 创建新策略保存到数据库
     - name: 策略名称
-    - config_yaml: YAML 格式策略配置
-    示例: [TOOL_CALL: create_strategy(name=RSI超卖策略, symbol=BTCUSDT, interval=1h, config_yaml=...)]
+    - config_yaml: **不要放在TOOL_CALL参数里**。必须在回复的正文中使用 ```yaml 和 ``` 包裹输出策略的 YAML 内容。系统会自动提取代码块。
+    示例: 
+    ```yaml
+    name: "RSI超卖策略"
+    symbol: BTCUSDT
+    interval: 1h
+    ...
+    ```
+    [TOOL_CALL: create_strategy(name=RSI超卖策略, symbol=BTCUSDT, interval=1h)]
 
-17. update_strategy(strategy_id, name, symbol, interval, config_yaml) - 修改已有策略
+17. update_strategy(strategy_id, name, symbol, interval) - 修改已有策略
     - 只传需要修改的字段，不传的保持不变
-    示例: [TOOL_CALL: update_strategy(strategy_id=1, config_yaml=...)]
+    - config_yaml: 同样**不要放在TOOL_CALL参数里**，直接在正文写 ```yaml 代码块。
+    示例: [TOOL_CALL: update_strategy(strategy_id=1)]
 
 ## 记忆工具
 18. query_memories(symbol) - 查询所有交易记忆 (包含手动/AI/信号/量化策略所有来源)

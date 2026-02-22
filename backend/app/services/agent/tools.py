@@ -1141,6 +1141,17 @@ async def create_strategy(
     except ValueError as e:
         return json.dumps({"error": f"YAML 配置验证失败: {str(e)}"}, ensure_ascii=False)
 
+    # 强校验：是否存在不支持的指标
+    report = _build_validation_report(config)
+    if not report.get("is_valid", False):
+        error_msgs = []
+        if report.get("unknown_indicators"):
+            error_msgs.append(f"使用了系统不支持的指标: {', '.join(report['unknown_indicators'])}")
+        if report.get("syntax_errors"):
+            error_msgs.extend(report["syntax_errors"])
+        if error_msgs:
+            return json.dumps({"error": f"策略配置无效: {'; '.join(error_msgs)}"}, ensure_ascii=False)
+
     strategy = Strategy(
         user_id=user_id,
         name=name,
@@ -1152,9 +1163,6 @@ async def create_strategy(
     db.add(strategy)
     await db.commit()
     await db.refresh(strategy)
-
-    # 生成验证报告
-    report = _build_validation_report(config)
 
     return json.dumps({
         "action": "created",
@@ -1200,12 +1208,25 @@ async def update_strategy(
         return json.dumps({"error": f"找不到策略 ID: {strategy_id}"}, ensure_ascii=False)
 
     # 验证新的 YAML (如果提供了)
+    report = {}
     if config_yaml:
         engine = StrategyEngine()
         try:
-            engine.parse_yaml(config_yaml)
+            config = engine.parse_yaml(config_yaml)
         except ValueError as e:
-            return json.dumps({"error": f"YAML 配置验证失败: {str(e)}"}, ensure_ascii=False)
+            return json.dumps({"error": f"YAML 配置解析失败: {str(e)}"}, ensure_ascii=False)
+        
+        # 强校验新的 YAML
+        report = _build_validation_report(config)
+        if not report.get("is_valid", False):
+            error_msgs = []
+            if report.get("unknown_indicators"):
+                error_msgs.append(f"使用了系统不支持的指标: {', '.join(report['unknown_indicators'])}")
+            if report.get("syntax_errors"):
+                error_msgs.extend(report["syntax_errors"])
+            if error_msgs:
+                return json.dumps({"error": f"策略配置无效无法更新: {'; '.join(error_msgs)}"}, ensure_ascii=False)
+                
         strategy.config_yaml = config_yaml
 
     if name:
@@ -1217,14 +1238,16 @@ async def update_strategy(
 
     await db.commit()
 
-    # 生成验证报告 (用最新 YAML)
-    report = {}
-    try:
-        final_config = engine.parse_yaml(strategy.config_yaml) if config_yaml else None
-        if final_config:
+    await db.commit()
+
+    # 如果没提供新的 YAML，生成旧 YAML 的验证报告
+    if not config_yaml:
+        try:
+            engine = StrategyEngine()
+            final_config = engine.parse_yaml(strategy.config_yaml)
             report = _build_validation_report(final_config)
-    except Exception:
-        pass
+        except Exception:
+            pass
 
     result = {
         "action": "updated",

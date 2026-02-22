@@ -170,6 +170,12 @@ async def chat_stream(
             for tool_name, args_str in tool_matches:
                 tool_args = _parse_tool_args(args_str)
 
+                # 特殊处理: 取出 ai_content 中的 ```yaml 代码块作为 config_yaml 参数
+                if tool_name in ("create_strategy", "update_strategy"):
+                    yaml_match = re.search(r"```yaml\s*\n(.*?)\n```", ai_content, re.DOTALL)
+                    if yaml_match:
+                        tool_args["config_yaml"] = yaml_match.group(1).strip()
+
                 # 发送工具调用事件
                 yield {"type": "tool_call", "tool": tool_name, "args": tool_args}
 
@@ -305,6 +311,13 @@ async def chat_complete(
             results_text_parts = []
             for tool_name, args_str in tool_matches:
                 tool_args = _parse_tool_args(args_str)
+                
+                # 特殊处理: 取出 ai_content 中的 ```yaml 代码块作为 config_yaml 参数
+                if tool_name in ("create_strategy", "update_strategy"):
+                    yaml_match = re.search(r"```yaml\s*\n(.*?)\n```", ai_content, re.DOTALL)
+                    if yaml_match:
+                        tool_args["config_yaml"] = yaml_match.group(1).strip()
+                
                 tool_result = await execute_tool(tool_name, tool_args, db, user_id)
                 results_text_parts.append(
                     f"[TOOL_RESULT: {tool_name}]\n{tool_result}\n[/TOOL_RESULT]"
