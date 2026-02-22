@@ -81,6 +81,14 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("CRYPTOPANIC_API_KEY not set, News Crawler disabled")
     
+    # 启动趋势分析定时调度器 (每日自动分析)
+    try:
+        from app.services.quant.trend_scheduler import trend_scheduler
+        await trend_scheduler.start()
+        logger.info("Trend Analysis Scheduler started (daily)")
+    except Exception as e:
+        logger.warning(f"Trend Scheduler skipped: {e}")
+    
     yield
     
     # ==================== Graceful Shutdown ====================
