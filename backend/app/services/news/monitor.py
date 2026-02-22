@@ -169,15 +169,46 @@ class NewsMonitor:
         # ============ action=trade → AI 分析 + 自动交易 ============
 
         symbol = (alert.trade_symbol or "BTCUSDT").upper()
-        side = alert.trade_side or "buy"
+        side_config = alert.trade_side or "auto"
         leverage = alert.trade_leverage or 5
         position_pct = alert.trade_position_pct or 5.0  # 默认 5%
         sl_pct = alert.trade_stop_loss_pct or 2.0
         tp_pct = alert.trade_take_profit_pct or 3.0
 
+        # ============ 自动判断交易方向 ============
+        if side_config == "auto":
+            # 根据新闻情感决定方向
+            sentiment = article.sentiment or "neutral"
+            score = article.sentiment_score or 0
+            if sentiment == "positive" or score > 0.2:
+                side = "buy"
+            elif sentiment == "negative" or score < -0.2:
+                side = "sell"
+            else:
+                # 情感中性 → 观望
+                thinking = NewsThinking(
+                    user_id=user_id,
+                    news_article_id=article.id,
+                    news_alert_id=alert.id,
+                    step_get_news=step_news,
+                    step_analyze=step_analyze,
+                    step_evaluate="交易方向=自动, 但新闻情感为中性，无法判断方向",
+                    step_decide="决策: 观望 (情感中性，自动判断无法确定方向)",
+                    decision="skip",
+                )
+                db.add(thinking)
+                alert.triggered_count += 1
+                alert.last_triggered_at = datetime.now(timezone.utc)
+                await db.flush()
+                return thinking
+            step_analyze += f"\n🤖 自动方向判断: 情感={sentiment}(score={score}) → {side}"
+        else:
+            side = side_config
+
         # Step 3: 评估 — 检查趋势分析是否支持这个方向
         step_evaluate = ""
         trend_ok = True
+        trend_direction = None
         try:
             from app.models.trend_scheme import TrendScheme
             trend_result = await db.execute(
@@ -189,21 +220,34 @@ class NewsMonitor:
             scheme = trend_result.scalar_one_or_none()
             if scheme and scheme.last_result:
                 r = scheme.last_result
-                direction = r.get("direction", "unknown")
+                trend_direction = r.get("direction", "unknown")
                 regime = r.get("regime", "unknown")
                 step_evaluate += (
-                    f"趋势分析 ({scheme.name}): {direction}, "
+                    f"趋势分析 ({scheme.name}): {trend_direction}, "
                     f"体制: {regime}, 置信度: {r.get('confidence', 0)}%\n"
                 )
-                # 趋势方向与交易方向冲突 → 降低信心
-                if side == "buy" and direction == "downtrend":
-                    step_evaluate += "⚠️ 趋势方向(下跌)与做多方向冲突\n"
-                    trend_ok = False
-                elif side == "sell" and direction == "uptrend":
-                    step_evaluate += "⚠️ 趋势方向(上涨)与做空方向冲突\n"
-                    trend_ok = False
-                else:
-                    step_evaluate += "✅ 趋势方向与交易方向一致\n"
+
+                # auto 模式: 如果趋势与情感冲突，优先用趋势方向
+                if side_config == "auto" and trend_direction in ("uptrend", "downtrend"):
+                    trend_side = "buy" if trend_direction == "uptrend" else "sell"
+                    if trend_side != side:
+                        step_evaluate += (
+                            f"⚠️ 情感判断({side}) 与 趋势方向({trend_side}) 冲突 → "
+                            f"采用趋势方向 {trend_side}\n"
+                        )
+                        side = trend_side
+                    else:
+                        step_evaluate += f"✅ 情感判断({side}) 与趋势方向一致\n"
+                elif side_config != "auto":
+                    # 固定方向模式: 检查趋势冲突
+                    if side == "buy" and trend_direction == "downtrend":
+                        step_evaluate += "⚠️ 趋势方向(下跌)与做多方向冲突\n"
+                        trend_ok = False
+                    elif side == "sell" and trend_direction == "uptrend":
+                        step_evaluate += "⚠️ 趋势方向(上涨)与做空方向冲突\n"
+                        trend_ok = False
+                    else:
+                        step_evaluate += "✅ 趋势方向与交易方向一致\n"
             else:
                 step_evaluate += "未找到趋势分析结果，跳过趋势检查\n"
         except Exception as e:

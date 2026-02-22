@@ -522,7 +522,7 @@ onMounted(loadAll)
           <n-form-item label="交易方向">
             <n-select
               v-model:value="alertForm.trade_side"
-              :options="[{ value: 'buy', label: '做多' }, { value: 'sell', label: '做空' }]"
+              :options="[{ value: 'auto', label: '🤖 自动判断' }, { value: 'buy', label: '做多' }, { value: 'sell', label: '做空' }]"
             />
           </n-form-item>
           <n-form-item label="交易对">
