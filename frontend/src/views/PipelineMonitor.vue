@@ -22,6 +22,11 @@ const circuitBreakerLoading = ref(false)
 // Auto-refresh
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 
+// History tracking (Pure Frontend)
+const historyLimit = 20
+const ticksHistory = ref<number[]>([])
+const lastTicksCount = ref<number>(0)
+
 // Computed
 const uptimeStr = computed(() => {
   if (!status.value) return '--'
@@ -75,6 +80,18 @@ async function fetchStatus() {
     ])
     status.value = s
     config.value = c
+
+    // Record ticks delta for sparkline
+    if (s.stats && s.stats.ticks_processed !== undefined) {
+      if (lastTicksCount.value > 0) {
+        const delta = Math.max(0, s.stats.ticks_processed - lastTicksCount.value)
+        ticksHistory.value.push(delta)
+        if (ticksHistory.value.length > historyLimit) {
+          ticksHistory.value.shift()
+        }
+      }
+      lastTicksCount.value = s.stats.ticks_processed
+    }
   } catch (e: any) {
     console.error('Pipeline status fetch failed:', e)
   } finally {
@@ -114,7 +131,6 @@ onUnmounted(() => {
       <div class="page-header">
         <div class="header-left">
           <h1 class="page-title">
-            <span class="title-icon">⚡</span>
             Pipeline Monitor
           </h1>
           <p class="page-subtitle">LEAN 四层流水线 · 实时监控</p>
@@ -168,7 +184,7 @@ onUnmounted(() => {
                 @click="handleCircuitBreaker"
                 round
               >
-                {{ status.circuit_breaker ? '🚨 已熔断 · 解除' : '正常' }}
+                {{ status.circuit_breaker ? '已熔断 · 解除' : '正常' }}
               </NButton>
             </div>
           </div>
@@ -250,27 +266,21 @@ onUnmounted(() => {
           <div class="stats-grid">
             <div class="stat-card glass-panel">
               <NStatistic label="Insights 产出" :value="status.stats?.insights_generated || 0" />
-              <div class="stat-icon" style="color: #a855f7">📡</div>
             </div>
             <div class="stat-card glass-panel">
               <NStatistic label="Targets 创建" :value="status.stats?.targets_created || 0" />
-              <div class="stat-icon" style="color: #3b82f6">🎯</div>
             </div>
             <div class="stat-card glass-panel">
               <NStatistic label="风控通过" :value="status.stats?.risk_approved || 0" />
-              <div class="stat-icon" style="color: #22c55e">✅</div>
             </div>
             <div class="stat-card glass-panel">
               <NStatistic label="风控拒绝" :value="status.stats?.risk_rejected || 0" />
-              <div class="stat-icon" style="color: #ef4444">❌</div>
             </div>
             <div class="stat-card glass-panel">
               <NStatistic label="执行成功" :value="status.stats?.orders_executed || 0" />
-              <div class="stat-icon" style="color: #22c55e">📦</div>
             </div>
             <div class="stat-card glass-panel">
               <NStatistic label="错误" :value="status.stats?.errors || 0" />
-              <div class="stat-icon" style="color: #f59e0b">⚠️</div>
             </div>
           </div>
 
@@ -326,8 +336,8 @@ onUnmounted(() => {
                   :key="i"
                   class="activity-item"
                 >
-                  <span class="activity-dir" :class="insight.direction === 'up' ? 'up' : 'down'">
-                    {{ insight.direction === 'up' ? '📈' : '📉' }}
+                  <span class="activity-dir mono" :class="insight.direction === 'up' ? 'up' : 'down'">
+                    {{ insight.direction === 'up' ? '多' : '空' }}
                   </span>
                   <span class="activity-symbol mono">{{ insight.symbol }}</span>
                   <span class="activity-conf mono">
@@ -351,11 +361,35 @@ onUnmounted(() => {
                   class="activity-item"
                 >
                   <span class="activity-dir">
-                    {{ verdict.approved ? '✅' : '❌' }}
+                    {{ verdict.approved ? '通过' : '拒绝' }}
                   </span>
                   <span class="activity-symbol mono">{{ verdict.symbol }}</span>
                   <span class="activity-reason">{{ verdict.reason || 'Approved' }}</span>
                   <span class="activity-time">{{ String(verdict.timestamp).slice(11, 19) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Ticks Activity Trend -->
+            <div class="activity-panel glass-panel" style="margin-top: 20px;">
+              <h3 class="section-title">
+                TICK 吞吐量趋势 <NTag size="tiny" round type="info">每 5 秒</NTag>
+              </h3>
+              <div class="ticks-trend-chart">
+                <div v-if="ticksHistory.length === 0" class="empty-chart">
+                  等待数据采集...
+                </div>
+                <div v-else class="chart-bars">
+                  <div 
+                    v-for="(val, i) in ticksHistory" 
+                    :key="i"
+                    class="trend-bar"
+                    :style="{ 
+                      height: `${Math.max(5, (val / Math.max(1, ...ticksHistory)) * 100)}%`,
+                      background: `hsl(${220 - (val / Math.max(1, ...ticksHistory)) * 100}, 80%, 60%)` 
+                    }"
+                    :title="`新到 ${val} Ticks`"
+                  />
                 </div>
               </div>
             </div>
@@ -685,6 +719,37 @@ onUnmounted(() => {
 .empty-state {
   padding: 24px;
   text-align: center;
+}
+
+/* Sparkline Trend */
+.ticks-trend-chart {
+  height: 80px;
+  display: flex;
+  align-items: flex-end;
+  padding: 10px 0;
+}
+.empty-chart {
+  width: 100%;
+  text-align: center;
+  color: #6b7280;
+  font-size: 12px;
+}
+.chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+}
+.trend-bar {
+  flex: 1;
+  min-width: 4px;
+  border-radius: 2px 2px 0 0;
+  transition: all 0.3s ease;
+  min-height: 2px;
+}
+.trend-bar:hover {
+  filter: brightness(1.2);
 }
 
 /* Responsive */

@@ -20,6 +20,7 @@ const TradeJournal = () => import('@/views/TradeJournal.vue')
 const AutopilotDashboard = () => import('@/views/AutopilotDashboard.vue')
 const NewsCenter = () => import('@/views/NewsCenter.vue')
 const PipelineMonitor = () => import('@/views/PipelineMonitor.vue')
+const GridDashboard = () => import('@/views/GridDashboard.vue')
 
 
 // Route definitions
@@ -94,6 +95,12 @@ const routes: RouteRecordRaw[] = [
     path: '/pipeline',
     name: 'PipelineMonitor',
     component: PipelineMonitor,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/grid',
+    name: 'GridDashboard',
+    component: GridDashboard,
     meta: { requiresAuth: true },
   },
 

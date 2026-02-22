@@ -320,7 +320,7 @@ onMounted(async () => {
         <!-- Contract Account -->
         <div class="account-card contract">
           <div class="account-card-header">
-            <span class="account-icon">📊</span>
+            <!-- Icon removed -->
             <span class="account-title">合约账户</span>
           </div>
           <div class="account-balance">
@@ -553,7 +553,7 @@ onMounted(async () => {
           <div class="transfer-direction">
             <div class="transfer-account-box">
               <span class="transfer-account-label">从</span>
-              <span class="transfer-account-name">{{ transferDirection === 'to_funding' ? '📊 合约账户' : '🏦 资金账户' }}</span>
+              <span class="transfer-account-name">{{ transferDirection === 'to_funding' ? '合约账户' : '资金账户' }}</span>
               <span class="transfer-account-balance">可用: {{ formatNum(transferMaxAmount) }} USDT</span>
             </div>
             <button class="transfer-swap-btn" @click="toggleTransferDirection" title="切换方向">
@@ -564,7 +564,7 @@ onMounted(async () => {
             </button>
             <div class="transfer-account-box">
               <span class="transfer-account-label">到</span>
-              <span class="transfer-account-name">{{ transferDirection === 'to_funding' ? '🏦 资金账户' : '📊 合约账户' }}</span>
+              <span class="transfer-account-name">{{ transferDirection === 'to_funding' ? '资金账户' : '合约账户' }}</span>
             </div>
           </div>
 

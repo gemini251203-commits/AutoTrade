@@ -62,16 +62,16 @@ const alertSaving = ref(false)
 
 // ==================== 分类/情感配置 ====================
 const categoryOptions = [
-  { value: 'macro', label: '🏛️ 宏观经济' },
-  { value: 'etf', label: '📊 ETF/机构' },
-  { value: 'regulation', label: '⚖️ 监管政策' },
-  { value: 'exchange', label: '🏦 交易所' },
-  { value: 'whale', label: '🐳 巨鲸动向' },
-  { value: 'project', label: '🔧 项目/技术' },
+  { value: 'macro', label: '宏观经济' },
+  { value: 'etf', label: 'ETF/机构' },
+  { value: 'regulation', label: '监管政策' },
+  { value: 'exchange', label: '交易所' },
+  { value: 'whale', label: '巨鲸动向' },
+  { value: 'project', label: '项目/技术' },
 ]
 const categoryMap: Record<string, string> = {
-  macro: '🏛️ 宏观', etf: '📊 ETF', regulation: '⚖️ 监管',
-  exchange: '🏦 交易所', whale: '🐳 巨鲸', project: '🔧 项目',
+  macro: '宏观', etf: 'ETF', regulation: '监管',
+  exchange: '交易所', whale: '巨鲸', project: '项目',
 }
 const sentimentColor: Record<string, string> = {
   positive: '#10b981', negative: '#ef4444', neutral: '#6b7280',
@@ -356,7 +356,7 @@ onMounted(loadAll)
                     size="small"
                     :color="{ color: sentimentColor[article.sentiment] + '20', textColor: sentimentColor[article.sentiment] }"
                   >
-                    {{ article.sentiment === 'positive' ? '📈 看多' : article.sentiment === 'negative' ? '📉 看空' : '➖ 中性' }}
+                    {{ article.sentiment === 'positive' ? '看多' : article.sentiment === 'negative' ? '看空' : '中性' }}
                   </n-tag>
                   <n-tag
                     v-if="article.importance === 'high'"
@@ -364,7 +364,7 @@ onMounted(loadAll)
                     size="small"
                     type="warning"
                   >
-                    🔥 重要
+                    重要
                   </n-tag>
                   <span class="news-time">{{ formatTime(article.published_at) }}</span>
                 </div>
@@ -434,7 +434,7 @@ onMounted(loadAll)
                   :ghost="alert.is_reliable"
                   @click="toggleReliable(alert)"
                 >
-                  {{ alert.is_reliable ? '可靠' : '⚠️ 不可靠' }}
+                  {{ alert.is_reliable ? '可靠' : '不可靠' }}
                 </n-button>
                 <n-popconfirm @positive-click="onDeleteAlert(alert.id)">
                   <template #trigger>
@@ -468,10 +468,10 @@ onMounted(loadAll)
                 <div v-if="t.ai_reflection" class="step"><strong>💭 反思:</strong> {{ t.ai_reflection }}</div>
                 <div class="thinking-result">
                   <n-tag :type="t.decision === 'trade' ? 'success' : t.decision === 'skip' ? 'default' : 'warning'" size="small">
-                    {{ t.decision === 'trade' ? '📊 交易' : t.decision === 'skip' ? '⏭️ 跳过' : '👀 观察' }}
+                    {{ t.decision === 'trade' ? '交易' : t.decision === 'skip' ? '跳过' : '观察' }}
                   </n-tag>
                   <span v-if="t.trade_result" :style="{ color: t.trade_result === 'win' ? '#10b981' : '#ef4444' }">
-                    {{ t.trade_result === 'win' ? '✅ 盈利' : '❌ 亏损' }}
+                    {{ t.trade_result === 'win' ? '盈利' : '亏损' }}
                     {{ t.trade_pnl ? (t.trade_pnl >= 0 ? '+' : '') + t.trade_pnl.toFixed(2) + ' USDT' : '' }}
                   </span>
                 </div>
@@ -511,8 +511,8 @@ onMounted(loadAll)
           <n-select
             v-model:value="alertForm.action"
             :options="[
-              { value: 'notify', label: '📢 仅通知' },
-              { value: 'trade', label: '📊 自动交易' },
+              { value: 'notify', label: '仅通知' },
+              { value: 'trade', label: '自动交易' },
             ]"
           />
         </n-form-item>

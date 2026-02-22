@@ -63,6 +63,7 @@ const status = ref<AutopilotStatus>({
 const logs = ref<AutopilotLogResponse[]>([])
 const logsLoading = ref(false)
 const expandedLogId = ref<number | null>(null)
+const activeLogSymbol = ref<string | null>(null) // 新增：当前查看日志的交易对
 
 // UI
 const loading = ref(false)
@@ -95,6 +96,27 @@ const decisionLabels: Record<string, string> = {
   close_short: '平空',
   error: '异常',
 }
+
+// 基于选择的交易对过滤日志
+const filteredLogs = computed(() => {
+  if (!activeLogSymbol.value) return logs.value
+  return logs.value.filter(l => l.symbol === activeLogSymbol.value)
+})
+
+// 决策统计 (computed, 纯前端计算，基于过滤后的日志)
+const decisionStats = computed(() => {
+  const hold = filteredLogs.value.filter(l => l.decision === 'hold').length
+  const openTrades = filteredLogs.value.filter(l => l.decision === 'open_long' || l.decision === 'open_short').length
+  const closeTrades = filteredLogs.value.filter(l => l.decision === 'close_long' || l.decision === 'close_short').length
+  const actions = filteredLogs.value.filter(l => l.action_taken).length
+  const errors = filteredLogs.value.filter(l => l.error_message).length
+  return { hold, openTrades, closeTrades, actions, errors, total: filteredLogs.value.length }
+})
+
+// 最近决策走势 (最后 20 次决策)
+const recentTrend = computed(() => {
+  return [...filteredLogs.value].reverse().slice(-20).map(l => l.decision)
+})
 
 const runDuration = computed(() => {
   if (!status.value.started_at) return '-'
@@ -408,21 +430,77 @@ function formatTime(iso: string): string {
         <!-- 右侧: 决策时间线 -->
         <div class="timeline-panel">
           <h3 class="panel-title">
-            决策记录
-            <span class="log-count" v-if="logs.length > 0">{{ logs.length }}</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              决策记录
+              <span class="log-count" v-if="filteredLogs.length > 0">{{ filteredLogs.length }}</span>
+            </div>
+            
+            <div class="log-symbol-tabs" v-if="symbols.length > 0">
+              <button 
+                class="log-tab" 
+                :class="{ active: activeLogSymbol === null }"
+                @click="activeLogSymbol = null"
+              >全部</button>
+              <button 
+                v-for="sym in symbols" 
+                :key="sym"
+                class="log-tab"
+                :class="{ active: activeLogSymbol === sym }"
+                @click="activeLogSymbol = sym"
+              >{{ sym }}</button>
+            </div>
+
             <button
               v-if="logs.length > 0"
               class="btn btn-ghost btn-xs clear-logs-btn"
               @click.stop="handleClearLogs"
               :disabled="loading"
-              title="清空记录"
+              title="清空所有记录"
+              style="margin-left: auto;"
             >
               <NIcon :component="TrashOutline" :size="14" />
               清空
             </button>
           </h3>
 
-          <div v-if="logsLoading && logs.length === 0" class="timeline-loading">
+          <!-- 决策统计摘要 -->
+          <div class="decision-stats" v-if="filteredLogs.length > 0">
+            <div class="dstat-item">
+              <span class="dstat-num" style="color: #8b8b8b;">{{ decisionStats.hold }}</span>
+              <span class="dstat-label">观望</span>
+            </div>
+            <div class="dstat-divider" />
+            <div class="dstat-item">
+              <span class="dstat-num" style="color: #52c41a;">{{ decisionStats.openTrades }}</span>
+              <span class="dstat-label">开仓</span>
+            </div>
+            <div class="dstat-divider" />
+            <div class="dstat-item">
+              <span class="dstat-num" style="color: #faad14;">{{ decisionStats.closeTrades }}</span>
+              <span class="dstat-label">平仓</span>
+            </div>
+            <div class="dstat-divider" />
+            <div class="dstat-item">
+              <span class="dstat-num" style="color: #22c55e;">{{ decisionStats.actions }}</span>
+              <span class="dstat-label">已执行</span>
+            </div>
+            <div class="dstat-divider" v-if="decisionStats.errors > 0" />
+            <div class="dstat-item" v-if="decisionStats.errors > 0">
+              <span class="dstat-num" style="color: #ff4d4f;">{{ decisionStats.errors }}</span>
+              <span class="dstat-label">异常</span>
+            </div>
+            <div class="dstat-divider" />
+            <div class="trend-sparkline" title="最近20次决策趋势 (左旧右新)">
+              <div 
+                v-for="(dec, idx) in recentTrend" 
+                :key="idx"
+                class="trend-dot"
+                :style="{ background: decisionColors[dec] || '#666' }"
+              />
+            </div>
+          </div>
+
+          <div v-if="logsLoading && filteredLogs.length === 0" class="timeline-loading">
             <NSpin size="small" />
             <span>加载中...</span>
           </div>
@@ -431,10 +509,14 @@ function formatTime(iso: string): string {
             <p>暂无决策记录</p>
             <p class="text-hint">启动自动交易后，AI 的每次分析都会记录在这里</p>
           </div>
+          
+          <div v-else-if="filteredLogs.length === 0" class="timeline-empty">
+            <p>该交易对暂无日志</p>
+          </div>
 
           <div v-else class="timeline">
             <div
-              v-for="log in logs"
+              v-for="log in filteredLogs"
               :key="log.id"
               class="timeline-item"
               @click="toggleExpand(log.id)"
@@ -691,6 +773,89 @@ function formatTime(iso: string): string {
   font-size: 12px;
   font-weight: 600;
   font-family: var(--font-family-mono);
+}
+
+/* Decision Stats */
+.decision-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.dstat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 42px;
+}
+
+.dstat-num {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: 'SF Mono', monospace;
+}
+
+.dstat-label {
+  font-size: 10px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dstat-divider {
+  width: 1px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.trend-sparkline {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto; /* Push to right */
+  padding-left: 10px;
+}
+
+.trend-dot {
+  width: 6px;
+  height: 12px;
+  border-radius: 2px;
+  opacity: 0.8;
+}
+
+.log-symbol-tabs {
+  display: flex;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  padding: 3px;
+  margin-left: 16px;
+}
+
+.log-tab {
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  color: #9ca3af;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.log-tab:hover {
+  color: #e5e7eb;
+}
+
+.log-tab.active {
+  background: rgba(139, 92, 246, 0.3);
+  color: #d8b4fe;
+  font-weight: 500;
 }
 
 .config-section {

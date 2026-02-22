@@ -32,6 +32,7 @@ interface JournalStats {
 const memories = ref<TradeMemory[]>([])
 const stats = ref<JournalStats | null>(null)
 const loading = ref(false)
+const symbolFilter = ref('')
 const sourceFilter = ref<string | null>(null)
 const resultFilter = ref<string | null>(null)
 const message = useMessage()
@@ -95,12 +96,13 @@ async function fetchAll() {
   loading.value = true
   try {
     const params: Record<string, string> = {}
+    if (symbolFilter.value) params.symbol = symbolFilter.value.trim().toUpperCase()
     if (sourceFilter.value) params.source = sourceFilter.value
     if (resultFilter.value) params.result = resultFilter.value
     
     const [memRes, statRes] = await Promise.all([
       request.get('/journal/', { params }),
-      request.get('/journal/stats'),
+      request.get('/journal/stats', { params: symbolFilter.value ? { symbol: symbolFilter.value.trim().toUpperCase() } : {} }),
     ])
     memories.value = memRes.data
     stats.value = statRes.data
@@ -166,6 +168,19 @@ onMounted(fetchAll)
           <span class="subtitle" v-if="stats">共 {{ stats.total_trades }} 笔交易</span>
         </div>
         <div class="header-filters">
+          <NInput
+            v-model:value="symbolFilter"
+            placeholder="搜索交易对"
+            size="small"
+            clearable
+            style="width: 120px"
+            @keyup.enter="onFilterChange"
+            @clear="onFilterChange"
+          >
+            <template #prefix>
+              <NIcon><SearchOutline /></NIcon>
+            </template>
+          </NInput>
           <NSelect
             v-model:value="sourceFilter"
             :options="sourceOptions"
@@ -246,6 +261,63 @@ onMounted(fetchAll)
           <span class="chip-pnl" :style="{ color: data.pnl_usdt >= 0 ? '#22c55e' : '#ef4444' }">
             {{ data.pnl_usdt >= 0 ? '+' : '' }}{{ data.pnl_usdt.toFixed(2) }}
           </span>
+        </div>
+      </div>
+
+      <!-- Symbol Analysis Cards (Pure Frontend Computed from memories) -->
+      <div class="symbol-analysis-grid" v-if="memories.length > 0 && !symbolFilter">
+        <div class="analysis-title">活跃交易对分析</div>
+        <div class="analysis-cards">
+          <div
+            v-for="sym in Object.keys(memories.reduce((acc, m) => {
+              if(!acc[m.symbol]) acc[m.symbol] = { w:0, t:0, pnl:0 };
+              acc[m.symbol]!.t++;
+              if(m.trade_result === 'win') acc[m.symbol]!.w++;
+              acc[m.symbol]!.pnl += (m.pnl_usdt || 0);
+              return acc;
+            }, {} as Record<string, any>)).sort((a,b) => {
+              const d = memories.reduce((acc, m) => { acc[m.symbol] = (acc[m.symbol] || 0) + 1; return acc; }, {} as Record<string, number>);
+              return (d[b] || 0) - (d[a] || 0);
+            }).slice(0, 4)"
+            :key="sym"
+            class="symbol-stat-card"
+          >
+            <div class="sym-name mono">{{ sym }}</div>
+            <div class="sym-data">
+              <span class="sym-rate">{{ Math.round((memories.filter(m => m.symbol === sym && m.trade_result === 'win').length / memories.filter(m => m.symbol === sym).length) * 100) }}% 胜率</span>
+              <span class="sym-pnl mono" :style="{ color: memories.filter(m => m.symbol === sym).reduce((s, m) => s + (m.pnl_usdt || 0), 0)! >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ memories.filter(m => m.symbol === sym).reduce((s, m) => s + (m.pnl_usdt || 0), 0)! >= 0 ? '+' : '' }}{{ memories.filter(m => m.symbol === sym).reduce((s, m) => s + (m.pnl_usdt || 0), 0)!.toFixed(2) }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Source PnL Bar Chart -->
+      <div class="source-pnl-chart" v-if="stats && Object.keys(stats.by_source).length > 1">
+        <div class="chart-title">来源盈亏对比</div>
+        <div class="chart-bars">
+          <div
+            v-for="(data, src) in stats.by_source"
+            :key="src"
+            class="bar-row"
+          >
+            <span class="bar-label">{{ sourceLabels[src] || src }}</span>
+            <div class="bar-track">
+              <div
+                class="bar-fill"
+                :style="{
+                  width: Math.min(Math.abs(data.pnl_usdt) / Math.max(...Object.values(stats!.by_source).map(d => Math.abs(d.pnl_usdt)), 1) * 100, 100) + '%',
+                  background: data.pnl_usdt >= 0
+                    ? `linear-gradient(90deg, ${sourceColors[src] || '#6b7280'}88, ${sourceColors[src] || '#6b7280'})`
+                    : 'linear-gradient(90deg, #ef444488, #ef4444)',
+                }"
+              />
+            </div>
+            <span class="bar-value" :style="{ color: data.pnl_usdt >= 0 ? '#22c55e' : '#ef4444' }">
+              {{ data.pnl_usdt >= 0 ? '+' : '' }}{{ data.pnl_usdt.toFixed(2) }}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -478,6 +550,109 @@ onMounted(fetchAll)
 
 .chip-count { color: #6b7280; }
 .chip-pnl { font-family: 'SF Mono', monospace; font-weight: 500; }
+
+/* Source PnL Bar Chart */
+.source-pnl-chart {
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 16px;
+}
+
+.chart-title {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.chart-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bar-label {
+  font-size: 12px;
+  color: #9ca3af;
+  width: 70px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.bar-track {
+  flex: 1;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  min-width: 2px;
+}
+
+.bar-value {
+  font-size: 12px;
+  font-family: 'SF Mono', monospace;
+  font-weight: 600;
+  width: 80px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+/* Symbol Analysis */
+.symbol-analysis-grid {
+  margin-bottom: 16px;
+}
+.analysis-title {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.analysis-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.symbol-stat-card {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.sym-name {
+  font-weight: 600;
+  color: #e5e7eb;
+}
+.sym-data {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.sym-rate {
+  font-size: 11px;
+  color: #9ca3af;
+}
+.sym-pnl {
+  font-size: 13px;
+  font-weight: 600;
+}
 
 /* Loading */
 .loading-container {
