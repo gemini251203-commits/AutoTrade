@@ -81,6 +81,28 @@ async def get_price(db: AsyncSession, user_id: int, symbol: str = "BTCUSDT") -> 
 
 
 @register_tool
+async def get_funding_rate(
+    db: AsyncSession,
+    user_id: int,
+    symbol: str = "BTCUSDT",
+) -> str:
+    """
+    查询资金费率 — 交易成本分析
+
+    参数:
+        symbol: 交易对, 如 BTCUSDT / ETHUSDT
+
+    返回:
+        当前费率、年化成本、下次结算时间、多空方向提示
+    """
+    from app.services.funding_rate import funding_rate_service
+    info = await funding_rate_service.get_funding_info(symbol.upper())
+    if info:
+        return json.dumps(info, ensure_ascii=False)
+
+    return json.dumps({"error": f"无法获取 {symbol} 资金费率"}, ensure_ascii=False)
+
+@register_tool
 async def get_klines(
     db: AsyncSession,
     user_id: int,

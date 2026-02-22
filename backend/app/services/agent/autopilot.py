@@ -654,7 +654,32 @@ class AgentAutopilot:
                 except Exception as e:
                     logger.debug(f"[Autopilot] Trend fetch failed: {e}")
 
-                # 构造分析指令 (直接注入指标数据 + 策略信号 + 交易记忆 + 趋势分析)
+                # 预取资金费率
+                funding_text = ""
+                try:
+                    from app.services.funding_rate import FundingRateService
+                    rate_info = FundingRateService.get_cached_rate(symbol)
+                    if rate_info:
+                        rate = float(rate_info.get("lastFundingRate", 0))
+                        rate_pct = rate * 100
+                        annual_pct = rate * 3 * 365 * 100
+                        direction = "多头付费" if rate > 0 else "空头付费" if rate < 0 else "零费率"
+                        next_ts = rate_info.get("nextFundingTime", 0)
+                        if next_ts:
+                            remaining_min = max(0, (next_ts - int(datetime.utcnow().timestamp() * 1000)) // 60000)
+                            time_str = f"{remaining_min // 60}h{remaining_min % 60}m后"
+                        else:
+                            time_str = "未知"
+                        funding_text = (
+                            f"\n💰 资金费率:\n"
+                            f"  {symbol}: 当前 {rate_pct:.4f}% | 年化 {annual_pct:.2f}% | {direction}\n"
+                            f"  标记价: {rate_info.get('markPrice', '?')} | 下次结算: {time_str}\n"
+                            f"  (正费率=持多头需付费, 负费率=持空头需付费)"
+                        )
+                except Exception as e:
+                    logger.debug(f"[Autopilot] Funding rate fetch failed: {e}")
+
+                # 构造分析指令 (直接注入指标数据 + 策略信号 + 交易记忆 + 趋势分析 + 资金费率)
                 now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
                 prompt = (
                     f"[Autopilot {now}] "
@@ -662,6 +687,7 @@ class AgentAutopilot:
                     f"{indicator_text}\n"
                     f"{strategy_text}\n"
                     f"{trend_text}\n"
+                    f"{funding_text}\n"
                     f"{memory_text}\n\n"
                     f"请按以下步骤操作:\n"
                     f"1. 查询 {symbol} 实时价格 (如需更新)\n"

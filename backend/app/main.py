@@ -14,7 +14,7 @@ from loguru import logger
 from app.core.config import settings
 from app.core.log_config import setup_logging
 from app.db.session import init_db
-from app.api import auth, wallet, order, task, market, ai, position, risk, grid, user_config, admin, ws, strategy, agent, journal, news, pipeline, trend
+from app.api import auth, wallet, order, task, market, ai, position, risk, grid, user_config, admin, ws, strategy, agent, journal, news, pipeline, trend, funding
 from app.middleware.error_handler import setup_error_handlers
 from app.middleware.access_logger import AccessLoggerMiddleware
 from app.core.rate_limit import RateLimitMiddleware
@@ -49,6 +49,11 @@ async def lifespan(app: FastAPI):
     from app.services.market_collector import market_collector
     await market_collector.start()
     logger.info("Market Collector started")
+    
+    # 启动资金费率采集服务
+    from app.services.funding_rate import funding_rate_service
+    await funding_rate_service.start()
+    logger.info("Funding Rate Service started")
     
     # 🔥 启动实时价格流 (WebSocket)
     from app.services.price_stream import price_stream
@@ -103,6 +108,11 @@ async def lifespan(app: FastAPI):
     if news_crawler:
         await news_crawler.stop()
         logger.info("News Crawler stopped")
+    
+    # 停止资金费率服务
+    from app.services.funding_rate import funding_rate_service
+    await funding_rate_service.stop()
+    logger.info("Funding Rate Service stopped")
     
     # 停止市场数据采集器
     await market_collector.stop()
@@ -189,6 +199,7 @@ app.include_router(journal.router, prefix="/api/journal", tags=["TradeJournal"])
 app.include_router(news.router, prefix="/api/news", tags=["News"])
 app.include_router(pipeline.router, prefix="/api/pipeline", tags=["Pipeline"])
 app.include_router(trend.router, prefix="/api/trend", tags=["Trend"])
+app.include_router(funding.router, tags=["Funding"])
 
 
 

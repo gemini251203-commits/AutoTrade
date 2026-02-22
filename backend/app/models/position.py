@@ -181,6 +181,15 @@ class Position(Base):
         comment="累计手续费 (开仓+平仓, USDT)",
     )
     
+    # 累计资金费率费用 (正=已支出, 负=已收入)
+    accumulated_funding_fee: Mapped[Decimal] = mapped_column(
+        Numeric(precision=20, scale=8),
+        default=Decimal("0"),
+        nullable=False,
+        server_default="0",
+        comment="累计资金费率费用 (正=支出, 负=收入)",
+    )
+    
     # ============================================
     # 时间戳
     # ============================================

@@ -164,3 +164,88 @@ class BinanceClient:
         except Exception as e:
             logger.error(f"[BinanceClient] Error fetching klines for {symbol}: {e}")
             return []
+
+    async def get_funding_rate(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        获取当前资金费率 (对标币安 premiumIndex)
+        
+        Args:
+            symbol: 交易对 (例如 BTCUSDT)
+        
+        Returns:
+            {
+                "symbol": "BTCUSDT",
+                "markPrice": "78123.45",
+                "lastFundingRate": "0.00010000",     # 当前费率
+                "nextFundingTime": 1740000000000,     # 下次结算时间 (ms)
+                "interestRate": "0.00010000",
+            }
+        """
+        try:
+            url = f"{self.BASE_URL}/fapi/v1/premiumIndex"
+            data = await self._request("GET", url, timeout=5.0, params={"symbol": symbol.upper()})
+            return {
+                "symbol": data.get("symbol"),
+                "markPrice": data.get("markPrice", "0"),
+                "lastFundingRate": data.get("lastFundingRate", "0"),
+                "nextFundingTime": data.get("nextFundingTime", 0),
+                "interestRate": data.get("interestRate", "0"),
+            }
+        except CircuitBreakerError as e:
+            logger.warning(f"[BinanceClient] {e}")
+            return None
+        except Exception as e:
+            logger.warning(f"[BinanceClient] Error fetching funding rate for {symbol}: {e}")
+            return None
+
+    async def get_all_funding_rates(self) -> list:
+        """
+        获取所有交易对的当前资金费率 (批量)
+        
+        Returns:
+            List of funding rate dicts
+        """
+        try:
+            url = f"{self.BASE_URL}/fapi/v1/premiumIndex"
+            data = await self._request("GET", url, timeout=10.0)
+            return [
+                {
+                    "symbol": d.get("symbol"),
+                    "markPrice": d.get("markPrice", "0"),
+                    "lastFundingRate": d.get("lastFundingRate", "0"),
+                    "nextFundingTime": d.get("nextFundingTime", 0),
+                }
+                for d in data
+            ] if isinstance(data, list) else []
+        except Exception as e:
+            logger.warning(f"[BinanceClient] Error fetching all funding rates: {e}")
+            return []
+
+    async def get_funding_history(self, symbol: str, limit: int = 100) -> list:
+        """
+        获取历史资金费率 (对标币安 fundingRate)
+        
+        Args:
+            symbol: 交易对
+            limit: 返回条数 (最大 1000)
+        
+        Returns:
+            [{"symbol", "fundingRate", "fundingTime"}, ...]
+        """
+        try:
+            url = f"{self.BASE_URL}/fapi/v1/fundingRate"
+            data = await self._request(
+                "GET", url, timeout=10.0,
+                params={"symbol": symbol.upper(), "limit": min(limit, 1000)},
+            )
+            return [
+                {
+                    "symbol": d.get("symbol"),
+                    "fundingRate": d.get("fundingRate", "0"),
+                    "fundingTime": d.get("fundingTime", 0),
+                }
+                for d in data
+            ] if isinstance(data, list) else []
+        except Exception as e:
+            logger.warning(f"[BinanceClient] Error fetching funding history for {symbol}: {e}")
+            return []

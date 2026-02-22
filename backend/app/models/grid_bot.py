@@ -218,6 +218,14 @@ class GridBot(Base):
         comment="已实现盈亏 (利润 - 手续费)",
     )
     
+    # 累计资金费率费用 (正=支出, 负=收入)
+    total_funding_fee: Mapped[Decimal] = mapped_column(
+        Numeric(precision=20, scale=8),
+        default=Decimal("0"),
+        server_default="0",
+        comment="累计资金费率费用",
+    )
+    
     # 网格级别详情 (JSON 存储)
     grid_levels: Mapped[Optional[dict]] = mapped_column(
         JSON,
