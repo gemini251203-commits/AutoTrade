@@ -54,17 +54,12 @@ async def lifespan(app: FastAPI):
     await price_stream.start()
     logger.info("Price Stream (WebSocket) started")
     
-    # 🏗️ 初始化四层流水线 (Pipeline)
+    # 初始化四层流水线 (Pipeline)
     try:
-        from app.services.portfolio.model import FixedPercentModel
-        from app.services.risk.risk_model import RiskModel
-        from app.services.execution.model import ExecutionModel
-        from app.api.pipeline import pipeline_registry
-        
-        pipeline_registry.portfolio_model = FixedPercentModel()
-        pipeline_registry.risk_model = RiskModel()
-        pipeline_registry.startup_time = __import__('datetime').datetime.utcnow()
-        logger.info("Pipeline Registry initialized (4-layer architecture ready)")
+        from app.core.pipeline import get_pipeline
+        # 触发全局 Pipeline 单例创建 (内含 RiskModel + ExecutionModel)
+        _pipeline = get_pipeline()
+        logger.info("Pipeline initialized (4-layer architecture ready)")
     except Exception as e:
         logger.warning(f"Pipeline init skipped: {e}")
     

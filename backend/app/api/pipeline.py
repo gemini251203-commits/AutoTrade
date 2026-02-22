@@ -6,7 +6,6 @@ Pipeline API
 端点:
     GET  /api/pipeline/status   - 获取 Pipeline 实时状态
     GET  /api/pipeline/config   - 获取当前配置
-    POST /api/pipeline/config   - 更新配置
     POST /api/pipeline/circuit-breaker - 熔断控制
 """
 
@@ -77,59 +76,48 @@ class CircuitBreakerResponse(BaseModel):
     message: str
 
 
-# ==================== Singleton Registry ====================
+# ==================== Helper: 获取真实 Pipeline 实例 ====================
 
-class PipelineRegistry:
-    """
-    Pipeline 全局注册表 — 管理四层组件实例
-    
-    在 startup 时初始化, API 端点读取状态
-    """
-    
-    _instance = None
-    
-    def __init__(self):
-        self.pipeline = None
-        self.risk_model = None
-        self.portfolio_model = None
-        self.startup_time = datetime.utcnow()
-        self._recent_insights: list = []
-        self._recent_verdicts: list = []
-    
-    @classmethod
-    def get(cls) -> "PipelineRegistry":
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
-    
-    def record_insight(self, data: dict):
-        """记录最近的 Insight"""
-        self._recent_insights.append({
-            **data,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
-        # 只保留最近 50 条
-        if len(self._recent_insights) > 50:
-            self._recent_insights = self._recent_insights[-50:]
-    
-    def record_verdict(self, data: dict):
-        """记录最近的风控决策"""
-        self._recent_verdicts.append({
-            **data,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
-        if len(self._recent_verdicts) > 50:
-            self._recent_verdicts = self._recent_verdicts[-50:]
-    
-    def get_recent_insights(self, limit: int = 20) -> list:
-        return list(reversed(self._recent_insights[-limit:]))
-    
-    def get_recent_verdicts(self, limit: int = 20) -> list:
-        return list(reversed(self._recent_verdicts[-limit:]))
+_startup_time = datetime.utcnow()
+_recent_insights: list = []
+_recent_verdicts: list = []
 
 
-# 全局实例
-pipeline_registry = PipelineRegistry.get()
+def _get_pipeline():
+    """获取全局 TradingPipeline 实例 (来自 core/pipeline.py)"""
+    try:
+        from app.core.pipeline import get_pipeline
+        return get_pipeline()
+    except Exception:
+        return None
+
+
+def _get_risk_model():
+    """获取当前 Pipeline 中的 RiskModel"""
+    pipeline = _get_pipeline()
+    return pipeline._risk if pipeline else None
+
+
+def record_insight(data: dict):
+    """记录最近的 Insight (供 EventBus 回调使用)"""
+    global _recent_insights
+    _recent_insights.append({
+        **data,
+        "timestamp": datetime.utcnow().isoformat(),
+    })
+    if len(_recent_insights) > 50:
+        _recent_insights = _recent_insights[-50:]
+
+
+def record_verdict(data: dict):
+    """记录最近的风控决策"""
+    global _recent_verdicts
+    _recent_verdicts.append({
+        **data,
+        "timestamp": datetime.utcnow().isoformat(),
+    })
+    if len(_recent_verdicts) > 50:
+        _recent_verdicts = _recent_verdicts[-50:]
 
 
 # ==================== Routes ====================
@@ -140,34 +128,35 @@ async def get_pipeline_status(
 ):
     """
     获取 Pipeline 实时状态
-    
-    返回四层 (Alpha, Portfolio, Risk, Execution) 的运行状态和统计
+
+    从 core/pipeline.py 的全局 TradingPipeline 实例读取真实统计数据
     """
-    reg = pipeline_registry
-    
+    pipeline = _get_pipeline()
+    risk_model = _get_risk_model()
+
     # 计算运行时间
-    uptime = (datetime.utcnow() - reg.startup_time).total_seconds()
-    
-    # 从 Pipeline 获取统计
+    uptime = (datetime.utcnow() - _startup_time).total_seconds()
+
+    # 从 Pipeline 获取真实统计
     stats = {}
     is_active = False
-    if reg.pipeline:
-        stats = reg.pipeline.get_stats()
-        is_active = True
-    
+    if pipeline:
+        stats = pipeline.get_stats()
+        is_active = stats.get("ticks_processed", 0) > 0 or stats.get("orders_executed", 0) > 0
+
     # 熔断状态
     circuit_breaker = False
-    if reg.risk_model:
-        circuit_breaker = reg.risk_model.is_circuit_breaker_active
-    
+    if risk_model:
+        circuit_breaker = risk_model.is_circuit_breaker_active
+
     # 构造四层状态
     layers = []
-    
+
     # Alpha 层
     alpha_count = stats.get("insights_generated", 0)
     alpha_detail = ""
-    if reg.pipeline:
-        alpha_names = [a.get_name() for a in reg.pipeline._alphas]
+    if pipeline and pipeline._alphas:
+        alpha_names = [a.get_name() for a in pipeline._alphas]
         alpha_detail = f"Models: {', '.join(alpha_names)}"
     layers.append(LayerStatus(
         name="Alpha",
@@ -175,19 +164,18 @@ async def get_pipeline_status(
         detail=alpha_detail,
         count=alpha_count,
     ))
-    
+
     # Portfolio 层
     target_count = stats.get("targets_created", 0)
-    portfolio_type = "fixed_percent"
-    if reg.portfolio_model:
-        portfolio_type = type(reg.portfolio_model).__name__
+    portfolio_model = pipeline._portfolio if pipeline else None
+    portfolio_type = type(portfolio_model).__name__ if portfolio_model else "FixedPercentModel"
     layers.append(LayerStatus(
         name="Portfolio",
         status="active" if is_active and target_count > 0 else "idle",
         detail=f"Model: {portfolio_type}",
         count=target_count,
     ))
-    
+
     # Risk 层
     approved = stats.get("risk_approved", 0)
     rejected = stats.get("risk_rejected", 0)
@@ -199,10 +187,10 @@ async def get_pipeline_status(
     layers.append(LayerStatus(
         name="Risk",
         status=risk_status,
-        detail=f"Approved: {approved}, Rejected: {rejected}" + (" 🚨 CIRCUIT BREAKER" if circuit_breaker else ""),
+        detail=f"Approved: {approved}, Rejected: {rejected}" + (" CIRCUIT BREAKER" if circuit_breaker else ""),
         count=approved + rejected,
     ))
-    
+
     # Execution 层
     exec_count = stats.get("orders_executed", 0)
     layers.append(LayerStatus(
@@ -211,15 +199,15 @@ async def get_pipeline_status(
         detail=f"Orders executed: {exec_count}",
         count=exec_count,
     ))
-    
+
     return PipelineStatusResponse(
         is_active=is_active,
         circuit_breaker=circuit_breaker,
         uptime_seconds=uptime,
         layers=layers,
         stats=stats,
-        recent_insights=reg.get_recent_insights(20),
-        recent_verdicts=reg.get_recent_verdicts(20),
+        recent_insights=list(reversed(_recent_insights[-20:])),
+        recent_verdicts=list(reversed(_recent_verdicts[-20:])),
     )
 
 
@@ -227,9 +215,11 @@ async def get_pipeline_status(
 async def get_pipeline_config(
     current_user: CurrentUser,
 ):
-    """获取当前 Pipeline 配置"""
-    reg = pipeline_registry
-    
+    """获取当前 Pipeline 配置 (从真实实例读取)"""
+    pipeline = _get_pipeline()
+    portfolio_model = pipeline._portfolio if pipeline else None
+    risk_model = _get_risk_model()
+
     # 默认值
     config = PipelineConfigResponse(
         portfolio_model="fixed_percent",
@@ -241,26 +231,26 @@ async def get_pipeline_config(
         max_total_exposure_pct=200.0,
         blacklist=[],
     )
-    
+
     # 从实际模型读取
-    if reg.portfolio_model:
+    if portfolio_model:
         from app.services.portfolio.model import FixedPercentModel, KellyPortfolioModel
-        if isinstance(reg.portfolio_model, FixedPercentModel):
+        if isinstance(portfolio_model, FixedPercentModel):
             config.portfolio_model = "fixed_percent"
-            config.risk_percent = reg.portfolio_model._risk_percent
-            config.default_leverage = reg.portfolio_model._default_leverage
-            config.max_positions = reg.portfolio_model._max_positions
-        elif isinstance(reg.portfolio_model, KellyPortfolioModel):
+            config.risk_percent = portfolio_model._risk_percent
+            config.default_leverage = portfolio_model._default_leverage
+            config.max_positions = portfolio_model._max_positions
+        elif isinstance(portfolio_model, KellyPortfolioModel):
             config.portfolio_model = "kelly"
-            config.default_leverage = reg.portfolio_model._default_leverage
-            config.max_positions = reg.portfolio_model._max_positions
-    
-    if reg.risk_model:
-        config.max_leverage = reg.risk_model._config.max_leverage
-        config.max_daily_loss_pct = reg.risk_model._config.max_daily_loss_pct
-        config.max_total_exposure_pct = reg.risk_model._config.max_total_exposure_pct
-        config.blacklist = reg.risk_model._config.blacklist
-    
+            config.default_leverage = portfolio_model._default_leverage
+            config.max_positions = portfolio_model._max_positions
+
+    if risk_model:
+        config.max_leverage = risk_model._config.max_leverage
+        config.max_daily_loss_pct = risk_model._config.max_daily_loss_pct
+        config.max_total_exposure_pct = risk_model._config.max_total_exposure_pct
+        config.blacklist = risk_model._config.blacklist
+
     return config
 
 
@@ -271,28 +261,27 @@ async def control_circuit_breaker(
 ):
     """
     控制风控熔断器
-    
+
     - trigger: 触发熔断 (停止一切交易)
     - reset: 解除熔断
     """
-    reg = pipeline_registry
-    
-    if not reg.risk_model:
-        # 没有 Pipeline, 创建临时 RiskModel
+    risk_model = _get_risk_model()
+
+    if not risk_model:
         from app.services.risk.risk_model import RiskModel
-        reg.risk_model = RiskModel()
-    
+        risk_model = RiskModel()
+
     if body.action == "trigger":
-        reg.risk_model.trigger_circuit_breaker(body.reason)
+        risk_model.trigger_circuit_breaker(body.reason)
         return CircuitBreakerResponse(
             circuit_breaker=True,
-            message=f"🚨 熔断已触发: {body.reason or 'manual'}"
+            message=f"熔断已触发: {body.reason or 'manual'}"
         )
     elif body.action == "reset":
-        reg.risk_model.reset_circuit_breaker()
+        risk_model.reset_circuit_breaker()
         return CircuitBreakerResponse(
             circuit_breaker=False,
-            message="✅ 熔断已解除"
+            message="熔断已解除"
         )
     else:
         raise HTTPException(400, f"Unknown action: {body.action}")

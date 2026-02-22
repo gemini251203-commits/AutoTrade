@@ -225,53 +225,40 @@ class AutoPilot:
                     await db.commit()
                     return
 
-            # 5. 风控检查
+            # 5. 风控参数钳制 (确保参数在系统限制内)
             risk_config = signal.risk_config
             risk_config = self.risk_guard.clamp_params(risk_config)
             
             wallet_balance = await self._get_wallet_balance(db, strategy.user_id)
-            open_positions = await self._get_open_positions(db, strategy.user_id)
-            today_trades, today_pnl = await self._get_today_stats(
-                db, strategy.user_id
+
+            # 6. 通过 Pipeline 统一下单 (Pipeline 内部含 Risk 审批)
+            logger.info(f"[AutoPilot] 信号确认，通过 Pipeline 下单")
+            exec_result = await self._execute_order(
+                db, strategy, signal, risk_config, wallet_balance
             )
             
-            risk_passed, risk_results = self.risk_guard.check_all(
-                signal_side=signal.side.value if signal.side else "buy",
-                symbol=strategy.symbol,
-                position_pct=risk_config.get("position_pct", 10),
-                leverage=risk_config.get("leverage", 1),
-                stop_loss_pct=risk_config.get("stop_loss_pct", 3),
-                take_profit_pct=risk_config.get("take_profit_pct", 9),
-                wallet_balance=wallet_balance,
-                open_positions=open_positions,
-                today_trades=today_trades,
-                today_pnl=today_pnl,
-            )
+            order_id = exec_result.get("order_id") if exec_result else None
+            risk_passed = exec_result.get("risk_passed", True) if exec_result else False
+            risk_reason = exec_result.get("risk_reason", "") if exec_result else "执行失败"
             
-            if not risk_passed:
-                failed_rules = [r for r in risk_results if not r.passed]
-                risk_reason = "; ".join(str(r) for r in failed_rules)
-                logger.info(f"[AutoPilot] 🛡️ 风控拦截: {risk_reason}")
+            if not exec_result or not exec_result.get("success"):
+                # Pipeline 拒绝 (可能是风控拒绝或执行失败)
+                action = "rejected_risk" if not risk_passed else "error"
+                logger.info(f"[AutoPilot] Pipeline 拒绝: {risk_reason}")
                 await self._save_log(
-                    db, strategy, signal.signal_type.value, "rejected_risk",
+                    db, strategy, signal.signal_type.value, action,
                     side=signal.side.value if signal.side else None,
                     ai_approve=ai_approve,
                     ai_confidence=ai_confidence,
                     ai_reason=ai_reason,
-                    risk_passed=False,
+                    risk_passed=risk_passed,
                     risk_reason=risk_reason,
                     conditions_snapshot=self._snapshot_conditions(signal),
                 )
                 await db.commit()
                 return
-
-            # 6. 自动下单
-            logger.info(f"[AutoPilot] ✅ 信号确认，准备下单")
-            order_id = await self._execute_order(
-                db, strategy, signal, risk_config, wallet_balance
-            )
             
-            # 7. 记录日志
+            # 7. 记录成功日志
             strategy.total_trades += 1
             await self._save_log(
                 db, strategy, signal.signal_type.value, "executed",
@@ -286,7 +273,7 @@ class AutoPilot:
             
             await db.commit()
             logger.info(
-                f"[AutoPilot] ✅ 策略 #{strategy.id} 交易已执行 "
+                f"[AutoPilot] 策略 #{strategy.id} 交易已执行 "
                 f"(order_id={order_id})"
             )
 
@@ -418,8 +405,12 @@ class AutoPilot:
         signal: Signal,
         risk_config: Dict,
         wallet_balance: float,
-    ) -> Optional[int]:
-        """执行下单 (通过 Pipeline 统一入口)"""
+    ) -> Dict:
+        """执行下单 (通过 Pipeline 统一入口, 含 Risk 审批)
+        
+        Returns:
+            dict with keys: success, order_id, risk_passed, risk_reason, error
+        """
         try:
             from app.core.pipeline import get_pipeline
             
@@ -438,7 +429,7 @@ class AutoPilot:
             
             if current_price <= 0:
                 logger.error(f"[AutoPilot] 无法获取 {strategy.symbol} 价格")
-                return None
+                return {"success": False, "risk_passed": True, "risk_reason": "", "error": "无法获取价格"}
             
             quantity = Decimal(str(trade_amount * leverage / current_price))
             
@@ -456,7 +447,7 @@ class AutoPilot:
             # 获取持仓信息
             open_positions = await self._get_open_positions(db, strategy.user_id)
             
-            # 通过 Pipeline 下单
+            # 通过 Pipeline 下单 (内含 Risk 审批)
             pipeline = get_pipeline(strategy.user_id)
             result = await pipeline.submit_from_signal(
                 db=db,
@@ -475,13 +466,26 @@ class AutoPilot:
             )
             
             if result.get("success"):
-                return result.get("order_id")
+                return {
+                    "success": True,
+                    "order_id": result.get("order_id"),
+                    "risk_passed": True,
+                    "risk_reason": "",
+                }
             else:
-                logger.warning(f"[AutoPilot] Pipeline 拒绝: {result.get('error')}")
-                return None
+                # 判断是风控拒绝还是执行失败
+                error_msg = result.get("error", "")
+                is_risk_reject = "风控拒绝" in error_msg or "risk_reason" in result
+                return {
+                    "success": False,
+                    "order_id": None,
+                    "risk_passed": not is_risk_reject,
+                    "risk_reason": result.get("risk_reason", error_msg),
+                    "error": error_msg,
+                }
         except Exception as e:
             logger.error(f"[AutoPilot] 下单失败: {e}")
-            return None
+            return {"success": False, "risk_passed": True, "risk_reason": "", "error": str(e)}
 
 
     async def _save_log(

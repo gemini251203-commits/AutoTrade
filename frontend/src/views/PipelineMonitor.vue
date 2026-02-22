@@ -61,7 +61,7 @@ const layerDescriptions: Record<string, string> = {
   Alpha: '信号产出 — 分析市场数据, 生成交易信号 (Insight)',
   Portfolio: '仓位计算 — 将信号转换为具体的交易目标 (Target)',
   Risk: '风控审批 — 8项检查, 保护资金安全',
-  Execution: '订单执行 — 将审批通过的目标提交给交易所',
+  Execution: '订单执行 — 将审批通过的目标生成模拟订单',
 }
 
 function statusTagType(s: string) {

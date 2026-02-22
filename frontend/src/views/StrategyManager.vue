@@ -43,6 +43,10 @@ import {
   type StrategyTemplate,
   type TradeMemoryResponse,
 } from '@/api/strategy'
+import {
+  getPipelineStatus,
+  type PipelineStatusResponse,
+} from '@/api/pipeline'
 
 // ==================== State ====================
 
@@ -51,6 +55,7 @@ const templates = ref<StrategyTemplate[]>([])
 const memories = ref<TradeMemoryResponse[]>([])
 const loading = ref(false)
 const error = ref('')
+const pipelineStatus = ref<PipelineStatusResponse | null>(null)
 
 // Modal state
 const showCreateModal = ref(false)
@@ -221,6 +226,8 @@ function pnlColor(v: number) {
 
 onMounted(() => {
   fetchAll()
+  // 加载 Pipeline 状态
+  getPipelineStatus().then(s => pipelineStatus.value = s).catch(() => {})
 })
 </script>
 
@@ -260,6 +267,35 @@ onMounted(() => {
           <div class="stat-label">累计盈亏</div>
           <div class="stat-value" :style="{ color: pnlColor(totalPnl) }">
             {{ totalPnl >= 0 ? '+' : '' }}{{ totalPnl.toFixed(2) }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Pipeline Status (嵌入式) -->
+      <div v-if="pipelineStatus" class="pipeline-inline">
+        <div class="pipeline-header">
+          <span class="pipeline-title">交易流水线 (Pipeline)</span>
+          <span
+            class="pipeline-badge"
+            :style="{ background: pipelineStatus.circuit_breaker ? '#ef4444' : '#22c55e' }"
+          >
+            {{ pipelineStatus.circuit_breaker ? '熔断' : '正常' }}
+          </span>
+        </div>
+        <div class="pipeline-layers">
+          <div
+            v-for="layer in pipelineStatus.layers"
+            :key="layer.name"
+            class="pipeline-layer"
+          >
+            <div class="layer-dot" :style="{ background: layer.status === 'active' ? '#22c55e' : layer.status === 'error' ? '#ef4444' : '#4b5563' }"></div>
+            <div class="layer-info">
+              <span class="layer-name">{{ layer.name }}</span>
+              <span class="layer-count">{{ layer.count }}</span>
+            </div>
+          </div>
+          <div class="pipeline-arrow" v-for="i in 3" :key="'arrow'+i">
+            <svg width="12" height="12" viewBox="0 0 12 12"><path d="M4 2L8 6L4 10" stroke="#4b5563" stroke-width="1.5" fill="none"/></svg>
           </div>
         </div>
       </div>
@@ -754,5 +790,69 @@ onMounted(() => {
   .template-card .text-sm {
     font-size: 12px;
   }
+}
+
+/* Pipeline Inline */
+.pipeline-inline {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+.pipeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.pipeline-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #d1d5db;
+}
+.pipeline-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+}
+.pipeline-layers {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.pipeline-layer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.layer-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.layer-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.layer-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+.layer-count {
+  font-size: 11px;
+  color: #6b7280;
+  font-family: 'JetBrains Mono', monospace;
+}
+.pipeline-arrow {
+  color: #4b5563;
 }
 </style>
