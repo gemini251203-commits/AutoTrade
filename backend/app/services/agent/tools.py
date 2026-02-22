@@ -1043,6 +1043,19 @@ def _calc_fixed_stops(
 
 def _build_validation_report(config: dict) -> dict:
     """生成策略验证报告 — 让 AI 和用户确认策略实际包含什么"""
+    is_pipeline = any(k in config for k in ("alphas", "portfolio", "execution"))
+    
+    if is_pipeline:
+        alphas = config.get("alphas", [])
+        return {
+            "is_pipeline": True,
+            "alphas": len(alphas),
+            "portfolio": config.get("portfolio", {}).get("type", "unknown"),
+            "risk": config.get("risk", {}).get("type", "unknown"),
+            "execution": config.get("execution", {}).get("type", "unknown"),
+            "features": ["Pipeline架构"]
+        }
+
     entry = config.get("entry", {})
     exit_block = config.get("exit", {})
     risk = config.get("risk", {})
@@ -1081,6 +1094,7 @@ def _build_validation_report(config: dict) -> dict:
         features.append("波动率自适应")
 
     report = {
+        "is_pipeline": False,
         "entry_conditions": len(entry_conds),
         "exit_conditions": len(exit_conds),
         "entry_operator": entry.get("operator", "AND"),
@@ -1171,6 +1185,61 @@ async def create_strategy(
         "symbol": strategy.symbol,
         "interval": strategy.interval,
         "message": f"策略 '{name}' 已创建 (ID: {strategy.id})，默认未启用",
+        "validation_report": report,
+    }, ensure_ascii=False)
+
+
+@register_tool
+async def create_pipeline_strategy(
+    db: AsyncSession,
+    user_id: int,
+    name: str = "",
+    symbol: str = "BTCUSDT",
+    interval: str = "1h",
+    config_yaml: str = "",
+) -> str:
+    """
+    创建多模块流水线策略并保存到数据库
+
+    参数:
+        name: 策略名称
+        symbol: 交易对
+        interval: K 线周期
+        config_yaml: YAML 格式的 pipeline 策略配置
+    """
+    from app.services.quant.strategy import StrategyEngine
+
+    if not name or not config_yaml:
+        return json.dumps({"error": "缺少必要参数: name 和 config_yaml"}, ensure_ascii=False)
+
+    engine = StrategyEngine()
+    try:
+        config = engine.parse_yaml(config_yaml)
+    except ValueError as e:
+        return json.dumps({"error": f"YAML 配置验证失败: {str(e)}"}, ensure_ascii=False)
+
+    report = _build_validation_report(config)
+
+    strategy = Strategy(
+        user_id=user_id,
+        name=name,
+        symbol=symbol.upper(),
+        interval=interval,
+        config_yaml=config_yaml,
+        strategy_type="pipeline",
+        is_active=False,
+    )
+    db.add(strategy)
+    await db.commit()
+    await db.refresh(strategy)
+
+    return json.dumps({
+        "action": "created",
+        "id": strategy.id,
+        "name": strategy.name,
+        "symbol": strategy.symbol,
+        "interval": strategy.interval,
+        "message": f"流水线策略 '{name}' 已创建 (ID: {strategy.id})，默认未启用",
         "validation_report": report,
     }, ensure_ascii=False)
 

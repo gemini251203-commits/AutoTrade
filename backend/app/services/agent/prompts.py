@@ -110,6 +110,30 @@ TOOLS_DESCRIPTION = """
     - config_yaml: 同样**不要放在TOOL_CALL参数里**，直接在正文写 ```yaml 代码块。
     示例: [TOOL_CALL: update_strategy(strategy_id=1)]
 
+18. create_pipeline_strategy(name, symbol, interval) - 创建多模块流水线策略 (Pipeline) 并保存到数据库
+    - config_yaml: **不要放在TOOL_CALL参数里**，直接在正文写 ```yaml 代码块。
+    - YAML 结构包含: alphas(列表), portfolio(仓位分配), risk(风控约束), execution(执行模型)
+    示例:
+    ```yaml
+    alphas:
+      - type: "yaml_condition"
+        entry:
+          operator: AND
+          conditions:
+            - indicator: rsi
+              compare: "<"
+              value: 30
+    portfolio:
+      type: "fixed_percent"
+      params: { percent: 10 }
+    risk:
+      type: "standard_risk"
+      params: { max_drawdown_pct: 10, stop_loss_pct: 5 }
+    execution:
+      type: "market_order"
+    ```
+    [TOOL_CALL: create_pipeline_strategy(name=多模块组合策略, symbol=BTCUSDT, interval=1h)]
+
 ## 记忆工具
 18. query_memories(symbol) - 查询所有交易记忆 (包含手动/AI/信号/量化策略所有来源)
     示例: [TOOL_CALL: query_memories(symbol=BTCUSDT)]

@@ -502,6 +502,13 @@ onMounted(() => {
                       {{ s.symbol }}
                     </span>
                     <span class="text-xs text-gray-600 font-mono">{{ s.interval }}</span>
+                    <span
+                      v-if="s.strategy_type === 'pipeline'"
+                      class="px-2 py-0.5 rounded text-[10px] font-medium tracking-wide flex items-center gap-1"
+                      style="background: rgba(168,85,247,0.1); color: #a855f7; border: 1px solid rgba(168,85,247,0.2);"
+                    >
+                      <NIcon size="12"><TrophyOutline /></NIcon> PIPELINE
+                    </span>
                   </div>
                   <div class="flex items-center gap-4 mt-1 text-xs text-gray-500">
                     <span>交易: {{ s.total_trades }}</span>

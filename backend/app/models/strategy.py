@@ -46,6 +46,12 @@ class Strategy(Base):
         default="1h",
         comment="K 线周期 (1m/5m/15m/1h/4h/1d)",
     )
+    strategy_type: Mapped[str] = mapped_column(
+        String(20),
+        default="basic",
+        server_default="basic",
+        comment="策略分类: basic / pipeline",
+    )
     config_yaml: Mapped[str] = mapped_column(
         Text,
         comment="YAML 策略配置内容",

@@ -171,7 +171,7 @@ async def chat_stream(
                 tool_args = _parse_tool_args(args_str)
 
                 # 特殊处理: 取出 ai_content 中的 ```yaml 代码块作为 config_yaml 参数
-                if tool_name in ("create_strategy", "update_strategy"):
+                if tool_name in ("create_strategy", "update_strategy", "create_pipeline_strategy"):
                     yaml_match = re.search(r"```yaml\s*\n(.*?)\n```", ai_content, re.DOTALL)
                     if yaml_match:
                         tool_args["config_yaml"] = yaml_match.group(1).strip()
@@ -313,7 +313,7 @@ async def chat_complete(
                 tool_args = _parse_tool_args(args_str)
                 
                 # 特殊处理: 取出 ai_content 中的 ```yaml 代码块作为 config_yaml 参数
-                if tool_name in ("create_strategy", "update_strategy"):
+                if tool_name in ("create_strategy", "update_strategy", "create_pipeline_strategy"):
                     yaml_match = re.search(r"```yaml\s*\n(.*?)\n```", ai_content, re.DOTALL)
                     if yaml_match:
                         tool_args["config_yaml"] = yaml_match.group(1).strip()

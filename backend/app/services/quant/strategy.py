@@ -138,6 +138,7 @@ COMPARATORS = {
 ALLOWED_TOP_KEYS = {
     "name", "symbol", "interval",
     "entry", "exit", "risk", "ai_prompt",
+    "alphas", "portfolio", "execution", # pipeline mode
     # L2+
     "timeframes",
     # L3+
@@ -219,10 +220,13 @@ class StrategyEngine:
         
         # 3. 设置默认值
         config.setdefault("interval", "1h")
-        config.setdefault("entry", {"operator": "AND", "conditions": []})
-        config.setdefault("exit", {"operator": "OR", "conditions": []})
-        config.setdefault("risk", {})
-        config.setdefault("ai_prompt", "")
+        is_pipeline = any(k in config for k in ("alphas", "portfolio", "execution"))
+        
+        if not is_pipeline:
+            config.setdefault("entry", {"operator": "AND", "conditions": []})
+            config.setdefault("exit", {"operator": "OR", "conditions": []})
+            config.setdefault("risk", {})
+            config.setdefault("ai_prompt", "")
         
         # 4. 白名单 — risk 字段
         risk = config.get("risk", {})
@@ -235,28 +239,35 @@ class StrategyEngine:
                 )
         
         # 5. 白名单 — entry/exit 块字段
-        for block_name in ("entry", "exit"):
-            block = config.get(block_name, {})
-            if isinstance(block, dict):
+        blocks_to_check = [config.get("entry", {}), config.get("exit", {})]
+        alphas = config.get("alphas", [])
+        if isinstance(alphas, list):
+            for alpha in alphas:
+                if isinstance(alpha, dict):
+                    blocks_to_check.append(alpha.get("entry", {}))
+                    blocks_to_check.append(alpha.get("exit", {}))
+                    
+        for block in blocks_to_check:
+            if isinstance(block, dict) and block:
                 unknown_block = set(block.keys()) - ALLOWED_BLOCK_KEYS
                 if unknown_block:
                     raise ValueError(
-                        f"{block_name} 包含未知字段: {unknown_block}。"
+                        f"条件块包含未知字段: {unknown_block}。"
                         f"允许的字段: {sorted(ALLOWED_BLOCK_KEYS)}"
                     )
         
         # 6. 校验条件中的指标名称 + 白名单字段
-        self._validate_conditions(config.get("entry", {}))
-        self._validate_conditions(config.get("exit", {}))
+        for block in blocks_to_check:
+            self._validate_conditions(block)
         
         # 7. 收集需要的时间框架 (用于多时间框架功能)
         required_tfs = set()
         required_tfs.add(config.get("interval", "1h"))
-        for block_name in ("entry", "exit"):
-            block = config.get(block_name, {})
-            for cond in block.get("conditions", []):
-                if "timeframe" in cond:
-                    required_tfs.add(cond["timeframe"])
+        for block in blocks_to_check:
+            if isinstance(block, dict):
+                for cond in block.get("conditions", []):
+                    if "timeframe" in cond:
+                        required_tfs.add(cond["timeframe"])
         config["_required_timeframes"] = sorted(required_tfs)
         
         return config

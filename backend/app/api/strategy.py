@@ -56,6 +56,7 @@ class StrategyResponse(BaseModel):
     symbol: str
     interval: str
     config_yaml: str
+    strategy_type: str
     is_active: bool
     last_run_at: Optional[str] = None
     last_signal: Optional[str] = None
@@ -128,6 +129,7 @@ def _strategy_to_response(s: Strategy) -> dict:
         "symbol": s.symbol,
         "interval": s.interval,
         "config_yaml": s.config_yaml,
+        "strategy_type": getattr(s, "strategy_type", "basic"),
         "is_active": s.is_active,
         "last_run_at": s.last_run_at.isoformat() if s.last_run_at else None,
         "last_signal": s.last_signal,

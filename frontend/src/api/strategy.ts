@@ -38,6 +38,7 @@ export interface StrategyResponse {
   symbol: string
   interval: string
   config_yaml: string
+  strategy_type: string
   is_active: boolean
   last_run_at: string | null
   last_signal: string | null
