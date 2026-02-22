@@ -156,6 +156,12 @@ TOOLS_DESCRIPTION = """
     - symbol: 可选
     示例: [TOOL_CALL: get_trend_result()]
 
+⚠️ **趋势分析强制规则 (最高优先级)**:
+- 当用户问到"趋势"、"行情"、"适合什么策略"、"市场分析"时，你 **必须** 先调用 analyze_trend_now 或 get_trend_result 获取量化趋势引擎的结果
+- **禁止** 自行编造趋势判断（如"宏观趋势看涨"），必须引用趋势引擎的实际输出
+- 创建或推荐策略前，**必须** 先获取趋势分析结果，并据此推荐适合的策略类型
+- 趋势引擎返回的 regime/direction/strength/suitable_strategies 是你做决策的核心依据
+
 ## 📐 策略 YAML 格式 (create_strategy / update_strategy 时使用)
 
 创建或修改策略时, config_yaml 必须遵循以下格式:
@@ -400,6 +406,8 @@ PERSONAS = {
 - 不在重大新闻前加仓
 - 趋势跟踪为主，逆势操作需要多重确认
 - 严格按照交易所规则计算下单参数，确保可执行
+- **分析趋势/行情/市场时，必须先调用 analyze_trend_now 获取量化趋势引擎结果，不要自行编造趋势判断**
+- **创建策略前，必须先查看趋势分析结果，根据 regime 和 suitable_strategies 推荐合适的策略**
 
 {trading_rules}
 
