@@ -11,7 +11,7 @@ AI 服务提供商适配器
 
 import json
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, AsyncGenerator
 from dataclasses import dataclass
 
 import httpx
@@ -47,6 +47,18 @@ class BaseProvider(ABC):
     ) -> ChatResponse:
         """发送聊天请求"""
         pass
+    
+    async def chat_streaming(
+        self,
+        messages: List[ChatMessage],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2000,
+    ) -> AsyncGenerator[str, None]:
+        """流式聊天 — 逐 token 返回文本"""
+        # 默认实现: fallback 到非流式
+        resp = await self.chat(messages, model, temperature, max_tokens)
+        yield resp.content
     
     @abstractmethod
     async def health_check(self) -> bool:
@@ -130,6 +142,64 @@ class DeepSeekProvider(BaseProvider):
             raise Exception("DeepSeek API timeout")
         except Exception as e:
             logger.error(f"[DeepSeek] Request failed: {e}")
+            raise
+    
+    async def chat_streaming(
+        self,
+        messages: List[ChatMessage],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2000,
+    ) -> AsyncGenerator[str, None]:
+        """真流式聊天 — 使用 SSE stream"""
+        use_model = model or self.model
+        
+        payload = {
+            "model": use_model,
+            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                async with client.stream(
+                    "POST",
+                    f"{self.base_url}/chat/completions",
+                    json=payload,
+                    headers=headers,
+                ) as resp:
+                    if resp.status_code != 200:
+                        error_text = await resp.aread()
+                        logger.error(f"[DeepSeek] Stream error {resp.status_code}: {error_text}")
+                        raise Exception(f"DeepSeek stream error: {resp.status_code}")
+                    
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        data_str = line[6:]
+                        if data_str.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                            delta = chunk.get("choices", [{}])[0].get("delta", {})
+                            content = delta.get("content", "")
+                            if content:
+                                yield content
+                        except json.JSONDecodeError:
+                            continue
+        except httpx.TimeoutException:
+            logger.error("[DeepSeek] Stream timeout")
+            raise Exception("DeepSeek stream timeout")
+        except Exception as e:
+            if "stream error" not in str(e):
+                logger.error(f"[DeepSeek] Stream failed: {e}")
             raise
     
     async def health_check(self) -> bool:
@@ -219,6 +289,58 @@ class OllamaProvider(BaseProvider):
             raise Exception("Ollama connection failed")
         except Exception as e:
             logger.error(f"[Ollama] Request failed: {e}")
+            raise
+    
+    async def chat_streaming(
+        self,
+        messages: List[ChatMessage],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2000,
+    ) -> AsyncGenerator[str, None]:
+        """真流式聊天 — Ollama streaming"""
+        use_model = model or self.model
+        
+        payload = {
+            "model": use_model,
+            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "stream": True,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+            },
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                async with client.stream(
+                    "POST",
+                    f"{self.base_url}/api/chat",
+                    json=payload,
+                ) as resp:
+                    if resp.status_code != 200:
+                        error_text = await resp.aread()
+                        logger.error(f"[Ollama] Stream error {resp.status_code}: {error_text}")
+                        raise Exception(f"Ollama stream error: {resp.status_code}")
+                    
+                    async for line in resp.aiter_lines():
+                        if not line.strip():
+                            continue
+                        try:
+                            chunk = json.loads(line)
+                            content = chunk.get("message", {}).get("content", "")
+                            if content:
+                                yield content
+                            if chunk.get("done", False):
+                                break
+                        except json.JSONDecodeError:
+                            continue
+        except httpx.TimeoutException:
+            logger.error("[Ollama] Stream timeout")
+            raise Exception("Ollama stream timeout")
+        except Exception as e:
+            if "stream error" not in str(e):
+                logger.error(f"[Ollama] Stream failed: {e}")
             raise
     
     async def health_check(self) -> bool:

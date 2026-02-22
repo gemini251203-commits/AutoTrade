@@ -6,7 +6,7 @@
  *
  * 功能:
  * - 多会话管理 (新建/切换/删除)
- * - AI 主理人 (统一角色)
+ * - AI Agent (统一角色)
  * - 流式消息显示 (打字机效果)
  * - 工具调用状态展示
  * - Markdown 渲染
@@ -73,7 +73,7 @@ const activeConversation = computed(() =>
   conversations.value.find((c) => c.id === activeConversationId.value) || null
 )
 
-const activePersonaName = computed(() => 'AI 主理人')
+const activePersonaName = computed(() => 'AI Agent')
 
 const displayMessages = computed(() => {
   // 过滤掉 system 消息，只显示 user / assistant / tool
@@ -255,7 +255,7 @@ function stopStreaming() {
 // ==================== Helpers ====================
 
 function getPersonaName(id: string): string {
-  return 'AI 主理人'
+  return 'AI Agent'
 }
 
 function scrollToBottom() {
@@ -354,7 +354,7 @@ function formatTime(iso: string): string {
           </button>
           <div class="header-info" v-if="activeConversation">
             <n-icon :component="PersonOutline" :size="20" />
-            <span class="header-name">AI 主理人</span>
+            <span class="header-name">AI Agent</span>
             <n-tag :type="'info'" size="small" round>
               {{ activeConversation.title }}
             </n-tag>
@@ -366,7 +366,7 @@ function formatTime(iso: string): string {
         <!-- 空状态 -->
         <div v-if="!activeConversationId" class="empty-state">
           <div class="empty-icon">AI</div>
-          <h2>AI 主理人</h2>
+          <h2>AI Agent</h2>
           <p>你的 AI 交易主理人，帮你分析市场、制定策略、自动交易</p>
           <button class="create-chat-btn empty-start-btn" @click="handleCreateConversation">
             开始对话

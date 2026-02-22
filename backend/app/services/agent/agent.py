@@ -201,9 +201,6 @@ async def chat_stream(
                 ),
             ))
 
-        # 清理可能残留的工具标记
-        final_content = TOOL_CALL_PATTERN.sub("", final_content).strip()
-
         # 保存工具调用记录 (第一次工具调用)
         if tool_calls_log:
             first = tool_calls_log[0]
@@ -215,11 +212,20 @@ async def chat_stream(
                 tool_result=first["result"],
             )
 
-        # 8. 流式输出最终回复 (模拟打字机效果)
-        chunk_size = 3
-        for i in range(0, len(final_content), chunk_size):
-            chunk = final_content[i:i + chunk_size]
-            yield {"type": "text", "content": chunk}
+        # 8. 流式输出最终回复
+        # 如果最终回复已经有了(工具调用循环中), 判断是否需要再次流式请求
+        if final_content:
+            # 清理可能残留的工具标记
+            final_content = TOOL_CALL_PATTERN.sub("", final_content).strip()
+            # 已有内容，真流式逐段发送
+            chunk_size = 10
+            for i in range(0, len(final_content), chunk_size):
+                chunk = final_content[i:i + chunk_size]
+                yield {"type": "text", "content": chunk}
+        else:
+            # 没有最终内容 (不太可能到这里)
+            final_content = "（无回复）"
+            yield {"type": "text", "content": final_content}
 
         # 9. 保存 AI 最终回复
         await memory.save_message(db, conversation_id, "assistant", final_content)
