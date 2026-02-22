@@ -6,7 +6,7 @@
  *
  * 功能:
  * - 多会话管理 (新建/切换/删除)
- * - 角色选择 (稳健/激进/量化/教练)
+ * - AI 主理人 (统一角色)
  * - 流式消息显示 (打字机效果)
  * - 工具调用状态展示
  * - Markdown 渲染
@@ -25,13 +25,13 @@ import {
 } from '@vicons/ionicons5'
 import MainLayout from '@/layouts/MainLayout.vue'
 import {
-  getPersonas,
+
   createConversation,
   listConversations,
   deleteConversation,
   getMessages,
   sendMessage,
-  type Persona,
+
   type Conversation,
   type ChatMessage,
   type SSEEvent,
@@ -46,7 +46,6 @@ const message = useMessage()
 // 会话
 const conversations = ref<Conversation[]>([])
 const activeConversationId = ref<number | null>(null)
-const personas = ref<Persona[]>([])
 const selectedPersona = ref('conservative')
 
 // 消息
@@ -74,12 +73,7 @@ const activeConversation = computed(() =>
   conversations.value.find((c) => c.id === activeConversationId.value) || null
 )
 
-const activePersonaName = computed(() => {
-  const conv = activeConversation.value
-  if (!conv) return ''
-  const p = personas.value.find((item: Persona) => item.id === conv.persona)
-  return p?.name || conv.persona
-})
+const activePersonaName = computed(() => 'AI 主理人')
 
 const displayMessages = computed(() => {
   // 过滤掉 system 消息，只显示 user / assistant / tool
@@ -89,7 +83,6 @@ const displayMessages = computed(() => {
 // ==================== Lifecycle ====================
 
 onMounted(async () => {
-  await loadPersonas()
   await loadConversations()
 })
 
@@ -105,20 +98,7 @@ watch(
 
 // ==================== API Methods ====================
 
-async function loadPersonas() {
-  try {
-    personas.value = await getPersonas()
-  } catch (e) {
-    console.error('Failed to load personas:', e)
-    // 使用默认值
-    personas.value = [
-      { id: 'conservative', name: '稳健交易员' },
-      { id: 'aggressive', name: '激进交易员' },
-      { id: 'quant', name: '量化分析师' },
-      { id: 'mentor', name: '交易教练' },
-    ]
-  }
-}
+
 
 async function loadConversations() {
   loadingConversations.value = true
@@ -141,7 +121,7 @@ async function handleCreateConversation() {
     const conv = await createConversation(selectedPersona.value)
     conversations.value.unshift(conv)
     await selectConversation(conv.id)
-    message.success(`新会话已创建 (${getPersonaName(conv.persona)})`)
+    message.success('新会话已创建')
   } catch (e) {
     message.error('创建会话失败')
   }
@@ -275,7 +255,7 @@ function stopStreaming() {
 // ==================== Helpers ====================
 
 function getPersonaName(id: string): string {
-  return personas.value.find((p) => p.id === id)?.name || id
+  return 'AI 主理人'
 }
 
 function scrollToBottom() {
@@ -318,15 +298,6 @@ function formatTime(iso: string): string {
         <template v-if="!sidebarCollapsed">
           <!-- 新建会话 -->
           <div class="new-chat">
-            <div class="new-chat-label">选择 AI 角色</div>
-            <select
-              v-model="selectedPersona"
-              class="persona-select"
-            >
-              <option v-for="p in personas" :key="p.id" :value="p.id">
-                {{ p.name }}
-              </option>
-            </select>
             <button
               class="create-chat-btn"
               @click="handleCreateConversation"
@@ -357,9 +328,6 @@ function formatTime(iso: string): string {
                   <span v-if="conv.persona === 'autopilot'" class="autopilot-tag">[自动]</span>
                   {{ conv.title }}
                 </div>
-                <div class="conv-meta">
-                  <span class="persona-badge">{{ getPersonaName(conv.persona) }}</span>
-                </div>
               </div>
               <button
                 class="conv-delete"
@@ -386,7 +354,7 @@ function formatTime(iso: string): string {
           </button>
           <div class="header-info" v-if="activeConversation">
             <n-icon :component="PersonOutline" :size="20" />
-            <span class="header-name">{{ activePersonaName }}</span>
+            <span class="header-name">AI 主理人</span>
             <n-tag :type="'info'" size="small" round>
               {{ activeConversation.title }}
             </n-tag>
@@ -398,14 +366,12 @@ function formatTime(iso: string): string {
         <!-- 空状态 -->
         <div v-if="!activeConversationId" class="empty-state">
           <div class="empty-icon">AI</div>
-          <h2>AI 交易代理</h2>
-          <p>在左侧选择一个 AI 角色, 点击「新建会话」开始对话</p>
-          <div class="empty-roles">
-            <div class="role-tag" v-for="p in personas" :key="p.id" @click="selectedPersona = p.id; handleCreateConversation()">
-              {{ p.name }}
-            </div>
-          </div>
-          <p class="empty-hint">AI 可以帮你查行情、下单、分析市场、查持仓</p>
+          <h2>AI 主理人</h2>
+          <p>你的 AI 交易主理人，帮你分析市场、制定策略、自动交易</p>
+          <button class="create-chat-btn empty-start-btn" @click="handleCreateConversation">
+            开始对话
+          </button>
+          <p class="empty-hint">AI 可以帮你查行情、下单、分析市场、管理策略、趋势分析</p>
         </div>
 
         <!-- 消息区域 -->
