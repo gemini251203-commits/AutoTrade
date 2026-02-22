@@ -113,6 +113,11 @@ const riskMaxLeverage = ref(20)
 const riskMaxDailyLoss = ref(10)
 const riskMaxDailyTrades = ref(20)
 
+// Execution params
+const selectedExecution = ref('market')
+const execPriceOffsetPct = ref(-0.3)
+const execTriggerOffsetPct = ref(0.2)
+
 const indicatorOptions = [
   { label: 'RSI', value: 'rsi' },
   { label: 'MACD 金叉', value: 'macd_golden_cross' },
@@ -188,7 +193,7 @@ function openEditModal(strategy: StrategyResponse) {
   formSymbol.value = strategy.symbol
   formInterval.value = strategy.interval
   formYaml.value = strategy.config_yaml
-  wizardStep.value = 4  // Jump to review for editing
+  wizardStep.value = 5  // Jump to review for editing
   showCreateModal.value = true
 }
 
@@ -244,7 +249,14 @@ function buildPipelineYaml(): string {
   lines.push(`    max_daily_trades: ${riskMaxDailyTrades.value}`)
 
   lines.push('execution:')
-  lines.push('  type: "market"')
+  lines.push(`  type: "${selectedExecution.value}"`)
+  if (selectedExecution.value === 'limit') {
+    lines.push('  params:')
+    lines.push(`    price_offset_pct: ${execPriceOffsetPct.value}`)
+  } else if (selectedExecution.value === 'stop_market') {
+    lines.push('  params:')
+    lines.push(`    trigger_offset_pct: ${execTriggerOffsetPct.value}`)
+  }
   return lines.join('\n')
 }
 
@@ -861,7 +873,7 @@ onMounted(() => {
       </template>
     </div>
 
-    <!-- Create/Edit Modal (4-Step Wizard) -->
+    <!-- Create/Edit Modal (5-Step Wizard) -->
     <NModal
       v-model:show="showCreateModal"
       preset="card"
@@ -871,23 +883,23 @@ onMounted(() => {
     >
       <!-- Step indicator -->
       <div v-if="!editingStrategy" class="flex items-center gap-2 mb-6">
-        <template v-for="step in 4" :key="step">
+        <template v-for="step in 5" :key="step">
           <div
-            class="flex items-center gap-2 cursor-pointer"
+            class="flex items-center gap-1.5 cursor-pointer"
             @click="wizardStep = step"
           >
             <div
-              class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all"
+              class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-medium transition-all"
               :style="{
                 background: wizardStep >= step ? 'linear-gradient(135deg, #8a2be2, #5a189a)' : 'rgba(255,255,255,0.05)',
                 color: wizardStep >= step ? 'white' : '#6b7280',
               }"
             >{{ step }}</div>
-            <span class="text-xs" :style="{ color: wizardStep >= step ? '#a855f7' : '#4b5563' }">
-              {{ ['Alpha 信号', 'Portfolio 仓位', 'Risk 风控', '基本信息'][step - 1] }}
+            <span class="text-[10px]" :style="{ color: wizardStep >= step ? '#a855f7' : '#4b5563' }">
+              {{ ['Alpha', 'Portfolio', 'Risk', 'Execution', '确认'][step - 1] }}
             </span>
           </div>
-          <div v-if="step < 4" class="flex-1 h-px" style="background: rgba(255,255,255,0.06);"></div>
+          <div v-if="step < 5" class="flex-1 h-px" style="background: rgba(255,255,255,0.06);"></div>
         </template>
       </div>
 
@@ -1015,8 +1027,56 @@ onMounted(() => {
           </div>
         </template>
 
-        <!-- Step 4: Basic Info -->
-        <template v-if="wizardStep === 4 || editingStrategy">
+        <!-- Step 4: Execution -->
+        <template v-if="wizardStep === 4 && !editingStrategy">
+          <div class="text-sm text-gray-300 mb-3">选择执行方式：如何下单？</div>
+          <div class="grid grid-cols-3 gap-3">
+            <button
+              @click="selectedExecution = 'market'"
+              class="p-3 rounded-lg text-left transition-all"
+              :style="{
+                background: selectedExecution === 'market' ? 'rgba(138,43,226,0.15)' : 'rgba(255,255,255,0.03)',
+                border: selectedExecution === 'market' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
+              }"
+            >
+              <div class="text-sm text-white font-medium">⚡ 市价单</div>
+              <div class="text-[10px] text-gray-500 mt-1">立即成交，速度最快</div>
+            </button>
+            <button
+              @click="selectedExecution = 'limit'"
+              class="p-3 rounded-lg text-left transition-all"
+              :style="{
+                background: selectedExecution === 'limit' ? 'rgba(138,43,226,0.15)' : 'rgba(255,255,255,0.03)',
+                border: selectedExecution === 'limit' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
+              }"
+            >
+              <div class="text-sm text-white font-medium">📌 限价挂单</div>
+              <div class="text-[10px] text-gray-500 mt-1">指定价格等待成交</div>
+            </button>
+            <button
+              @click="selectedExecution = 'stop_market'"
+              class="p-3 rounded-lg text-left transition-all"
+              :style="{
+                background: selectedExecution === 'stop_market' ? 'rgba(138,43,226,0.15)' : 'rgba(255,255,255,0.03)',
+                border: selectedExecution === 'stop_market' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
+              }"
+            >
+              <div class="text-sm text-white font-medium">🎯 条件触发</div>
+              <div class="text-[10px] text-gray-500 mt-1">突破价格后市价成交</div>
+            </button>
+          </div>
+          <div v-if="selectedExecution === 'limit'" class="p-3 rounded-lg mt-3" style="background: rgba(255,255,255,0.02);">
+            <label class="text-xs text-gray-500">价格偏移 % (负数=低于当前价挂买单)</label>
+            <NInputNumber v-model:value="execPriceOffsetPct" :min="-5" :max="5" :step="0.1" size="small" class="mt-1" />
+          </div>
+          <div v-if="selectedExecution === 'stop_market'" class="p-3 rounded-lg mt-3" style="background: rgba(255,255,255,0.02);">
+            <label class="text-xs text-gray-500">触发价偏移 % (正数=突破做多)</label>
+            <NInputNumber v-model:value="execTriggerOffsetPct" :min="-5" :max="5" :step="0.1" size="small" class="mt-1" />
+          </div>
+        </template>
+
+        <!-- Step 5: Basic Info -->
+        <template v-if="wizardStep === 5 || editingStrategy">
           <div v-if="!editingStrategy" class="text-sm text-gray-300 mb-3">最后一步：填写策略名称</div>
           <div>
             <label class="block text-xs text-gray-500 mb-1.5">策略名称</label>
@@ -1064,7 +1124,7 @@ onMounted(() => {
               <span class="text-gray-600">→</span>
               <span class="px-2 py-1 rounded" style="background: rgba(239,68,68,0.1); color: #ef4444;">🛡️ 风控 {{ riskMaxLeverage }}x</span>
               <span class="text-gray-600">→</span>
-              <span class="px-2 py-1 rounded" style="background: rgba(59,130,246,0.1); color: #3b82f6;">⚡ 市价执行</span>
+              <span class="px-2 py-1 rounded" style="background: rgba(59,130,246,0.1); color: #3b82f6;">{{ selectedExecution === 'market' ? '⚡ 市价' : selectedExecution === 'limit' ? '📌 限价' : '🎯 条件单' }}</span>
             </div>
           </div>
         </template>
@@ -1089,7 +1149,7 @@ onMounted(() => {
               取消
             </button>
             <button
-              v-if="wizardStep < 4 && !editingStrategy"
+              v-if="wizardStep < 5 && !editingStrategy"
               @click="wizardStep++"
               class="px-4 py-2 rounded-lg text-sm text-white font-medium transition-all"
               style="background: linear-gradient(135deg, #8a2be2, #5a189a);"
@@ -1097,7 +1157,7 @@ onMounted(() => {
               下一步
             </button>
             <button
-              v-if="wizardStep === 4 || editingStrategy"
+              v-if="wizardStep === 5 || editingStrategy"
               @click="handleSave"
               :disabled="formSaving"
               class="px-4 py-2 rounded-lg text-sm text-white font-medium transition-all flex items-center gap-2"

@@ -201,6 +201,34 @@ _REGISTRY: List[ModuleInfo] = [
         ),
         params=[],
     ),
+    ModuleInfo(
+        id="limit",
+        name="限价单挂单",
+        layer="execution",
+        description=(
+            "以指定价格挂单等待成交。适合想在更好价格入场的策略。"
+            "通过偏移百分比自动计算挂单价格。"
+        ),
+        params=[
+            ParamSpec("price_offset_pct", "float", -0.3,
+                      "相对当前价的偏移% (负数=低于当前价挂买单, 正数=高于当前价挂卖单)",
+                      min_value=-5.0, max_value=5.0),
+        ],
+    ),
+    ModuleInfo(
+        id="stop_market",
+        name="条件触发市价单",
+        layer="execution",
+        description=(
+            "价格触及指定条件后以市价成交。适合突破策略。"
+            "例如：突破阻力位后自动市价做多。"
+        ),
+        params=[
+            ParamSpec("trigger_offset_pct", "float", 0.2,
+                      "触发价相对当前价的偏移% (正数=突破做多, 负数=跌破做空)",
+                      min_value=-5.0, max_value=5.0),
+        ],
+    ),
 ]
 
 # 按 (layer, id) 建索引
