@@ -1245,29 +1245,34 @@ onMounted(async () => {
     max-width: 100% !important;
     padding: 14px;
     box-sizing: border-box;
-    overflow: hidden;
+    overflow: visible;
   }
   .account-balance {
     font-size: 22px;
   }
   .account-details {
     width: 100%;
-    overflow: hidden;
+    overflow: visible;
   }
   .account-detail-item {
     display: flex !important;
     justify-content: space-between !important;
     align-items: center !important;
     width: 100%;
+    min-height: 20px;
+    flex-wrap: nowrap;
   }
   .account-detail-item .detail-label {
     font-size: 11px;
     flex-shrink: 0;
+    min-width: 50px;
   }
   .account-detail-item .detail-value {
     font-size: 12px;
     text-align: right;
     flex-shrink: 0;
+    min-width: 60px;
+    white-space: nowrap;
   }
   .portfolio-page {
     padding: 12px;
