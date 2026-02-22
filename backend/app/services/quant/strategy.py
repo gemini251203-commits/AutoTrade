@@ -702,178 +702,109 @@ class StrategyEngine:
 
 
 # ============================================================
-# 预设策略模板
+# 预设策略模板 (Pipeline 式)
 # ============================================================
 
 STRATEGY_TEMPLATES = {
-    "rsi_oversold": """
-name: "RSI 超卖反弹"
+    "rsi_fixed": """
+name: "RSI 超卖 · 固定仓位"
 symbol: BTCUSDT
 interval: 1h
-entry:
-  operator: AND
-  conditions:
-    - indicator: rsi
-      compare: "<"
-      value: 30
-    - indicator: volume_ratio
-      compare: ">"
-      value: 1.2
-exit:
-  operator: OR
-  conditions:
-    - indicator: rsi
-      compare: ">"
-      value: 70
-ai_prompt: |
-  策略检测到 RSI 超卖，请额外确认：
-  1. 是否有底部反转 K 线形态 (pinbar/锤子/吞没)
-  2. 下跌趋势是否已经放缓
-  3. 成交量是否配合
+alphas:
+  - type: "yaml_condition"
+    name: "RSI超卖反弹"
+    entry:
+      operator: AND
+      conditions:
+        - indicator: rsi
+          compare: "<"
+          value: 30
+        - indicator: volume_ratio
+          compare: ">"
+          value: 1.2
+    exit:
+      operator: OR
+      conditions:
+        - indicator: rsi
+          compare: ">"
+          value: 70
+portfolio:
+  type: "fixed_percent"
+  params:
+    risk_percent: 10
+    default_leverage: 3
+    default_sl_pct: 3
+    default_tp_pct: 9
 risk:
-  side: buy
-  leverage: 3
-  position_pct: 10
-  stop_loss_pct: 3
-  take_profit_pct: 9
+  type: "standard"
+  params:
+    max_leverage: 5
+    max_daily_loss_pct: 8
+execution:
+  type: "market"
 """,
 
-    "macd_golden_cross": """
-name: "MACD 金叉"
+    "macd_kelly": """
+name: "MACD 金叉 · 凯利仓位"
 symbol: BTCUSDT
 interval: 1h
-entry:
-  operator: AND
-  conditions:
-    - indicator: macd_golden_cross
-      compare: "=="
-      value: true
-    - indicator: rsi
-      compare: ">"
-      value: 40
-exit:
-  operator: OR
-  conditions:
-    - indicator: macd_death_cross
-      compare: "=="
-      value: true
-ai_prompt: |
-  MACD刚刚金叉，请检查：
-  1. 金叉是否发生在零轴附近或上方（强势金叉更可靠）
-  2. 成交量是否在放大
-  3. 价格是否站上 EMA20
+alphas:
+  - type: "yaml_condition"
+    name: "MACD金叉"
+    entry:
+      operator: AND
+      conditions:
+        - indicator: macd_golden_cross
+          compare: "=="
+          value: true
+        - indicator: rsi
+          compare: ">"
+          value: 40
+    exit:
+      operator: OR
+      conditions:
+        - indicator: macd_death_cross
+          compare: "=="
+          value: true
+portfolio:
+  type: "kelly"
+  params:
+    kelly_fraction: 0.5
+    max_risk_percent: 20
+    default_leverage: 5
+    odds_ratio: 2.5
 risk:
-  side: buy
-  leverage: 2
-  position_pct: 8
-  stop_loss_pct: 4
-  take_profit_pct: 12
+  type: "standard"
+  params:
+    max_leverage: 10
+    max_daily_loss_pct: 12
+execution:
+  type: "market"
 """,
 
-    "bollinger_bounce": """
-name: "布林带下轨反弹"
+    "ai_conservative": """
+name: "AI 研判 · 保守风控"
 symbol: BTCUSDT
 interval: 1h
-entry:
-  operator: AND
-  conditions:
-    - indicator: close
-      compare: "<="
-      reference: bollinger_lower
-    - indicator: rsi
-      compare: "<"
-      value: 35
-exit:
-  operator: OR
-  conditions:
-    - indicator: close
-      compare: ">="
-      reference: bollinger_upper
-    - indicator: rsi
-      compare: ">"
-      value: 70
-ai_prompt: |
-  价格触及布林带下轨，请判断：
-  1. 是否只是正常回踩还是趋势性下跌
-  2. 布林带宽度是否在收窄（这意味着即将变盘）
-  3. 参考历史经验做出判断
+alphas:
+  - type: "ai_agent"
+    name: "AI智能研判"
+    confidence_threshold: 0.6
+portfolio:
+  type: "fixed_percent"
+  params:
+    risk_percent: 8
+    default_leverage: 2
+    default_sl_pct: 2
+    default_tp_pct: 6
 risk:
-  side: buy
-  leverage: 2
-  position_pct: 10
-  stop_loss_pct: 3
-  take_profit_pct: 6
-""",
-
-    "ema_trend": """
-name: "均线趋势追踪"
-symbol: BTCUSDT
-interval: 4h
-entry:
-  operator: AND
-  conditions:
-    - indicator: golden_cross
-      compare: "=="
-      value: true
-    - indicator: close
-      compare: ">"
-      reference: ema_50
-exit:
-  operator: OR
-  conditions:
-    - indicator: death_cross
-      compare: "=="
-      value: true
-    - indicator: close
-      compare: "<"
-      reference: ema_50
-ai_prompt: |
-  均线金叉出现，请确认：
-  1. 这是趋势启动还是假突破
-  2. 更大周期（日线）趋势方向如何
-  3. 当前位置是否追高
-risk:
-  side: buy
-  leverage: 2
-  position_pct: 15
-  stop_loss_pct: 5
-  take_profit_pct: 15
-""",
-
-    "pinbar_support": """
-name: "Pinbar 支撑位反转"
-symbol: BTCUSDT
-interval: 1h
-entry:
-  operator: AND
-  conditions:
-    - indicator: pinbar_at_support
-      compare: "=="
-      value: true
-    - indicator: rsi
-      compare: "<"
-      value: 45
-exit:
-  operator: OR
-  conditions:
-    - indicator: rsi
-      compare: ">"
-      value: 70
-    - indicator: near_resistance
-      compare: "=="
-      value: true
-ai_prompt: |
-  检测到支撑位附近出现 Pinbar，这是高概率反转信号。请确认：
-  1. 该支撑位是否被多次验证（强度如何）
-  2. Pinbar 的下影线是否足够长
-  3. 之后有没有确认 K 线（小阳线跟随）
-  4. 历史上类似模式的胜率如何
-risk:
-  side: buy
-  leverage: 3
-  position_pct: 12
-  stop_loss_pct: 2
-  take_profit_pct: 6
+  type: "standard"
+  params:
+    max_leverage: 3
+    max_daily_loss_pct: 5
+    max_daily_trades: 10
+execution:
+  type: "market"
 """,
 }
 
@@ -884,15 +815,28 @@ def get_template(name: str) -> Optional[str]:
 
 
 def list_templates() -> List[Dict[str, str]]:
-    """列出所有可用模板"""
-    engine = StrategyEngine()
+    """列出所有可用模板 (含模块组合信息)"""
+    import yaml as _yaml
+
     result = []
     for key, yaml_content in STRATEGY_TEMPLATES.items():
-        config = engine.parse_yaml(yaml_content.strip())
+        config = _yaml.safe_load(yaml_content.strip())
+        if not config:
+            continue
+
+        # 提取模块组合描述
+        alphas = config.get("alphas", [])
+        alpha_names = [a.get("name", a.get("type", "?")) for a in alphas if isinstance(a, dict)]
+        portfolio_type = config.get("portfolio", {}).get("type", "?")
+        risk_type = config.get("risk", {}).get("type", "?")
+
         result.append({
             "id": key,
-            "name": config["name"],
-            "symbol": config["symbol"],
-            "interval": config["interval"],
+            "name": config.get("name", key),
+            "symbol": config.get("symbol", "BTCUSDT"),
+            "interval": config.get("interval", "1h"),
+            "strategy_type": "pipeline",
+            "modules": f"{' + '.join(alpha_names)} → {portfolio_type} → {risk_type}",
         })
     return result
+

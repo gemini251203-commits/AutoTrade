@@ -457,8 +457,9 @@ onMounted(() => {
               @click="openCreateModal(tmpl)"
               class="template-card"
             >
-              <div class="text-sm text-white font-medium truncate">{{ tmpl.name }}</div>
+            <div class="text-sm text-white font-medium truncate">{{ tmpl.name }}</div>
               <div class="text-xs text-gray-500 mt-1 line-clamp-2">{{ tmpl.symbol }} · {{ tmpl.interval }}</div>
+              <div v-if="tmpl.modules" class="text-[10px] text-purple-400 mt-1 truncate opacity-70">{{ tmpl.modules }}</div>
             </button>
           </div>
         </div>

@@ -93,46 +93,33 @@ TOOLS_DESCRIPTION = """
     - 只有入场信号 + 风控通过才会自动下单
     示例: [TOOL_CALL: run_strategy(strategy_id=1)]
 
-16. create_strategy(name, symbol, interval) - 创建新策略保存到数据库
-    - name: 策略名称
-    - config_yaml: **不要放在TOOL_CALL参数里**。必须在回复的正文中使用 ```yaml 和 ``` 包裹输出策略的 YAML 内容。系统会自动提取代码块。
-    示例: 
-    ```yaml
-    name: "RSI超卖策略"
-    symbol: BTCUSDT
-    interval: 1h
-    ...
-    ```
-    [TOOL_CALL: create_strategy(name=RSI超卖策略, symbol=BTCUSDT, interval=1h)]
+16. list_modules(layer) - 查询某层可用的策略模块目录
+    - layer: alpha / portfolio / risk / execution (空=全部)
+    返回: 模块ID、名称、参数说明
+    示例: [TOOL_CALL: list_modules(layer=alpha)]
 
-17. update_strategy(strategy_id, name, symbol, interval) - 修改已有策略
-    - 只传需要修改的字段，不传的保持不变
-    - config_yaml: 同样**不要放在TOOL_CALL参数里**，直接在正文写 ```yaml 代码块。
+17. create_strategy(name, symbol, interval) - 创建传统策略保存到数据库
+    - config_yaml: **不要放在TOOL_CALL参数里**，在正文写 ```yaml 代码块
+    示例: [TOOL_CALL: create_strategy(name=RSI超卖策略, symbol=BTCUSDT, interval=1h)]
+
+18. create_pipeline_strategy(name, symbol, interval) - 创建四层模块化策略 (推荐)
+    - config_yaml: **不要放在TOOL_CALL参数里**，在正文写 ```yaml 代码块
+    - YAML 必须包含 4 层: alphas + portfolio + risk + execution
+    示例: [TOOL_CALL: create_pipeline_strategy(name=RSI固定仓位策略, symbol=BTCUSDT, interval=1h)]
+
+19. update_strategy(strategy_id, name, symbol, interval) - 修改已有策略
+    - config_yaml: 同样**不要放在TOOL_CALL参数里**，直接在正文写 ```yaml 代码块
     示例: [TOOL_CALL: update_strategy(strategy_id=1)]
 
-18. create_pipeline_strategy(name, symbol, interval) - 创建多模块流水线策略 (Pipeline) 并保存到数据库
-    - config_yaml: **不要放在TOOL_CALL参数里**，直接在正文写 ```yaml 代码块。
-    - YAML 结构包含: alphas(列表), portfolio(仓位分配), risk(风控约束), execution(执行模型)
-    示例:
-    ```yaml
-    alphas:
-      - type: "yaml_condition"
-        entry:
-          operator: AND
-          conditions:
-            - indicator: rsi
-              compare: "<"
-              value: 30
-    portfolio:
-      type: "fixed_percent"
-      params: { percent: 10 }
-    risk:
-      type: "standard_risk"
-      params: { max_drawdown_pct: 10, stop_loss_pct: 5 }
-    execution:
-      type: "market_order"
-    ```
-    [TOOL_CALL: create_pipeline_strategy(name=多模块组合策略, symbol=BTCUSDT, interval=1h)]
+⚠️ **策略构建协议 (四步引导 — 必须遵守)**:
+当用户要求创建策略时，你必须按以下 4 步引导:
+
+Step 1 — Alpha 信号层: 调用 list_modules(layer=alpha) 了解可用信号模块，询问用户要用哪种信号源
+Step 2 — Portfolio 仓位层: 调用 list_modules(layer=portfolio) 展示仓位模型，询问用户偏好
+Step 3 — Risk 风控层: 调用 list_modules(layer=risk) 展示风控选项，和用户确认参数
+Step 4 — 组装: 将用户在每步确认的模块+参数组装成 pipeline YAML，调用 create_pipeline_strategy
+
+**禁止**: 跳过任何一步直接生成完整 YAML。必须逐步和用户沟通确认。
 
 ## 记忆工具
 19. query_memories(symbol) - 查询所有交易记忆 (包含手动/AI/信号/量化策略所有来源)

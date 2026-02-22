@@ -1190,6 +1190,44 @@ async def create_strategy(
 
 
 @register_tool
+async def list_modules(
+    db: AsyncSession,
+    user_id: int,
+    layer: str = "",
+) -> str:
+    """
+    查询可用的策略模块目录
+
+    参数:
+        layer: 指定层 (alpha/portfolio/risk/execution)，空=显示全部
+
+    返回:
+        各层可用模块清单，含参数说明
+    """
+    from app.services.quant.module_registry import list_modules as _list, get_registry_summary
+
+    if layer and layer not in ("alpha", "portfolio", "risk", "execution"):
+        return json.dumps({"error": f"未知层: {layer}。可选: alpha/portfolio/risk/execution"}, ensure_ascii=False)
+
+    modules = _list(layer or None)
+
+    if not modules:
+        return json.dumps({"error": f"层 '{layer}' 没有可用模块"}, ensure_ascii=False)
+
+    result = []
+    for m in modules:
+        result.append(m.to_dict())
+
+    summary = get_registry_summary()
+
+    return json.dumps({
+        "modules": result,
+        "summary": summary,
+        "hint": "使用 create_pipeline_strategy 时，从每层选择一个模块并配置参数",
+    }, ensure_ascii=False, indent=2)
+
+
+@register_tool
 async def create_pipeline_strategy(
     db: AsyncSession,
     user_id: int,

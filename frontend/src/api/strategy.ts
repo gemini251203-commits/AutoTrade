@@ -73,6 +73,8 @@ export interface StrategyTemplate {
   symbol: string
   interval: string
   config_yaml: string
+  strategy_type?: string
+  modules?: string
 }
 
 /** 交易记忆 (对应后端 journal.py TradeMemoryResponse) */
