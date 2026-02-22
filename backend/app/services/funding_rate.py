@@ -242,10 +242,8 @@ class FundingRateService:
                         wallet_delta -= wallet.balance  # 调整
                         wallet.balance = Decimal("0")
 
-                    # 更新仓位累计资金费用
-                    if hasattr(pos, "accumulated_funding_fee"):
-                        # 累计的是支出 (正=已付, 负=已收)
-                        pos.accumulated_funding_fee += (-wallet_delta)
+                    # 更新仓位累计资金费用 (正=已付, 负=已收)
+                    pos.accumulated_funding_fee += (-wallet_delta)
 
                     # 写入流水
                     tx = WalletTransaction(

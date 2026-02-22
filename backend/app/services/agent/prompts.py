@@ -175,6 +175,24 @@ Step 4 — 组装: 将用户在每步确认的模块+参数组装成 pipeline YA
     - symbol: 可选
     示例: [TOOL_CALL: get_trend_result()]
 
+## 资金费率工具
+29. get_funding_rate(symbol) - 查询资金费率 (对标币安)
+    - symbol: 交易对 (默认 BTCUSDT)
+    返回: 当前费率、年化成本、下次结算时间、多空方向提示
+    示例: [TOOL_CALL: get_funding_rate(symbol=BTCUSDT)]
+
+## 新闻工具
+30. get_news(currency, limit) - 查询最新加密货币新闻
+    - currency: 币种过滤, 如 BTC / ETH / SOL (空=全部)
+    - limit: 返回条数 (默认 10)
+    返回: 标题、中文标题、情绪、重要性、来源、时间
+    示例: [TOOL_CALL: get_news(currency=BTC, limit=5)]
+
+31. get_market_sentiment(currency) - 查询市场情绪 (基于新闻情感分析)
+    - currency: 币种 (默认 BTC)
+    返回: 整体情绪(看多/看空/中性)、分数、正负面新闻数量
+    示例: [TOOL_CALL: get_market_sentiment(currency=BTC)]
+
 ⚠️ **趋势分析强制规则 (最高优先级)**:
 - 当用户问到"趋势"、"行情"、"适合什么策略"、"市场分析"时，你 **必须** 先调用 analyze_trend_now 或 get_trend_result 获取量化趋势引擎的结果
 - **禁止** 自行编造趋势判断（如"宏观趋势看涨"），必须引用趋势引擎的实际输出

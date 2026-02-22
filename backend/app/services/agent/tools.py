@@ -2183,6 +2183,106 @@ async def get_trend_result(
             "results": results,
         }, ensure_ascii=False, default=str)
 
+        return json.dumps({
+            "count": len(results),
+            "results": results,
+        }, ensure_ascii=False, default=str)
+
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
+
+# ==================== 新闻工具 ====================
+
+
+@register_tool
+async def get_news(
+    db: AsyncSession,
+    user_id: int,
+    currency: str = "BTC",
+    limit: int = 10,
+) -> str:
+    """
+    查询最新加密货币新闻
+
+    参数:
+        currency: 币种过滤, 如 BTC / ETH / SOL (空=全部)
+        limit: 返回条数 (默认10, 最大50)
+
+    返回:
+        新闻列表 (标题、中文标题、情绪、重要性、来源、时间)
+    """
+    from app.services.news.service import get_latest_news
+
+    try:
+        articles = await get_latest_news(
+            db,
+            currency=currency if currency else None,
+            limit=min(limit, 50),
+        )
+
+        if not articles:
+            return json.dumps({"message": f"暂无 {currency} 相关新闻"}, ensure_ascii=False)
+
+        result = []
+        for a in articles[:limit]:
+            result.append({
+                "title": a.get("title", ""),
+                "title_zh": a.get("title_zh", ""),
+                "sentiment": a.get("sentiment", "unknown"),
+                "sentiment_score": a.get("sentiment_score"),
+                "importance": a.get("importance", ""),
+                "source": a.get("source", ""),
+                "published_at": a.get("published_at", ""),
+            })
+
+        return json.dumps({
+            "currency": currency,
+            "count": len(result),
+            "articles": result,
+        }, ensure_ascii=False, default=str)
+
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
+@register_tool
+async def get_market_sentiment(
+    db: AsyncSession,
+    user_id: int,
+    currency: str = "BTC",
+) -> str:
+    """
+    查询市场情绪 (基于新闻情感分析)
+
+    参数:
+        currency: 币种, 如 BTC / ETH (空=全部)
+
+    返回:
+        整体情绪(看多/看空/中性)、情绪分数、正面/负面/中性新闻数量
+    """
+    from app.services.news.service import get_market_sentiment as _get_sentiment
+
+    try:
+        sentiment = await _get_sentiment(
+            db,
+            currency=currency if currency else None,
+            hours=24,
+        )
+
+        overall = sentiment.get("overall", "neutral")
+        overall_zh = {"positive": "看多", "negative": "看空", "neutral": "中性"}.get(overall, overall)
+
+        return json.dumps({
+            "currency": currency,
+            "overall": overall_zh,
+            "score": sentiment.get("score", 0),
+            "total_articles": sentiment.get("total_articles", 0),
+            "positive_count": sentiment.get("positive_count", 0),
+            "negative_count": sentiment.get("negative_count", 0),
+            "neutral_count": sentiment.get("neutral_count", 0),
+            "by_category": sentiment.get("by_category", {}),
+        }, ensure_ascii=False, default=str)
+
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
