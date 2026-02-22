@@ -81,12 +81,24 @@ def build_pipeline_from_yaml(config: Dict[str, Any], user_id: int) -> TradingPip
     
     portfolio: PortfolioModel
     if p_type == "fixed_percent":
-        percent = float(portfolio_params.get("percent", 10.0))
-        portfolio = FixedPercentModel(risk_percent=percent)
+        portfolio = FixedPercentModel(
+            risk_percent=float(portfolio_params.get("risk_percent", 10.0)),
+            default_leverage=int(portfolio_params.get("default_leverage", 5)),
+            max_positions=int(portfolio_params.get("max_positions", 5)),
+            default_sl_pct=float(portfolio_params.get("default_sl_pct", 2.0)),
+            default_tp_pct=float(portfolio_params.get("default_tp_pct", 4.0)),
+        )
     elif p_type == "kelly":
         from app.services.portfolio.model import KellyPortfolioModel
-        fraction = float(portfolio_params.get("fraction", 0.5))
-        portfolio = KellyPortfolioModel(kelly_fraction=fraction)
+        portfolio = KellyPortfolioModel(
+            kelly_fraction=float(portfolio_params.get("kelly_fraction", 0.5)),
+            max_risk_percent=float(portfolio_params.get("max_risk_percent", 25.0)),
+            default_leverage=int(portfolio_params.get("default_leverage", 5)),
+            odds_ratio=float(portfolio_params.get("odds_ratio", 2.0)),
+            max_positions=int(portfolio_params.get("max_positions", 5)),
+            default_sl_pct=float(portfolio_params.get("default_sl_pct", 2.0)),
+            default_tp_pct=float(portfolio_params.get("default_tp_pct", 4.0)),
+        )
     else:
         raise ValueError(
             f"不支持的 Portfolio 类型: '{p_type}'。"
@@ -99,16 +111,30 @@ def build_pipeline_from_yaml(config: Dict[str, Any], user_id: int) -> TradingPip
     
     risk_config_obj = RiskConfig()
     
-    if "max_drawdown_pct" in risk_params:
-        risk_config_obj.max_daily_loss_pct = float(risk_params["max_drawdown_pct"])
     if "max_leverage" in risk_params:
         risk_config_obj.max_leverage = int(risk_params["max_leverage"])
+    if "max_daily_loss_pct" in risk_params:
+        risk_config_obj.max_daily_loss_pct = float(risk_params["max_daily_loss_pct"])
+    if "max_drawdown_pct" in risk_params:
+        risk_config_obj.max_daily_loss_pct = float(risk_params["max_drawdown_pct"])
+    if "max_positions" in risk_params:
+        risk_config_obj.max_positions = int(risk_params["max_positions"])
+    if "max_daily_trades" in risk_params:
+        risk_config_obj.max_daily_trades = int(risk_params["max_daily_trades"])
+    if "max_single_margin_pct" in risk_params:
+        risk_config_obj.max_single_margin_pct = float(risk_params["max_single_margin_pct"])
         
     risk_model = RiskModel(config=risk_config_obj)
 
     # 解析 Execution (执行层)
-    # 目前仅支持基础的 ExecutionModel (市价单)
+    exec_cfg = config.get("execution", {})
+    exec_type = exec_cfg.get("type", "market")
+    exec_params = exec_cfg.get("params", {})
+    
     execution = ExecutionModel()
+    # 将执行类型和参数存储在 execution 上，供 process 时使用
+    execution._order_type = exec_type  # market / limit / stop_market
+    execution._exec_params = exec_params
     
     pipeline = TradingPipeline(
         alphas=alphas,

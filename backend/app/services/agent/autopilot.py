@@ -490,8 +490,9 @@ class AgentAutopilot:
                 # 预取技术指标 (使用用户选择的多个 K 线级别)
                 indicator_text = await self._fetch_indicators(symbol, intervals)
 
-                # 预取策略信号 (从量化策略引擎)
+                # 预取策略信号 (双路径: Pipeline 策略 vs 传统策略)
                 strategy_text = ""
+                pipeline_executed = False  # Pipeline 策略是否已直接执行
                 try:
                     from app.services.quant.strategy import StrategyEngine
                     from app.core.network import net_manager
@@ -508,6 +509,7 @@ class AgentAutopilot:
 
                     if active_strategies:
                         # 获取 K 线用于策略评估
+                        klines = []
                         async with net_manager.get_client(timeout=15.0) as client:
                             resp = await client.get(
                                 "https://fapi.binance.com/fapi/v1/klines",
@@ -526,25 +528,84 @@ class AgentAutopilot:
                                     "quote_volume": float(k[7]),
                                 } for k in raw]
 
-                                signals = []
-                                for strat in active_strategies:
-                                    try:
-                                        config = engine.parse_yaml(strat.config_yaml)
-                                        config["symbol"] = symbol
+                        # 获取余额和持仓 (Pipeline 需要)
+                        from app.services.wallet.manager import WalletManager
+                        from app.models.position import Position, PositionStatus
+                        from decimal import Decimal as _D
+
+                        wallet = await WalletManager.get_wallet(db, user_id)
+                        available_balance = wallet.balance - wallet.frozen if wallet else _D("0")
+                        total_equity = wallet.balance if wallet else _D("0")
+
+                        pos_result = await db.execute(
+                            _select(Position).where(
+                                Position.user_id == user_id,
+                                Position.status == PositionStatus.OPEN,
+                            )
+                        )
+                        open_positions = [
+                            {"symbol": p.symbol, "side": p.side.value, "quantity": float(p.quantity)}
+                            for p in pos_result.scalars().all()
+                        ]
+
+                        current_price = _D(str(klines[-1]["close"])) if klines else _D("0")
+
+                        signals = []
+                        pipeline_results = []
+
+                        for strat in active_strategies:
+                            try:
+                                config = engine.parse_yaml(strat.config_yaml)
+                                config["symbol"] = symbol
+
+                                # Pipeline 策略检测: 包含 alphas 字段
+                                is_pipeline = "alphas" in config
+
+                                if is_pipeline and klines:
+                                    # === Pipeline 路径: 直接走四步 ===
+                                    from app.services.quant.pipeline_builder import build_pipeline_from_yaml
+                                    pipeline = build_pipeline_from_yaml(config, user_id)
+
+                                    results = await pipeline.process(
+                                        symbol=symbol,
+                                        price=current_price,
+                                        db=db,
+                                        available_balance=available_balance,
+                                        total_equity=total_equity,
+                                        open_positions=open_positions,
+                                        klines=klines,
+                                    )
+
+                                    if results:
+                                        for r in results:
+                                            status = "✅ 已执行" if r.get("success") else f"❌ {r.get('error', '失败')}"
+                                            signals.append(
+                                                f"  - [Pipeline] {strat.name}: {status}"
+                                                f" (order_id={r.get('order_id', 'N/A')})"
+                                            )
+                                            pipeline_results.append(r)
+                                        pipeline_executed = True
+                                    else:
+                                        signals.append(
+                                            f"  - [Pipeline] {strat.name}: 无信号 (Alpha 未触发)"
+                                        )
+                                else:
+                                    # === 传统路径: 只评估信号，交给 AI 决策 ===
+                                    if klines:
                                         signal = engine.evaluate(config, klines)
                                         signals.append(
                                             f"  - {strat.name}: {signal.summary()}"
                                         )
-                                    except Exception as se:
-                                        signals.append(
-                                            f"  - {strat.name}: 评估异常 ({se})"
-                                        )
+                            except Exception as se:
+                                signals.append(
+                                    f"  - {strat.name}: 评估异常 ({se})"
+                                )
 
-                                if signals:
-                                    strategy_text = (
-                                        "\n📊 量化策略信号:\n"
-                                        + "\n".join(signals)
-                                    )
+                        if signals:
+                            strategy_text = (
+                                "\n📊 量化策略信号:\n"
+                                + "\n".join(signals)
+                            )
                 except Exception as e:
                     logger.warning(f"[Autopilot] Strategy evaluation failed: {e}")
 
