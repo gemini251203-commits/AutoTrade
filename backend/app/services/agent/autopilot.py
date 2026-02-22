@@ -568,18 +568,44 @@ class AgentAutopilot:
                 except Exception as e:
                     logger.debug(f"[Autopilot] Memory fetch failed: {e}")
 
-                # 构造分析指令 (直接注入指标数据 + 策略信号 + 交易记忆)
+                # 预取趋势分析结果
+                trend_text = ""
+                try:
+                    from app.models.trend_scheme import TrendScheme
+                    from app.services.quant.trend_analyzer import TrendAnalyzer, TrendResult
+                    trend_result = await db.execute(
+                        select(TrendScheme).where(
+                            TrendScheme.user_id == user_id,
+                            TrendScheme.is_active == True,
+                        ).limit(1)
+                    )
+                    active_scheme = trend_result.scalar_one_or_none()
+                    if active_scheme and active_scheme.last_result:
+                        r = active_scheme.last_result
+                        trend_text = (
+                            f"\n🔍 趋势分析 ({active_scheme.name}):\n"
+                            f"  方向: {r.get('direction', '?')} (分数: {r.get('direction_score', 0)})\n"
+                            f"  强度: {r.get('strength', '?')} | 波动率: {r.get('volatility', '?')}\n"
+                            f"  动量: {r.get('momentum', '?')} | 体制: {r.get('regime', '?')}\n"
+                            f"  适合策略: {', '.join(r.get('suitable_strategies', []))}\n"
+                            f"  不适合策略: {', '.join(r.get('unsuitable_strategies', []))}"
+                        )
+                except Exception as e:
+                    logger.debug(f"[Autopilot] Trend fetch failed: {e}")
+
+                # 构造分析指令 (直接注入指标数据 + 策略信号 + 交易记忆 + 趋势分析)
                 now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
                 prompt = (
                     f"[Autopilot {now}] "
                     f"请分析 {symbol} 当前市场状况并做出交易决策。\n\n"
                     f"{indicator_text}\n"
                     f"{strategy_text}\n"
+                    f"{trend_text}\n"
                     f"{memory_text}\n\n"
                     f"请按以下步骤操作:\n"
                     f"1. 查询 {symbol} 实时价格 (如需更新)\n"
                     f"2. 查看当前持仓和余额\n"
-                    f"3. 结合上方技术指标、策略信号和历史交易记忆综合分析\n"
+                    f"3. 结合上方技术指标、策略信号、趋势分析和历史交易记忆综合分析\n"
                     f"4. 给出决策: 开仓/平仓/观望, 并说明理由\n"
                     f"5. 如果决定交易, 直接执行 (使用 run_strategy 工具以关联策略)\n\n"
                     f"回复要简洁, 列出关键数据和理由。\n"

@@ -146,6 +146,16 @@ TOOLS_DESCRIPTION = """
     - limit: 返回条数 (默认 10)
     示例: [TOOL_CALL: get_trading_logs(limit=5)]
 
+## 趋势分析工具
+26. analyze_trend_now(symbol) - 用活跃趋势方案分析当前市场趋势
+    - symbol: 交易对 (默认 BTCUSDT)
+    返回: 趋势方向/强度/波动率/动量/适合的策略类型
+    示例: [TOOL_CALL: analyze_trend_now(symbol=BTCUSDT)]
+
+27. get_trend_result(symbol) - 获取最近的趋势分析结果 (读缓存，不重新分析)
+    - symbol: 可选
+    示例: [TOOL_CALL: get_trend_result()]
+
 ## 📐 策略 YAML 格式 (create_strategy / update_strategy 时使用)
 
 创建或修改策略时, config_yaml 必须遵循以下格式:

@@ -51,6 +51,12 @@ import {
   getAutopilotLogs,
   type AutopilotLogResponse,
 } from '@/api/chat'
+import {
+  listTrendSchemes,
+  runTrendAnalysis,
+  initTrendPresets,
+  type TrendSchemeResponse,
+} from '@/api/trend'
 
 // ==================== State ====================
 
@@ -61,6 +67,8 @@ const loading = ref(false)
 const error = ref('')
 const pipelineStatus = ref<PipelineStatusResponse | null>(null)
 const decisionLogs = ref<AutopilotLogResponse[]>([])
+const trendSchemes = ref<TrendSchemeResponse[]>([])
+const trendLoading = ref(false)
 
 // Modal state
 const showCreateModal = ref(false)
@@ -79,7 +87,7 @@ const formYaml = ref('')
 const formSaving = ref(false)
 
 // Tab state
-type TabKey = 'strategies' | 'memories' | 'timeline'
+type TabKey = 'strategies' | 'memories' | 'timeline' | 'trend'
 const activeTab = ref<TabKey>('strategies')
 
 // ==================== Computed ====================
@@ -253,6 +261,54 @@ function decisionLabel(d: string) {
   return map[d] || d
 }
 
+async function fetchTrendSchemes() {
+  trendLoading.value = true
+  try {
+    trendSchemes.value = await listTrendSchemes()
+  } catch (e) {
+    console.warn('Failed to fetch trend schemes', e)
+  } finally {
+    trendLoading.value = false
+  }
+}
+
+async function handleRunTrend(schemeId: number, symbol: string = 'BTCUSDT') {
+  trendLoading.value = true
+  try {
+    await runTrendAnalysis(schemeId, symbol)
+    await fetchTrendSchemes()
+  } catch (e: any) {
+    error.value = e?.response?.data?.detail || '分析失败'
+  } finally {
+    trendLoading.value = false
+  }
+}
+
+async function handleInitPresets() {
+  try {
+    await initTrendPresets()
+    await fetchTrendSchemes()
+  } catch (e) {
+    console.warn('Init presets failed', e)
+  }
+}
+
+function regimeLabel(r: string) {
+  const map: Record<string, string> = {
+    trending_up: '📈 上涨趋势', trending_down: '📉 下跌趋势',
+    ranging: '⇔ 震荡', volatile: '⚡ 高波动',
+    insufficient_data: '⚠️ 数据不足', unknown: '❓ 未分析',
+  }
+  return map[r] || r
+}
+
+function regimeColor(r: string) {
+  if (r === 'trending_up') return '#22c55e'
+  if (r === 'trending_down') return '#ef4444'
+  if (r === 'volatile') return '#f59e0b'
+  return '#6b7280'
+}
+
 onMounted(() => {
   fetchAll()
   // 加载 Pipeline 状态
@@ -361,6 +417,16 @@ onMounted(() => {
           }"
         >
           决策时间线
+        </button>
+        <button
+          @click="activeTab = 'trend'; fetchTrendSchemes()"
+          class="px-4 py-2 rounded-md text-sm transition-all"
+          :style="{
+            background: activeTab === 'trend' ? 'rgba(138,43,226,0.15)' : 'transparent',
+            color: activeTab === 'trend' ? '#a855f7' : '#6b7280',
+          }"
+        >
+          趋势分析
         </button>
       </div>
 
@@ -588,6 +654,96 @@ onMounted(() => {
                 <pre class="tl-pre">{{ log.thinking }}</pre>
               </details>
             </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Trend Analysis Tab -->
+      <template v-else-if="activeTab === 'trend'">
+        <div v-if="trendLoading" class="flex justify-center py-12">
+          <NSpin size="medium" />
+        </div>
+        <div v-else-if="trendSchemes.length === 0" class="text-center py-16">
+          <p class="text-gray-500 mt-4">暂无趋势分析方案</p>
+          <button
+            @click="handleInitPresets()"
+            class="mt-4 px-4 py-2 rounded-lg text-sm transition-colors"
+            style="background: rgba(138,43,226,0.15); color: #a855f7;"
+          >
+            📦 初始化预置方案
+          </button>
+        </div>
+        <div v-else class="space-y-4">
+          <div
+            v-for="s in trendSchemes"
+            :key="s.id"
+            class="trend-card"
+          >
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <span
+                  class="w-2 h-2 rounded-full"
+                  :style="{ background: s.is_active ? '#22c55e' : '#4b5563' }"
+                ></span>
+                <span class="text-sm font-medium text-white">{{ s.name }}</span>
+                <span v-if="s.is_preset" class="px-1.5 py-0.5 rounded text-[10px]" style="background: rgba(139,92,246,0.1); color: #a78bfa;">预置</span>
+              </div>
+              <button
+                @click="handleRunTrend(s.id)"
+                class="px-3 py-1.5 rounded-lg text-xs transition-colors"
+                style="background: rgba(138,43,226,0.15); color: #a855f7;"
+                :disabled="trendLoading"
+              >
+                ▶ 运行分析
+              </button>
+            </div>
+
+            <!-- Result -->
+            <div v-if="s.last_result" class="trend-result">
+              <div class="trend-regime" :style="{ color: regimeColor(s.last_result.regime) }">
+                {{ regimeLabel(s.last_result.regime) }}
+              </div>
+              <div class="trend-metrics">
+                <div class="trend-metric">
+                  <span class="trend-metric-label">方向</span>
+                  <span class="trend-metric-value" :style="{ color: s.last_result.direction_score > 0 ? '#22c55e' : s.last_result.direction_score < 0 ? '#ef4444' : '#6b7280' }">
+                    {{ s.last_result.direction }} ({{ s.last_result.direction_score > 0 ? '+' : '' }}{{ s.last_result.direction_score }})
+                  </span>
+                </div>
+                <div class="trend-metric">
+                  <span class="trend-metric-label">强度</span>
+                  <span class="trend-metric-value">{{ s.last_result.strength }}</span>
+                </div>
+                <div class="trend-metric">
+                  <span class="trend-metric-label">波动率</span>
+                  <span class="trend-metric-value">{{ s.last_result.volatility }}</span>
+                </div>
+                <div class="trend-metric">
+                  <span class="trend-metric-label">动量</span>
+                  <span class="trend-metric-value" :style="{ color: s.last_result.momentum_score > 0 ? '#22c55e' : s.last_result.momentum_score < 0 ? '#ef4444' : '#6b7280' }">
+                    {{ s.last_result.momentum }}
+                  </span>
+                </div>
+                <div class="trend-metric">
+                  <span class="trend-metric-label">置信度</span>
+                  <span class="trend-metric-value">{{ s.last_result.confidence }}%</span>
+                </div>
+              </div>
+              <div v-if="s.last_result.suitable_strategies?.length" class="mt-2">
+                <span class="text-[10px] text-gray-500">适合策略: </span>
+                <span
+                  v-for="st in s.last_result.suitable_strategies"
+                  :key="st"
+                  class="inline-block px-1.5 py-0.5 rounded text-[10px] mr-1 mb-1"
+                  style="background: rgba(34,197,94,0.1); color: #22c55e;"
+                >{{ st }}</span>
+              </div>
+              <div class="text-[10px] text-gray-600 mt-1" v-if="s.last_run_at">
+                上次分析: {{ formatDate(s.last_run_at) }}
+              </div>
+            </div>
+            <div v-else class="text-xs text-gray-600">尚未运行分析，点击"运行分析"开始</div>
           </div>
         </div>
       </template>
@@ -1092,5 +1248,42 @@ onMounted(() => {
   margin-top: 6px;
   max-height: 300px;
   overflow-y: auto;
+}
+
+/* Trend Analysis */
+.trend-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 16px;
+  transition: border-color 0.2s;
+}
+.trend-card:hover { border-color: rgba(138,43,226,0.3); }
+.trend-result { margin-top: 4px; }
+.trend-regime {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.trend-metrics {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.trend-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.trend-metric-label {
+  font-size: 10px;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+.trend-metric-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e5e7eb;
+  font-family: 'JetBrains Mono', monospace;
 }
 </style>
