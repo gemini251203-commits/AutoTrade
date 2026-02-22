@@ -4,6 +4,7 @@ Backend Core - Main Entry Point
 FastAPI 应用入口
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
