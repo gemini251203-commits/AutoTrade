@@ -16,13 +16,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.deps import get_db, get_current_user_id
+from app.api.deps import get_db, get_current_user, DbSession, CurrentUser
 from app.services.funding_rate import funding_rate_service, FundingRateService
 
 router = APIRouter(prefix="/api/funding", tags=["funding"])
-
-DbSession = Depends(get_db)
-UserId = Depends(get_current_user_id)
 
 
 @router.get("/rates")
@@ -84,8 +81,8 @@ async def get_rate_history(symbol: str, limit: int = Query(100, ge=1, le=1000)):
 
 @router.get("/my-fees")
 async def get_my_fees(
-    db: AsyncSession = DbSession,
-    user_id: int = UserId,
+    db: DbSession,
+    user: CurrentUser,
 ):
     """
     查询当前用户的资金费率累计信息
@@ -100,7 +97,7 @@ async def get_my_fees(
     # 活跃仓位的费用
     pos_result = await db.execute(
         select(Position).where(
-            Position.user_id == user_id,
+            Position.user_id == user.id,
             Position.status == PositionStatus.OPEN,
         )
     )
@@ -120,7 +117,7 @@ async def get_my_fees(
     # 总计 (从流水统计)
     total_result = await db.execute(
         select(func.coalesce(func.sum(WalletTransaction.amount), 0)).where(
-            WalletTransaction.user_id == user_id,
+            WalletTransaction.user_id == user.id,
             WalletTransaction.type == TransactionType.FUNDING.value,
         )
     )
@@ -129,7 +126,7 @@ async def get_my_fees(
     # 最近 20 条资金费率流水
     recent_result = await db.execute(
         select(WalletTransaction).where(
-            WalletTransaction.user_id == user_id,
+            WalletTransaction.user_id == user.id,
             WalletTransaction.type == TransactionType.FUNDING.value,
         ).order_by(WalletTransaction.created_at.desc()).limit(20)
     )
