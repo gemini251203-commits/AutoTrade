@@ -12,7 +12,7 @@
  * - 交易记忆查看
  */
 import { ref, computed, onMounted } from 'vue'
-import { NIcon, NSpin, NModal, NInput, NSelect } from 'naive-ui'
+import { NIcon, NSpin, NModal, NInput, NSelect, NSlider, NInputNumber } from 'naive-ui'
 import {
   AddOutline,
   PlayOutline,
@@ -79,12 +79,57 @@ const viewingLogs = ref<StrategyLogResponse[]>([])
 const viewingStrategyName = ref('')
 const logsLoading = ref(false)
 
-// Form state
+// Wizard state
+const wizardStep = ref(1)
 const formName = ref('')
-const formSymbol = ref('')
+const formSymbol = ref('BTCUSDT')
 const formInterval = ref('1h')
 const formYaml = ref('')
 const formSaving = ref(false)
+
+// Module selections
+const selectedAlpha = ref('yaml_condition')
+const selectedPortfolio = ref('fixed_percent')
+
+// Alpha params
+const alphaConfidence = ref(0.5)
+const alphaEntryIndicator = ref('rsi')
+const alphaEntryCompare = ref('<')
+const alphaEntryValue = ref(30)
+const alphaExitIndicator = ref('rsi')
+const alphaExitCompare = ref('>')
+const alphaExitValue = ref(70)
+
+// Portfolio params
+const portRiskPercent = ref(10)
+const portLeverage = ref(5)
+const portSlPct = ref(2.0)
+const portTpPct = ref(4.0)
+const portKellyFraction = ref(0.5)
+const portOddsRatio = ref(2.0)
+
+// Risk params
+const riskMaxLeverage = ref(20)
+const riskMaxDailyLoss = ref(10)
+const riskMaxDailyTrades = ref(20)
+
+const indicatorOptions = [
+  { label: 'RSI', value: 'rsi' },
+  { label: 'MACD 金叉', value: 'macd_golden_cross' },
+  { label: 'MACD 死叉', value: 'macd_death_cross' },
+  { label: '均线金叉', value: 'golden_cross' },
+  { label: '均线死叉', value: 'death_cross' },
+  { label: '成交量比', value: 'volume_ratio' },
+  { label: '布林下轨', value: 'bollinger_lower' },
+  { label: '收盘价', value: 'close' },
+]
+const compareOptions = [
+  { label: '< 小于', value: '<' },
+  { label: '> 大于', value: '>' },
+  { label: '== 等于', value: '==' },
+  { label: '<= 小于等于', value: '<=' },
+  { label: '>= 大于等于', value: '>=' },
+]
 
 // Tab state
 type TabKey = 'strategies' | 'memories' | 'timeline' | 'trend'
@@ -129,8 +174,9 @@ async function fetchAll() {
 
 function openCreateModal(template?: StrategyTemplate) {
   editingStrategy.value = null
+  wizardStep.value = 1
   formName.value = template?.name || ''
-  formSymbol.value = ''
+  formSymbol.value = 'BTCUSDT'
   formInterval.value = '1h'
   formYaml.value = template?.config_yaml || ''
   showCreateModal.value = true
@@ -142,21 +188,79 @@ function openEditModal(strategy: StrategyResponse) {
   formSymbol.value = strategy.symbol
   formInterval.value = strategy.interval
   formYaml.value = strategy.config_yaml
+  wizardStep.value = 4  // Jump to review for editing
   showCreateModal.value = true
 }
 
+function buildPipelineYaml(): string {
+  const lines: string[] = []
+  lines.push(`name: "${formName.value}"`)
+  lines.push(`symbol: ${formSymbol.value}`)
+  lines.push(`interval: ${formInterval.value}`)
+  lines.push('alphas:')
+
+  if (selectedAlpha.value === 'yaml_condition') {
+    lines.push('  - type: "yaml_condition"')
+    lines.push(`    name: "${alphaEntryIndicator.value}信号"`)
+    lines.push('    entry:')
+    lines.push('      operator: AND')
+    lines.push('      conditions:')
+    lines.push(`        - indicator: ${alphaEntryIndicator.value}`)
+    lines.push(`          compare: "${alphaEntryCompare.value}"`)
+    lines.push(`          value: ${alphaEntryValue.value}`)
+    lines.push('    exit:')
+    lines.push('      operator: OR')
+    lines.push('      conditions:')
+    lines.push(`        - indicator: ${alphaExitIndicator.value}`)
+    lines.push(`          compare: "${alphaExitCompare.value}"`)
+    lines.push(`          value: ${alphaExitValue.value}`)
+  } else {
+    lines.push('  - type: "ai_agent"')
+    lines.push('    name: "AI智能研判"')
+    lines.push(`    confidence_threshold: ${alphaConfidence.value}`)
+  }
+
+  lines.push('portfolio:')
+  if (selectedPortfolio.value === 'fixed_percent') {
+    lines.push('  type: "fixed_percent"')
+    lines.push('  params:')
+    lines.push(`    risk_percent: ${portRiskPercent.value}`)
+    lines.push(`    default_leverage: ${portLeverage.value}`)
+    lines.push(`    default_sl_pct: ${portSlPct.value}`)
+    lines.push(`    default_tp_pct: ${portTpPct.value}`)
+  } else {
+    lines.push('  type: "kelly"')
+    lines.push('  params:')
+    lines.push(`    kelly_fraction: ${portKellyFraction.value}`)
+    lines.push(`    default_leverage: ${portLeverage.value}`)
+    lines.push(`    odds_ratio: ${portOddsRatio.value}`)
+  }
+
+  lines.push('risk:')
+  lines.push('  type: "standard"')
+  lines.push('  params:')
+  lines.push(`    max_leverage: ${riskMaxLeverage.value}`)
+  lines.push(`    max_daily_loss_pct: ${riskMaxDailyLoss.value}`)
+  lines.push(`    max_daily_trades: ${riskMaxDailyTrades.value}`)
+
+  lines.push('execution:')
+  lines.push('  type: "market"')
+  return lines.join('\n')
+}
+
 async function handleSave() {
-  if (!formName.value || !formSymbol.value || !formYaml.value) {
-    error.value = '请填写所有必填项'
+  if (!formName.value || !formSymbol.value) {
+    error.value = '请填写策略名称和交易对'
     return
   }
   formSaving.value = true
   try {
+    const yaml = editingStrategy.value ? formYaml.value : buildPipelineYaml()
     const data = {
       name: formName.value,
       symbol: formSymbol.value.toUpperCase(),
       interval: formInterval.value,
-      config_yaml: formYaml.value,
+      config_yaml: yaml,
     }
     if (editingStrategy.value) {
       await updateStrategy(editingStrategy.value.id, data)
@@ -757,68 +861,252 @@ onMounted(() => {
       </template>
     </div>
 
-    <!-- Create/Edit Modal -->
+    <!-- Create/Edit Modal (4-Step Wizard) -->
     <NModal
       v-model:show="showCreateModal"
       preset="card"
-      :title="editingStrategy ? '编辑策略' : '新建策略'"
-      style="width: 640px; background: #18181b; border: 1px solid rgba(255,255,255,0.06);"
+      :title="editingStrategy ? '编辑策略' : '构建策略'"
+      style="width: 680px; background: #18181b; border: 1px solid rgba(255,255,255,0.06);"
       :bordered="false"
     >
+      <!-- Step indicator -->
+      <div v-if="!editingStrategy" class="flex items-center gap-2 mb-6">
+        <template v-for="step in 4" :key="step">
+          <div
+            class="flex items-center gap-2 cursor-pointer"
+            @click="wizardStep = step"
+          >
+            <div
+              class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all"
+              :style="{
+                background: wizardStep >= step ? 'linear-gradient(135deg, #8a2be2, #5a189a)' : 'rgba(255,255,255,0.05)',
+                color: wizardStep >= step ? 'white' : '#6b7280',
+              }"
+            >{{ step }}</div>
+            <span class="text-xs" :style="{ color: wizardStep >= step ? '#a855f7' : '#4b5563' }">
+              {{ ['Alpha 信号', 'Portfolio 仓位', 'Risk 风控', '基本信息'][step - 1] }}
+            </span>
+          </div>
+          <div v-if="step < 4" class="flex-1 h-px" style="background: rgba(255,255,255,0.06);"></div>
+        </template>
+      </div>
+
       <div class="space-y-4">
-        <div>
-          <label class="block text-xs text-gray-500 mb-1.5">策略名称</label>
-          <NInput
-            v-model:value="formName"
-            placeholder="例如: RSI 反转策略"
-            style="--n-color: #0f0f14; --n-border: 1px solid rgba(255,255,255,0.1); --n-text-color: white;"
-          />
-        </div>
-        <div class="grid grid-cols-2 gap-4">
+        <!-- Step 1: Alpha -->
+        <template v-if="wizardStep === 1 && !editingStrategy">
+          <div class="text-sm text-gray-300 mb-3">选择信号源模块：AI 根据什么来判断买卖时机？</div>
+          <div class="grid grid-cols-2 gap-3">
+            <button
+              @click="selectedAlpha = 'yaml_condition'"
+              class="p-4 rounded-lg text-left transition-all"
+              :style="{
+                background: selectedAlpha === 'yaml_condition' ? 'rgba(138,43,226,0.15)' : 'rgba(255,255,255,0.03)',
+                border: selectedAlpha === 'yaml_condition' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
+              }"
+            >
+              <div class="text-sm text-white font-medium">📊 技术指标条件</div>
+              <div class="text-xs text-gray-500 mt-1">RSI, MACD, EMA 等指标组合</div>
+            </button>
+            <button
+              @click="selectedAlpha = 'ai_agent'"
+              class="p-4 rounded-lg text-left transition-all"
+              :style="{
+                background: selectedAlpha === 'ai_agent' ? 'rgba(138,43,226,0.15)' : 'rgba(255,255,255,0.03)',
+                border: selectedAlpha === 'ai_agent' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
+              }"
+            >
+              <div class="text-sm text-white font-medium">🤖 AI 智能判断</div>
+              <div class="text-xs text-gray-500 mt-1">AI 大模型综合分析行情</div>
+            </button>
+          </div>
+          <!-- Alpha params -->
+          <div v-if="selectedAlpha === 'yaml_condition'" class="space-y-3 mt-3 p-3 rounded-lg" style="background: rgba(255,255,255,0.02);">
+            <div class="text-xs text-purple-400 mb-2">入场条件</div>
+            <div class="grid grid-cols-3 gap-2">
+              <NSelect v-model:value="alphaEntryIndicator" :options="indicatorOptions" size="small" />
+              <NSelect v-model:value="alphaEntryCompare" :options="compareOptions" size="small" />
+              <NInputNumber v-model:value="alphaEntryValue" size="small" />
+            </div>
+            <div class="text-xs text-purple-400 mt-3 mb-2">出场条件</div>
+            <div class="grid grid-cols-3 gap-2">
+              <NSelect v-model:value="alphaExitIndicator" :options="indicatorOptions" size="small" />
+              <NSelect v-model:value="alphaExitCompare" :options="compareOptions" size="small" />
+              <NInputNumber v-model:value="alphaExitValue" size="small" />
+            </div>
+          </div>
+          <div v-else class="p-3 rounded-lg" style="background: rgba(255,255,255,0.02);">
+            <label class="text-xs text-gray-500">最低信心阈值</label>
+            <NSlider v-model:value="alphaConfidence" :min="0.1" :max="1.0" :step="0.1" :format-tooltip="(v: number) => `${(v * 100).toFixed(0)}%`" class="mt-2" />
+          </div>
+        </template>
+
+        <!-- Step 2: Portfolio -->
+        <template v-if="wizardStep === 2 && !editingStrategy">
+          <div class="text-sm text-gray-300 mb-3">选择仓位管理模型：每次用多少资金开仓？</div>
+          <div class="grid grid-cols-2 gap-3">
+            <button
+              @click="selectedPortfolio = 'fixed_percent'"
+              class="p-4 rounded-lg text-left transition-all"
+              :style="{
+                background: selectedPortfolio === 'fixed_percent' ? 'rgba(138,43,226,0.15)' : 'rgba(255,255,255,0.03)',
+                border: selectedPortfolio === 'fixed_percent' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
+              }"
+            >
+              <div class="text-sm text-white font-medium">📐 固定比例</div>
+              <div class="text-xs text-gray-500 mt-1">每次用余额的固定百分比</div>
+            </button>
+            <button
+              @click="selectedPortfolio = 'kelly'"
+              class="p-4 rounded-lg text-left transition-all"
+              :style="{
+                background: selectedPortfolio === 'kelly' ? 'rgba(138,43,226,0.15)' : 'rgba(255,255,255,0.03)',
+                border: selectedPortfolio === 'kelly' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
+              }"
+            >
+              <div class="text-sm text-white font-medium">🎯 凯利公式</div>
+              <div class="text-xs text-gray-500 mt-1">基于胜率动态计算最优仓位</div>
+            </button>
+          </div>
+          <div class="space-y-3 mt-3 p-3 rounded-lg" style="background: rgba(255,255,255,0.02);">
+            <div class="grid grid-cols-2 gap-3">
+              <div v-if="selectedPortfolio === 'fixed_percent'">
+                <label class="text-xs text-gray-500">每次仓位 (%)</label>
+                <NInputNumber v-model:value="portRiskPercent" :min="1" :max="50" size="small" class="mt-1" />
+              </div>
+              <div v-else>
+                <label class="text-xs text-gray-500">凯利比例</label>
+                <NInputNumber v-model:value="portKellyFraction" :min="0.1" :max="1.0" :step="0.1" size="small" class="mt-1" />
+              </div>
+              <div>
+                <label class="text-xs text-gray-500">杠杆倍数</label>
+                <NInputNumber v-model:value="portLeverage" :min="1" :max="20" size="small" class="mt-1" />
+              </div>
+              <div>
+                <label class="text-xs text-gray-500">止损 (%)</label>
+                <NInputNumber v-model:value="portSlPct" :min="0.5" :max="10" :step="0.5" size="small" class="mt-1" />
+              </div>
+              <div>
+                <label class="text-xs text-gray-500">止盈 (%)</label>
+                <NInputNumber v-model:value="portTpPct" :min="1" :max="30" :step="0.5" size="small" class="mt-1" />
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- Step 3: Risk -->
+        <template v-if="wizardStep === 3 && !editingStrategy">
+          <div class="text-sm text-gray-300 mb-3">配置风控参数：设定安全边界</div>
+          <div class="p-4 rounded-lg space-y-4" style="background: rgba(255,255,255,0.02);">
+            <div>
+              <label class="text-xs text-gray-500">最大杠杆</label>
+              <NSlider v-model:value="riskMaxLeverage" :min="1" :max="125" :step="1" class="mt-1" />
+              <div class="text-right text-xs text-purple-400 mt-0.5">{{ riskMaxLeverage }}x</div>
+            </div>
+            <div>
+              <label class="text-xs text-gray-500">日最大亏损 (%)</label>
+              <NSlider v-model:value="riskMaxDailyLoss" :min="1" :max="50" :step="1" class="mt-1" />
+              <div class="text-right text-xs text-purple-400 mt-0.5">{{ riskMaxDailyLoss }}%</div>
+            </div>
+            <div>
+              <label class="text-xs text-gray-500">日最大交易次数</label>
+              <NSlider v-model:value="riskMaxDailyTrades" :min="1" :max="100" :step="1" class="mt-1" />
+              <div class="text-right text-xs text-purple-400 mt-0.5">{{ riskMaxDailyTrades }} 次</div>
+            </div>
+          </div>
+        </template>
+
+        <!-- Step 4: Basic Info -->
+        <template v-if="wizardStep === 4 || editingStrategy">
+          <div v-if="!editingStrategy" class="text-sm text-gray-300 mb-3">最后一步：填写策略名称</div>
           <div>
-            <label class="block text-xs text-gray-500 mb-1.5">交易对</label>
+            <label class="block text-xs text-gray-500 mb-1.5">策略名称</label>
             <NInput
-              v-model:value="formSymbol"
-              placeholder="BTCUSDT"
+              v-model:value="formName"
+              placeholder="例如: RSI 超卖反弹策略"
               style="--n-color: #0f0f14; --n-border: 1px solid rgba(255,255,255,0.1); --n-text-color: white;"
             />
           </div>
-          <div>
-            <label class="block text-xs text-gray-500 mb-1.5">K线周期</label>
-            <NSelect
-              v-model:value="formInterval"
-              :options="intervalOptions"
-              style="--n-color: #0f0f14; --n-border: 1px solid rgba(255,255,255,0.1);"
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1.5">交易对</label>
+              <NInput
+                v-model:value="formSymbol"
+                placeholder="BTCUSDT"
+                style="--n-color: #0f0f14; --n-border: 1px solid rgba(255,255,255,0.1); --n-text-color: white;"
+              />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1.5">K线周期</label>
+              <NSelect
+                v-model:value="formInterval"
+                :options="intervalOptions"
+                style="--n-color: #0f0f14; --n-border: 1px solid rgba(255,255,255,0.1);"
+              />
+            </div>
+          </div>
+          <!-- Edit mode: show raw YAML -->
+          <div v-if="editingStrategy">
+            <label class="block text-xs text-gray-500 mb-1.5">策略配置 (YAML)</label>
+            <NInput
+              v-model:value="formYaml"
+              type="textarea"
+              :rows="12"
+              style="--n-color: #0f0f14; --n-border: 1px solid rgba(255,255,255,0.1); --n-text-color: white; font-family: monospace; font-size: 13px;"
             />
           </div>
-        </div>
-        <div>
-          <label class="block text-xs text-gray-500 mb-1.5">策略配置 (YAML)</label>
-          <NInput
-            v-model:value="formYaml"
-            type="textarea"
-            :rows="12"
-            placeholder="name: my_strategy&#10;conditions:&#10;  operator: AND&#10;  items:&#10;    - indicator: rsi&#10;      comparator: less_than&#10;      value: 30"
-            style="--n-color: #0f0f14; --n-border: 1px solid rgba(255,255,255,0.1); --n-text-color: white; font-family: monospace; font-size: 13px;"
-          />
-        </div>
-        <div class="flex justify-end gap-3 pt-2">
+          <!-- Create mode: show preview -->
+          <div v-else class="p-3 rounded-lg" style="background: rgba(255,255,255,0.02);">
+            <div class="text-xs text-gray-500 mb-2">策略组合预览</div>
+            <div class="flex items-center gap-2 text-xs">
+              <span class="px-2 py-1 rounded" style="background: rgba(138,43,226,0.15); color: #a855f7;">{{ selectedAlpha === 'yaml_condition' ? '📊 技术指标' : '🤖 AI研判' }}</span>
+              <span class="text-gray-600">→</span>
+              <span class="px-2 py-1 rounded" style="background: rgba(34,197,94,0.1); color: #22c55e;">{{ selectedPortfolio === 'fixed_percent' ? '📐 固定比例' : '🎯 凯利公式' }}</span>
+              <span class="text-gray-600">→</span>
+              <span class="px-2 py-1 rounded" style="background: rgba(239,68,68,0.1); color: #ef4444;">🛡️ 风控 {{ riskMaxLeverage }}x</span>
+              <span class="text-gray-600">→</span>
+              <span class="px-2 py-1 rounded" style="background: rgba(59,130,246,0.1); color: #3b82f6;">⚡ 市价执行</span>
+            </div>
+          </div>
+        </template>
+
+        <!-- Navigation -->
+        <div class="flex justify-between pt-2">
           <button
-            @click="showCreateModal = false"
+            v-if="wizardStep > 1 && !editingStrategy"
+            @click="wizardStep--"
             class="px-4 py-2 rounded-lg text-sm text-gray-400 transition-colors"
             style="background: rgba(255,255,255,0.05);"
           >
-            取消
+            上一步
           </button>
-          <button
-            @click="handleSave"
-            :disabled="formSaving"
-            class="px-4 py-2 rounded-lg text-sm text-white font-medium transition-all flex items-center gap-2"
-            style="background: linear-gradient(135deg, #8a2be2, #5a189a);"
-          >
-            <NSpin v-if="formSaving" size="small" />
-            {{ editingStrategy ? '保存修改' : '创建策略' }}
-          </button>
+          <div v-else></div>
+          <div class="flex gap-3">
+            <button
+              @click="showCreateModal = false"
+              class="px-4 py-2 rounded-lg text-sm text-gray-400 transition-colors"
+              style="background: rgba(255,255,255,0.05);"
+            >
+              取消
+            </button>
+            <button
+              v-if="wizardStep < 4 && !editingStrategy"
+              @click="wizardStep++"
+              class="px-4 py-2 rounded-lg text-sm text-white font-medium transition-all"
+              style="background: linear-gradient(135deg, #8a2be2, #5a189a);"
+            >
+              下一步
+            </button>
+            <button
+              v-if="wizardStep === 4 || editingStrategy"
+              @click="handleSave"
+              :disabled="formSaving"
+              class="px-4 py-2 rounded-lg text-sm text-white font-medium transition-all flex items-center gap-2"
+              style="background: linear-gradient(135deg, #8a2be2, #5a189a);"
+            >
+              <NSpin v-if="formSaving" size="small" />
+              {{ editingStrategy ? '保存修改' : '创建策略' }}
+            </button>
+          </div>
         </div>
       </div>
     </NModal>
