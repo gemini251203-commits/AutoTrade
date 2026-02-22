@@ -249,7 +249,7 @@ onMounted(loadAll)
     <div class="news-center mobile-safe-pb">
     <!-- 页面标题 -->
     <div class="page-header">
-      <h1>📰 新闻中心</h1>
+      <h1>新闻中心</h1>
       <p class="subtitle">实时加密货币新闻 · AI 情感分析 · 智能监控</p>
     </div>
 
@@ -391,7 +391,7 @@ onMounted(loadAll)
       <!-- 右侧: 监控规则 + AI思考 -->
       <div class="side-panel">
         <!-- 监控规则 -->
-        <n-card title="📋 监控规则" class="alerts-card">
+        <n-card title="监控规则" class="alerts-card">
           <template #header-extra>
             <n-button size="small" type="primary" @click="showCreateAlert = true">
               + 新建
@@ -448,7 +448,7 @@ onMounted(loadAll)
         </n-card>
 
         <!-- AI 思考记录 -->
-        <n-card title="🧠 AI 思考记录" class="thinking-card" style="margin-top: 16px">
+        <n-card title="AI 思考记录" class="thinking-card" style="margin-top: 16px">
           <div v-if="thinkings.length === 0" style="padding: 16px 0">
             <n-empty description="暂无思考记录" size="small" />
           </div>
@@ -522,7 +522,7 @@ onMounted(loadAll)
           <n-form-item label="交易方向">
             <n-select
               v-model:value="alertForm.trade_side"
-              :options="[{ value: 'auto', label: '🤖 自动判断' }, { value: 'buy', label: '做多' }, { value: 'sell', label: '做空' }]"
+              :options="[{ value: 'auto', label: '自动判断' }, { value: 'buy', label: '做多' }, { value: 'sell', label: '做空' }]"
             />
           </n-form-item>
           <n-form-item label="交易对">

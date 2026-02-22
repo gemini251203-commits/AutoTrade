@@ -411,9 +411,9 @@ async function handleInitPresets() {
 
 function regimeLabel(r: string) {
   const map: Record<string, string> = {
-    trending_up: '📈 上涨趋势', trending_down: '📉 下跌趋势',
-    ranging: '⇔ 震荡', volatile: '⚡ 高波动',
-    insufficient_data: '⚠️ 数据不足', unknown: '❓ 未分析',
+    trending_up: '上涨趋势', trending_down: '下跌趋势',
+    ranging: '震荡', volatile: '高波动',
+    insufficient_data: '数据不足', unknown: '未分析',
   }
   return map[r] || r
 }
@@ -794,7 +794,7 @@ onMounted(() => {
             class="mt-4 px-4 py-2 rounded-lg text-sm transition-colors"
             style="background: rgba(138,43,226,0.15); color: #a855f7;"
           >
-            📦 初始化预置方案
+            初始化预置方案
           </button>
         </div>
         <div v-else class="space-y-4">
@@ -916,7 +916,7 @@ onMounted(() => {
                 border: selectedAlpha === 'yaml_condition' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
               }"
             >
-              <div class="text-sm text-white font-medium">📊 技术指标条件</div>
+              <div class="text-sm text-white font-medium">技术指标条件</div>
               <div class="text-xs text-gray-500 mt-1">RSI, MACD, EMA 等指标组合</div>
             </button>
             <button
@@ -927,7 +927,7 @@ onMounted(() => {
                 border: selectedAlpha === 'ai_agent' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
               }"
             >
-              <div class="text-sm text-white font-medium">🤖 AI 智能判断</div>
+              <div class="text-sm text-white font-medium">AI 智能判断</div>
               <div class="text-xs text-gray-500 mt-1">AI 大模型综合分析行情</div>
             </button>
           </div>
@@ -964,7 +964,7 @@ onMounted(() => {
                 border: selectedPortfolio === 'fixed_percent' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
               }"
             >
-              <div class="text-sm text-white font-medium">📐 固定比例</div>
+              <div class="text-sm text-white font-medium">固定比例</div>
               <div class="text-xs text-gray-500 mt-1">每次用余额的固定百分比</div>
             </button>
             <button
@@ -975,7 +975,7 @@ onMounted(() => {
                 border: selectedPortfolio === 'kelly' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
               }"
             >
-              <div class="text-sm text-white font-medium">🎯 凯利公式</div>
+              <div class="text-sm text-white font-medium">凯利公式</div>
               <div class="text-xs text-gray-500 mt-1">基于胜率动态计算最优仓位</div>
             </button>
           </div>
@@ -1039,7 +1039,7 @@ onMounted(() => {
                 border: selectedExecution === 'market' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
               }"
             >
-              <div class="text-sm text-white font-medium">⚡ 市价单</div>
+              <div class="text-sm text-white font-medium">市价单</div>
               <div class="text-[10px] text-gray-500 mt-1">立即成交，速度最快</div>
             </button>
             <button
@@ -1050,7 +1050,7 @@ onMounted(() => {
                 border: selectedExecution === 'limit' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
               }"
             >
-              <div class="text-sm text-white font-medium">📌 限价挂单</div>
+              <div class="text-sm text-white font-medium">限价挂单</div>
               <div class="text-[10px] text-gray-500 mt-1">指定价格等待成交</div>
             </button>
             <button
@@ -1061,7 +1061,7 @@ onMounted(() => {
                 border: selectedExecution === 'stop_market' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
               }"
             >
-              <div class="text-sm text-white font-medium">🎯 条件触发</div>
+              <div class="text-sm text-white font-medium">条件触发</div>
               <div class="text-[10px] text-gray-500 mt-1">突破价格后市价成交</div>
             </button>
           </div>
@@ -1118,13 +1118,13 @@ onMounted(() => {
           <div v-else class="p-3 rounded-lg" style="background: rgba(255,255,255,0.02);">
             <div class="text-xs text-gray-500 mb-2">策略组合预览</div>
             <div class="flex items-center gap-2 text-xs">
-              <span class="px-2 py-1 rounded" style="background: rgba(138,43,226,0.15); color: #a855f7;">{{ selectedAlpha === 'yaml_condition' ? '📊 技术指标' : '🤖 AI研判' }}</span>
+              <span class="px-2 py-1 rounded" style="background: rgba(138,43,226,0.15); color: #a855f7;">{{ selectedAlpha === 'yaml_condition' ? '技术指标' : 'AI研判' }}</span>
               <span class="text-gray-600">→</span>
-              <span class="px-2 py-1 rounded" style="background: rgba(34,197,94,0.1); color: #22c55e;">{{ selectedPortfolio === 'fixed_percent' ? '📐 固定比例' : '🎯 凯利公式' }}</span>
+              <span class="px-2 py-1 rounded" style="background: rgba(34,197,94,0.1); color: #22c55e;">{{ selectedPortfolio === 'fixed_percent' ? '固定比例' : '凯利公式' }}</span>
               <span class="text-gray-600">→</span>
-              <span class="px-2 py-1 rounded" style="background: rgba(239,68,68,0.1); color: #ef4444;">🛡️ 风控 {{ riskMaxLeverage }}x</span>
+              <span class="px-2 py-1 rounded" style="background: rgba(239,68,68,0.1); color: #ef4444;">风控 {{ riskMaxLeverage }}x</span>
               <span class="text-gray-600">→</span>
-              <span class="px-2 py-1 rounded" style="background: rgba(59,130,246,0.1); color: #3b82f6;">{{ selectedExecution === 'market' ? '⚡ 市价' : selectedExecution === 'limit' ? '📌 限价' : '🎯 条件单' }}</span>
+              <span class="px-2 py-1 rounded" style="background: rgba(59,130,246,0.1); color: #3b82f6;">{{ selectedExecution === 'market' ? '市价' : selectedExecution === 'limit' ? '限价' : '条件单' }}</span>
             </div>
           </div>
         </template>

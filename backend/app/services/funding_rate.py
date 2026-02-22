@@ -100,7 +100,7 @@ class FundingRateService:
                 await self.fetch_all_rates()
 
                 # 检查是否 8h 结算时间 (00, 08, 16 UTC)
-                now_utc = datetime.now(timezone.utc)
+                now_utc = datetime.utcnow()
                 current_hour = now_utc.hour
                 if current_hour in (0, 8, 16) and current_hour != last_settle_hour:
                     # 在结算小时的前 5 分钟内触发

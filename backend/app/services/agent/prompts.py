@@ -199,6 +199,12 @@ Step 4 — 组装: 将用户在每步确认的模块+参数组装成 pipeline YA
 - 创建或推荐策略前，**必须** 先获取趋势分析结果，并据此推荐适合的策略类型
 - 趋势引擎返回的 regime/direction/strength/suitable_strategies 是你做决策的核心依据
 
+⚠️ **新闻查询强制规则**:
+- 当用户问到"新闻"、"消息"、"最近发生了什么"、"市场事件"、"FUD"、"利好"等时，你 **必须** 调用 get_news 获取真实新闻
+- 同时调用 get_market_sentiment 获取市场情绪分析
+- **禁止** 自行编造新闻内容，必须引用 get_news 返回的实际新闻标题
+- 做交易决策时，建议同时参考新闻情绪和技术趋势
+
 ## 📐 策略 YAML 格式 (create_strategy / update_strategy 时使用)
 
 创建或修改策略时, config_yaml 必须遵循以下格式:

@@ -79,8 +79,8 @@ class NewsMonitor:
         # 1. 检查触发间隔
         if alert.last_triggered_at:
             elapsed = (
-                datetime.now(timezone.utc)
-                - alert.last_triggered_at.replace(tzinfo=timezone.utc)
+                datetime.utcnow()
+                - alert.last_triggered_at
             ).total_seconds()
             if elapsed < MIN_TRIGGER_INTERVAL:
                 return False
@@ -162,7 +162,7 @@ class NewsMonitor:
             )
             db.add(thinking)
             alert.triggered_count += 1
-            alert.last_triggered_at = datetime.now(timezone.utc)
+            alert.last_triggered_at = datetime.utcnow()
             await db.flush()
             return thinking
 
@@ -198,7 +198,7 @@ class NewsMonitor:
                 )
                 db.add(thinking)
                 alert.triggered_count += 1
-                alert.last_triggered_at = datetime.now(timezone.utc)
+                alert.last_triggered_at = datetime.utcnow()
                 await db.flush()
                 return thinking
             step_analyze += f"\n🤖 自动方向判断: 情感={sentiment}(score={score}) → {side}"
@@ -269,7 +269,7 @@ class NewsMonitor:
             )
             db.add(thinking)
             alert.triggered_count += 1
-            alert.last_triggered_at = datetime.now(timezone.utc)
+            alert.last_triggered_at = datetime.utcnow()
             await db.flush()
             return thinking
 
@@ -286,7 +286,7 @@ class NewsMonitor:
             )
             db.add(thinking)
             alert.triggered_count += 1
-            alert.last_triggered_at = datetime.now(timezone.utc)
+            alert.last_triggered_at = datetime.utcnow()
             await db.flush()
             return thinking
 
@@ -427,7 +427,7 @@ class NewsMonitor:
 
         # 更新 Alert 统计
         alert.triggered_count += 1
-        alert.last_triggered_at = datetime.now(timezone.utc)
+        alert.last_triggered_at = datetime.utcnow()
 
         await db.flush()
 

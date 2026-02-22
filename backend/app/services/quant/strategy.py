@@ -665,7 +665,7 @@ class StrategyEngine:
         """检查当前时间是否在交易时段内"""
         from datetime import datetime, timezone
         
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         
         # 跳过周末
         if time_filter.get("skip_weekends") and now.weekday() >= 5:
