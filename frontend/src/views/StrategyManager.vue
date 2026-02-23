@@ -311,6 +311,20 @@ async function handleToggle(strategy: StrategyResponse) {
   }
 }
 
+async function handleDecisionIntervalChange(strategy: StrategyResponse, newInterval: string) {
+  try {
+    await updateStrategy(strategy.id, { decision_interval: newInterval })
+    strategy.decision_interval = newInterval
+    // 如果策略正在运行，需要重启以应用新间隔
+    if (strategy.is_active) {
+      await stopStrategy(strategy.id)
+      await startStrategy(strategy.id)
+    }
+  } catch (e: any) {
+    error.value = e.response?.data?.detail || '更新失败'
+  }
+}
+
 async function openLogs(strategy: StrategyResponse) {
   viewingStrategyName.value = strategy.name
   logsLoading.value = true
@@ -632,6 +646,22 @@ onMounted(() => {
                     <span>胜: {{ s.win_trades }}</span>
                     <span :style="{ color: pnlColor(s.total_pnl) }">
                       PnL: {{ s.total_pnl >= 0 ? '+' : '' }}{{ s.total_pnl.toFixed(2) }}
+                    </span>
+                    <span class="flex items-center gap-1">
+                      决策间隔:
+                      <select
+                        :value="s.decision_interval || '30m'"
+                        @change="handleDecisionIntervalChange(s, ($event.target as HTMLSelectElement).value)"
+                        class="bg-transparent border border-gray-700 rounded px-1 py-0.5 text-xs text-gray-400 outline-none cursor-pointer"
+                        style="min-width: 52px;"
+                      >
+                        <option value="5m" style="background:#1a1a2e;">5m</option>
+                        <option value="15m" style="background:#1a1a2e;">15m</option>
+                        <option value="30m" style="background:#1a1a2e;">30m</option>
+                        <option value="1h" style="background:#1a1a2e;">1h</option>
+                        <option value="2h" style="background:#1a1a2e;">2h</option>
+                        <option value="4h" style="background:#1a1a2e;">4h</option>
+                      </select>
                     </span>
                     <span v-if="s.last_run_at">
                       <NIcon size="12"><TimeOutline /></NIcon>

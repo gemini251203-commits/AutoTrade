@@ -28,6 +28,7 @@ export interface StrategyRequest {
   symbol: string
   interval?: string
   config_yaml: string
+  decision_interval?: string
 }
 
 /** 策略响应 */
@@ -40,6 +41,7 @@ export interface StrategyResponse {
   config_yaml: string
   strategy_type: string
   is_active: boolean
+  decision_interval: string
   last_run_at: string | null
   last_signal: string | null
   total_trades: number
@@ -116,7 +118,7 @@ export async function createStrategy(data: StrategyRequest): Promise<StrategyRes
 }
 
 /** 更新策略 */
-export async function updateStrategy(id: number, data: StrategyRequest): Promise<StrategyResponse> {
+export async function updateStrategy(id: number, data: Partial<StrategyRequest>): Promise<StrategyResponse> {
   const response = await request.put<StrategyResponse>(`/strategy/${id}`, data)
   return response.data
 }

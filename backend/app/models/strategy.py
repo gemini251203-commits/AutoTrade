@@ -56,6 +56,12 @@ class Strategy(Base):
         Text,
         comment="YAML 策略配置内容",
     )
+    decision_interval: Mapped[str] = mapped_column(
+        String(10),
+        default="30m",
+        server_default="30m",
+        comment="Autopilot 决策间隔 (5m/15m/30m/1h/4h)",
+    )
     
     # 运行状态
     is_active: Mapped[bool] = mapped_column(

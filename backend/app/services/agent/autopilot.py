@@ -216,9 +216,11 @@ class AgentAutopilot:
                     if not self.is_running(uid):
                         symbols = list(set(s.symbol for s in strategies))
                         intervals = list(set(s.interval for s in strategies))
+                        # 使用 decision_interval（独立于 K 线周期）
+                        decision_intervals = [getattr(s, 'decision_interval', None) or s.interval for s in strategies]
                         config = {
                             "symbols": symbols,
-                            "interval": intervals[0] if intervals else "1h",
+                            "interval": decision_intervals[0] if decision_intervals else "30m",
                             "intervals": intervals,
                             "strategy_ids": [s.id for s in strategies],
                         }

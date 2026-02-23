@@ -38,6 +38,7 @@ class StrategyCreateRequest(BaseModel):
     symbol: str = Field(..., example="BTCUSDT")
     interval: str = Field(default="1h", example="1h")
     config_yaml: str = Field(..., example="name: test\nsymbol: BTCUSDT\n...")
+    decision_interval: str = Field(default="30m", example="30m")
 
 
 class StrategyUpdateRequest(BaseModel):
@@ -46,6 +47,7 @@ class StrategyUpdateRequest(BaseModel):
     symbol: Optional[str] = None
     interval: Optional[str] = None
     config_yaml: Optional[str] = None
+    decision_interval: Optional[str] = None
 
 
 class StrategyResponse(BaseModel):
@@ -58,6 +60,7 @@ class StrategyResponse(BaseModel):
     config_yaml: str
     strategy_type: str
     is_active: bool
+    decision_interval: str
     last_run_at: Optional[str] = None
     last_signal: Optional[str] = None
     total_trades: int
@@ -131,6 +134,7 @@ def _strategy_to_response(s: Strategy) -> dict:
         "config_yaml": s.config_yaml,
         "strategy_type": getattr(s, "strategy_type", "basic"),
         "is_active": s.is_active,
+        "decision_interval": getattr(s, "decision_interval", "30m") or "30m",
         "last_run_at": s.last_run_at.isoformat() if s.last_run_at else None,
         "last_signal": s.last_signal,
         "total_trades": s.total_trades,
@@ -211,10 +215,19 @@ async def update_strategy(
     if not strategy:
         raise HTTPException(status_code=404, detail="策略不存在")
     
-    if strategy.is_active:
+    # decision_interval 可以在运行中修改，其他字段需停止后修改
+    only_decision_interval = (
+        request.decision_interval is not None
+        and request.name is None
+        and request.symbol is None
+        and request.interval is None
+        and request.config_yaml is None
+    )
+    
+    if strategy.is_active and not only_decision_interval:
         raise HTTPException(
             status_code=400,
-            detail="策略运行中，请先停止再修改",
+            detail="策略运行中，请先停止再修改（决策间隔可直接修改）",
         )
     
     # 如果更新了 YAML，验证合法性
@@ -232,6 +245,8 @@ async def update_strategy(
         strategy.symbol = request.symbol
     if request.interval is not None:
         strategy.interval = request.interval
+    if request.decision_interval is not None:
+        strategy.decision_interval = request.decision_interval
     
     await db.commit()
     await db.refresh(strategy)
