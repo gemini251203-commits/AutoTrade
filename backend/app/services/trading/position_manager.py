@@ -452,6 +452,7 @@ class PositionManager:
             raw_pnl = raw_pnl * (close_quantity / position.size)
         
         # 🔥 3. 扣除平仓手续费 → 净 P&L
+        # ⚠️ 语义: realized_pnl = 净值 (已扣手续费), 前端不应再减 total_commission
         pnl = raw_pnl - commission
         
         # 3. 计算释放的保证金

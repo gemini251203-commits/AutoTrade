@@ -4,11 +4,11 @@ import request from '@/utils/request'
 
 export interface FundingRate {
   symbol: string
-  markPrice: string
-  fundingRate: string
-  fundingRatePct: string
-  annualizedPct: string
-  nextFundingTime: number
+  mark_price: string
+  funding_rate: string
+  funding_rate_pct: string
+  annualized_pct: string
+  next_funding_time: number
   direction: string
   updated_at?: string
 }
@@ -20,8 +20,8 @@ export interface FundingRatesResponse {
 
 export interface FundingHistory {
   symbol: string
-  fundingRate: string
-  fundingTime: number
+  funding_rate: string
+  funding_time: number
 }
 
 export interface MyFees {
@@ -31,7 +31,7 @@ export interface MyFees {
     symbol: string
     side: string
     size: number
-    accumulated_funding_fee: number
+    total_funding_fee: number
   }[]
   recent_transactions: {
     id: number
@@ -44,23 +44,23 @@ export interface MyFees {
 
 /** 获取所有交易对当前费率 */
 export function getFundingRates() {
-  return request.get<FundingRatesResponse>('/api/funding/rates')
+  return request.get<FundingRatesResponse>('/funding/rates')
 }
 
 /** 获取单个交易对详情 */
 export function getFundingRateDetail(symbol: string) {
-  return request.get<FundingRate>(`/api/funding/rates/${symbol}`)
+  return request.get<FundingRate>(`/funding/rates/${symbol}`)
 }
 
 /** 获取历史费率 */
 export function getFundingHistory(symbol: string, limit = 100) {
   return request.get<{ symbol: string; history: FundingHistory[]; count: number }>(
-    `/api/funding/history/${symbol}`,
+    `/funding/history/${symbol}`,
     { params: { limit } }
   )
 }
 
 /** 获取用户累计资金费用 */
 export function getMyFundingFees() {
-  return request.get<MyFees>('/api/funding/my-fees')
+  return request.get<MyFees>('/funding/my-fees')
 }

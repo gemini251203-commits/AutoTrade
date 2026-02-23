@@ -17,7 +17,8 @@ from pydantic import BaseModel, Field
 from loguru import logger
 
 from app.api.deps import DbSession, CurrentUser
-from app.models.order import Order, OrderSide, OrderType, OrderStatus, PositionSideEnum
+from app.models.order import Order, OrderSide, OrderType, OrderStatus
+from app.models.position import PositionSide
 from app.services.trading import OrderExecutor, OrderError, OrderNotFoundError
 
 
@@ -35,7 +36,7 @@ class OrderCreateRequest(BaseModel):
     price: Optional[Decimal] = Field(default=None, example=79000)
     trigger_price: Optional[Decimal] = Field(default=None, example=75000)
     leverage: int = Field(default=10, ge=1, le=125, example=10)
-    position_side: Optional[PositionSideEnum] = Field(default=None)
+    position_side: Optional[PositionSide] = Field(default=None)
     reduce_only: bool = Field(default=False)
     stop_loss: Optional[Decimal] = Field(default=None)
     take_profit: Optional[Decimal] = Field(default=None)
@@ -44,6 +45,8 @@ class OrderCreateRequest(BaseModel):
 
 class OrderResponse(BaseModel):
     """订单响应"""
+    model_config = {"from_attributes": True, "json_encoders": {Decimal: str}}
+
     id: int
     user_id: int
     symbol: str
@@ -51,7 +54,7 @@ class OrderResponse(BaseModel):
     order_type: OrderType
     status: OrderStatus
     leverage: int
-    position_side: Optional[PositionSideEnum]
+    position_side: Optional[PositionSide]
     reduce_only: bool
     quantity: Decimal
     filled_quantity: Decimal
@@ -64,9 +67,6 @@ class OrderResponse(BaseModel):
     realized_pnl: Decimal
     created_at: str
     filled_at: Optional[str]
-    
-    class Config:
-        from_attributes = True
 
 
 # ==================== Routes ====================

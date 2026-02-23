@@ -665,7 +665,7 @@ async def get_strategy_detail(
     engine = StrategyEngine()
 
     # 尝试作为数据库 ID 查询
-    if strategy_id.isdigit():
+    if str(strategy_id).isdigit():
         result = await db.execute(
             select(Strategy).where(
                 Strategy.id == int(strategy_id),
@@ -770,7 +770,7 @@ async def evaluate_strategy(
     config = None
     strategy_name = strategy_id
 
-    if strategy_id.isdigit():
+    if str(strategy_id).isdigit():
         result = await db.execute(
             select(Strategy).where(
                 Strategy.id == int(strategy_id),
@@ -848,7 +848,7 @@ async def run_strategy(
     config = None
     strategy_name = strategy_id
 
-    if strategy_id.isdigit():
+    if str(strategy_id).isdigit():
         result = await db.execute(
             select(Strategy).where(
                 Strategy.id == int(strategy_id),
@@ -1323,7 +1323,7 @@ async def update_strategy(
     """
     from app.services.quant.strategy import StrategyEngine
 
-    if not strategy_id.isdigit():
+    if not str(strategy_id).isdigit():
         return json.dumps({"error": f"无效的策略 ID: {strategy_id}"}, ensure_ascii=False)
 
     result = await db.execute(
@@ -1765,11 +1765,11 @@ async def get_trade_journal(
             query = query.where(TradeMemory.source == source.lower())
         
         if result_filter == "win":
-            query = query.where(TradeMemory.pnl > 0)
+            query = query.where(TradeMemory.pnl_usdt > 0)
         elif result_filter == "loss":
-            query = query.where(TradeMemory.pnl <= 0)
+            query = query.where(TradeMemory.pnl_usdt <= 0)
         
-        query = query.order_by(desc(TradeMemory.closed_at)).limit(limit)
+        query = query.order_by(desc(TradeMemory.created_at)).limit(limit)
         
         result = await db.execute(query)
         trades = result.scalars().all()
@@ -1780,7 +1780,7 @@ async def get_trade_journal(
         losses = 0
         
         for t in trades:
-            pnl = float(t.pnl) if t.pnl else 0
+            pnl = float(t.pnl_usdt) if t.pnl_usdt else 0
             total_pnl += pnl
             if pnl > 0:
                 wins += 1
@@ -1794,9 +1794,9 @@ async def get_trade_journal(
                 "source": t.source,
                 "pnl": round(pnl, 4),
                 "pnl_pct": round(float(t.pnl_pct), 2) if t.pnl_pct else 0,
-                "duration": t.duration,
+                "duration": t.duration_minutes,
                 "open_reason": t.open_reason,
-                "closed_at": t.closed_at.isoformat() if t.closed_at else None,
+                "closed_at": t.created_at.isoformat() if t.created_at else None,
             })
         
         win_rate = round(wins / len(trades) * 100, 1) if trades else 0

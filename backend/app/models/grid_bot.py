@@ -206,7 +206,7 @@ class GridBot(Base):
         comment="累计网格利润",
     )
     
-    total_fee: Mapped[Decimal] = mapped_column(
+    total_commission: Mapped[Decimal] = mapped_column(
         Numeric(precision=20, scale=8),
         default=Decimal("0"),
         comment="累计手续费",

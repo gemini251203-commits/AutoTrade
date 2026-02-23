@@ -100,6 +100,8 @@ class TemplateResponse(BaseModel):
     symbol: str
     interval: str
     config_yaml: str
+    strategy_type: Optional[str] = None
+    modules: Optional[str] = None
 
 
 class MemoryResponse(BaseModel):
@@ -426,6 +428,8 @@ async def get_templates():
             "symbol": t["symbol"],
             "interval": t["interval"],
             "config_yaml": yaml_content.strip() if yaml_content else "",
+            "strategy_type": t.get("strategy_type"),
+            "modules": t.get("modules"),
         })
     return result
 

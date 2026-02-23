@@ -33,6 +33,7 @@ class PositionSide(str, Enum):
     """仓位方向"""
     LONG = "long"    # 做多
     SHORT = "short"  # 做空
+    BOTH = "both"    # 双向持仓模式
 
 
 class PositionStatus(str, Enum):
@@ -182,7 +183,7 @@ class Position(Base):
     )
     
     # 累计资金费率费用 (正=已支出, 负=已收入)
-    accumulated_funding_fee: Mapped[Decimal] = mapped_column(
+    total_funding_fee: Mapped[Decimal] = mapped_column(
         Numeric(precision=20, scale=8),
         default=Decimal("0"),
         nullable=False,

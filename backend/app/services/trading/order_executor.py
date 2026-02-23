@@ -315,9 +315,11 @@ class OrderExecutor:
         # 确定仓位方向
         pos_side = PositionSide.LONG if order.side == OrderSide.BUY else PositionSide.SHORT
         
-        # 🔥 从冻结金额中扣除手续费 (不经过 balance)
+        # 🔥 统一获取 wallet 一次 (避免多次 get_wallet 拿到不同引用)
+        wallet = await WalletManager.get_wallet(db, order.user_id, for_update=True)
+        
+        # 从冻结金额中扣除手续费 (不经过 balance)
         if commission > 0:
-            wallet = await WalletManager.get_wallet(db, order.user_id, for_update=True)
             wallet.frozen -= commission
             # 手续费直接作为成本消耗, 不退回 balance
             logger.info(
@@ -334,14 +336,19 @@ class OrderExecutor:
         remaining_frozen = order.frozen_amount - commission
         if remaining_frozen > margin_for_position:
             excess = remaining_frozen - margin_for_position
-            wallet = await WalletManager.get_wallet(db, order.user_id, for_update=True)
             wallet.frozen -= excess
             wallet.balance += excess
             logger.info(f"[OrderExecutor] Excess frozen returned: {excess} USDT")
         elif remaining_frozen < margin_for_position:
             # 需要额外冻结 (实际成交价高于预估)
             shortfall = margin_for_position - remaining_frozen
-            await WalletManager.freeze_funds(db, order.user_id, shortfall)
+            if wallet.balance < shortfall:
+                raise OrderError(
+                    f"Insufficient balance for additional margin: "
+                    f"need={shortfall}, available={wallet.balance}"
+                )
+            wallet.balance -= shortfall
+            wallet.frozen += shortfall
             logger.info(f"[OrderExecutor] Additional margin frozen: {shortfall} USDT")
         
         # 清除订单冻结记录 (已转为仓位保证金)

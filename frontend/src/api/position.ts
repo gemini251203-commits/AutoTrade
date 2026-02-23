@@ -5,6 +5,35 @@
  */
 import request from '@/utils/request'
 
+// ==================== Types ====================
+
+/** 仓位响应 (对应后端 PositionResponse) */
+export interface PositionResponse {
+  id: number
+  user_id: number
+  symbol: string
+  side: string              // 'long' | 'short'
+  status: string            // 'open' | 'closed' | 'liquidated'
+  size: string              // Decimal → string
+  entry_price: string       // Decimal → string
+  leverage: number
+  margin: string            // Decimal → string
+  margin_mode: string       // 'cross' | 'isolated'
+  liquidation_price: string | null
+  stop_loss: string | null
+  take_profit: string | null
+  realized_pnl: string      // Decimal → string
+  created_at: string
+}
+
+/** 带未实现盈亏的仓位响应 (对应后端 PositionWithPnlResponse) */
+export interface PositionWithPnlResponse extends PositionResponse {
+  unrealized_pnl: string | null  // Decimal → string
+  roe_percent: string | null     // Decimal → string
+}
+
+// ==================== API Functions ====================
+
 /**
  * 设置止盈止损
  * 

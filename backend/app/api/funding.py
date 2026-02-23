@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, get_current_user, DbSession, CurrentUser
 from app.services.funding_rate import funding_rate_service, FundingRateService
 
-router = APIRouter(prefix="/api/funding", tags=["funding"])
+router = APIRouter()
 
 
 @router.get("/rates")
@@ -41,17 +41,17 @@ async def get_all_rates():
         annualized = rate * 3 * 365 * 100
         result.append({
             "symbol": symbol,
-            "markPrice": data.get("markPrice", "0"),
-            "fundingRate": data.get("lastFundingRate", "0"),
-            "fundingRatePct": f"{rate * 100:.4f}%",
-            "annualizedPct": f"{annualized:.2f}%",
-            "nextFundingTime": data.get("nextFundingTime", 0),
+            "mark_price": data.get("markPrice", "0"),
+            "funding_rate": data.get("lastFundingRate", "0"),
+            "funding_rate_pct": f"{rate * 100:.4f}%",
+            "annualized_pct": f"{annualized:.2f}%",
+            "next_funding_time": data.get("nextFundingTime", 0),
             "direction": "多头付费" if rate > 0 else "空头付费" if rate < 0 else "零费率",
             "updated_at": data.get("updated_at"),
         })
 
     # 按费率绝对值降序排列
-    result.sort(key=lambda x: abs(float(x.get("fundingRate", 0))), reverse=True)
+    result.sort(key=lambda x: abs(float(x.get("funding_rate", 0))), reverse=True)
     return {"rates": result, "count": len(result)}
 
 
@@ -105,13 +105,13 @@ async def get_my_fees(
 
     position_fees = []
     for pos in open_positions:
-        fee = float(getattr(pos, "accumulated_funding_fee", 0) or 0)
+        fee = float(getattr(pos, "total_funding_fee", 0) or 0)
         position_fees.append({
             "position_id": pos.id,
             "symbol": pos.symbol,
             "side": pos.side.value,
             "size": float(pos.size),
-            "accumulated_funding_fee": fee,
+            "total_funding_fee": fee,
         })
 
     # 总计 (从流水统计)

@@ -37,7 +37,7 @@ interface GridBot {
   filled_buy_count: number
   filled_sell_count: number
   total_profit: string
-  total_fee: string
+  total_commission: string
   realized_pnl: string
   profit_rate: string
   matched_count: number
@@ -451,7 +451,7 @@ onUnmounted(() => {
           </div>
           <div class="detail-item">
             <span class="detail-label">资金费用 (USDT)</span>
-            <span class="detail-value">{{ formatNum(bot.total_fee) }}</span>
+            <span class="detail-value">{{ formatNum(bot.total_commission) }}</span>
           </div>
         </div>
         

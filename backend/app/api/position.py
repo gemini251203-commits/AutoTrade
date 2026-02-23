@@ -55,6 +55,8 @@ class SetTpSlRequest(BaseModel):
 
 class PositionResponse(BaseModel):
     """仓位响应"""
+    model_config = {"from_attributes": True, "json_encoders": {Decimal: str}}
+
     id: int
     user_id: int
     symbol: str
@@ -70,9 +72,6 @@ class PositionResponse(BaseModel):
     take_profit: Optional[Decimal]
     realized_pnl: Decimal
     created_at: str
-    
-    class Config:
-        from_attributes = True
 
 
 class PositionWithPnlResponse(PositionResponse):

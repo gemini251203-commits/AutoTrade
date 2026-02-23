@@ -199,7 +199,7 @@ app.include_router(journal.router, prefix="/api/journal", tags=["TradeJournal"])
 app.include_router(news.router, prefix="/api/news", tags=["News"])
 app.include_router(pipeline.router, prefix="/api/pipeline", tags=["Pipeline"])
 app.include_router(trend.router, prefix="/api/trend", tags=["Trend"])
-app.include_router(funding.router, tags=["Funding"])
+app.include_router(funding.router, prefix="/api/funding", tags=["Funding"])
 
 
 

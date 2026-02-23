@@ -670,8 +670,8 @@ async def reset_wallet(
     wallet.balance = initial
     wallet.frozen = Decimal("0")
     wallet.total_pnl = Decimal("0")
-    wallet.total_equity = initial
-    wallet.unrealized_pnl = Decimal("0")
+    # total_equity 是 @property (= balance + frozen)，无需赋值
+    # unrealized_pnl 是实时计算值，不存储在数据库中
     
     # 记录重置流水
     tx = WalletTransaction(

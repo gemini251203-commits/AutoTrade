@@ -449,7 +449,7 @@ class GridStrategy:
             profit = (sell_price - buy_price) * order.quantity
             
             bot.total_profit += profit
-            bot.realized_pnl = bot.total_profit - bot.total_fee
+            bot.realized_pnl = bot.total_profit - bot.total_commission
             
             logger.info(f"[GridStrategy] Grid matched: profit={profit}, total={bot.total_profit}")
             

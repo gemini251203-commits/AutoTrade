@@ -71,11 +71,9 @@ class InvalidTransitionError(Exception):
         )
 
 
-class PositionSideEnum(str, Enum):
-    """仓位方向 (用于区分开仓/平仓)"""
-    LONG = "long"    # 做多
-    SHORT = "short"  # 做空
-    BOTH = "both"    # 双向持仓模式
+# 仓位方向统一使用 position.py 中的 PositionSide
+from app.models.position import PositionSide
+PositionSideEnum = PositionSide  # 向后兼容别名
 
 
 class Order(Base):
@@ -138,8 +136,8 @@ class Order(Base):
         comment="杠杆倍数 (1-125)",
     )
     
-    position_side: Mapped[Optional[PositionSideEnum]] = mapped_column(
-        SQLEnum(PositionSideEnum),
+    position_side: Mapped[Optional[PositionSide]] = mapped_column(
+        SQLEnum(PositionSide),
         nullable=True,
         comment="仓位方向: long=做多, short=做空",
     )

@@ -67,7 +67,7 @@ class GridResponse(BaseModel):
     filled_buy_count: int
     filled_sell_count: int
     total_profit: str
-    total_fee: str
+    total_commission: str
     realized_pnl: str
     profit_rate: str
     matched_count: int
@@ -109,7 +109,7 @@ def bot_to_response(bot: GridBot) -> GridResponse:
         filled_buy_count=bot.filled_buy_count,
         filled_sell_count=bot.filled_sell_count,
         total_profit=fmt_price(bot.total_profit),
-        total_fee=fmt_price(bot.total_fee),
+        total_commission=fmt_price(bot.total_commission),
         realized_pnl=fmt_price(bot.realized_pnl),
         profit_rate=fmt_price(bot.profit_rate),
         matched_count=bot.matched_count,

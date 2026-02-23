@@ -342,6 +342,14 @@ class WalletManager:
         if wallet is None:
             raise WalletNotFoundError(user_id)
         
+        # 🔥 防御性编程: 防止 frozen 下溢变负
+        if frozen_release > wallet.frozen:
+            logger.warning(
+                f"[WalletManager] User {user_id}: frozen underflow! "
+                f"frozen={wallet.frozen}, release={frozen_release}. Clamping to 0."
+            )
+            frozen_release = wallet.frozen
+
         wallet.frozen -= frozen_release
         wallet.balance += frozen_release + pnl
         wallet.total_pnl += pnl
@@ -380,7 +388,15 @@ class WalletManager:
         if wallet is None:
             raise WalletNotFoundError(user_id)
         
-        wallet.balance -= amount
+        # 🔥 防御性编程: 防止 balance 下溢变负
+        if wallet.balance < amount:
+            logger.warning(
+                f"[WalletManager] User {user_id}: balance underflow! "
+                f"balance={wallet.balance}, fee={amount}. Clamping to 0."
+            )
+            wallet.balance = Decimal("0")
+        else:
+            wallet.balance -= amount
         
         logger.info(
             f"[WalletManager] User {user_id}: Fee deducted {amount}, "

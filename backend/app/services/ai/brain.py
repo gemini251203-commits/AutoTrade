@@ -338,13 +338,15 @@ class AIBrain:
                 )
             )
             positions = result.scalars().all()
+            # 使用市场价格计算未实现盈亏 (Position ORM 无 unrealized_pnl 列)
+            market_price = Decimal(str(context.market.current_price)) if context.market and context.market.current_price > 0 else None
             context.positions = [
                 PositionContext(
                     symbol=p.symbol,
                     side=p.side.value,
                     size=float(p.size),
                     entry_price=float(p.entry_price),
-                    unrealized_pnl=float(p.unrealized_pnl) if p.unrealized_pnl else 0,
+                    unrealized_pnl=float(p.calculate_unrealized_pnl(market_price)) if market_price else 0,
                     leverage=p.leverage,
                 )
                 for p in positions
