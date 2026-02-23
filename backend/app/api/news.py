@@ -307,6 +307,14 @@ async def delete_alert(
     if not alert:
         raise HTTPException(status_code=404, detail="监控规则不存在")
     
+    # 解除关联的 AI 思考记录 (避免外键约束错误)
+    from sqlalchemy import update
+    await db.execute(
+        update(NewsThinking).where(
+            NewsThinking.news_alert_id == alert_id
+        ).values(news_alert_id=None)
+    )
+    
     await db.delete(alert)
     await db.commit()
     
