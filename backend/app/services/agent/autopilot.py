@@ -508,12 +508,13 @@ class AgentAutopilot:
                     active_strategies = strat_result.scalars().all()
 
                     if active_strategies:
-                        # 获取 K 线用于策略评估
+                        # 获取 K 线用于策略评估 — 使用策略定义的周期
+                        strat_interval = active_strategies[0].interval if active_strategies else "1h"
                         klines = []
                         async with net_manager.get_client(timeout=15.0) as client:
                             resp = await client.get(
                                 "https://fapi.binance.com/fapi/v1/klines",
-                                params={"symbol": symbol, "interval": "1h", "limit": 200},
+                                params={"symbol": symbol, "interval": strat_interval, "limit": 200},
                             )
                             if resp.status_code == 200:
                                 raw = resp.json()
@@ -603,9 +604,19 @@ class AgentAutopilot:
 
                         if signals:
                             strategy_text = (
-                                "\n📊 量化策略信号:\n"
+                                "\n量化策略信号:\n"
                                 + "\n".join(signals)
                             )
+
+                        # 注入策略完整 YAML 配置 — AI 必须看到用户定义的规则
+                        if active_strategies:
+                            strategy_configs = []
+                            for strat in active_strategies:
+                                strategy_configs.append(
+                                    f"\n=== 策略: {strat.name} (ID={strat.id}, 周期={strat.interval}) ===\n"
+                                    f"```yaml\n{strat.config_yaml}\n```"
+                                )
+                            strategy_text += "\n\n用户定义的策略详细配置 (你必须严格遵守以下规则):\n" + "\n".join(strategy_configs)
                 except Exception as e:
                     logger.warning(f"[Autopilot] Strategy evaluation failed: {e}")
 
@@ -683,19 +694,23 @@ class AgentAutopilot:
                 now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
                 prompt = (
                     f"[Autopilot {now}] "
-                    f"请分析 {symbol} 当前市场状况并做出交易决策。\n\n"
+                    f"请严格按照用户定义的策略规则分析 {symbol} 并做出交易决策。\n\n"
+                    f"⚠ 核心规则: 你的决策必须完全基于策略中定义的开仓/平仓条件。\n"
+                    f"如果策略是做空策略，你只能做空或观望，不得做多。\n"
+                    f"如果策略条件未满足，你必须选择观望。\n\n"
                     f"{indicator_text}\n"
                     f"{strategy_text}\n"
                     f"{trend_text}\n"
                     f"{funding_text}\n"
                     f"{memory_text}\n\n"
                     f"请按以下步骤操作:\n"
-                    f"1. 查询 {symbol} 实时价格 (如需更新)\n"
-                    f"2. 查看当前持仓和余额\n"
-                    f"3. 结合上方技术指标、策略信号、趋势分析和历史交易记忆综合分析\n"
-                    f"4. 给出决策: 开仓/平仓/观望, 并说明理由\n"
+                    f"1. 查看上方策略配置中的开仓/平仓条件\n"
+                    f"2. 对照当前技术指标，逐条检查策略条件是否满足\n"
+                    f"3. 只有当策略条件满足时才执行对应的交易操作\n"
+                    f"4. 如果条件不满足，必须选择观望\n"
                     f"5. 如果决定交易, 直接执行 (使用 run_strategy 工具以关联策略)\n\n"
                     f"回复要简洁, 列出关键数据和理由。\n"
+                    f"说明你检查了哪些策略条件，哪些满足/不满足。\n"
                     f"最后一行请明确写出你的决策: 观望/开多/开空/平多/平空"
                 )
 
