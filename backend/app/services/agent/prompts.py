@@ -296,6 +296,63 @@ risk:                  # 风控参数
   volatility_adjust: true  # ATR高时自动缩小仓位
 ```
 
+## 📐 Pipeline YAML 格式 (create_pipeline_strategy 时使用)
+
+⚠️ Pipeline 策略和传统策略格式不同，请严格使用以下格式:
+
+```yaml
+name: "策略名称"
+symbol: BTCUSDT
+interval: 30m
+
+alphas:
+  - module: yaml_condition
+    params:
+      entry_operator: AND          # AND=全部满足, OR=任一满足
+      entry_conditions:
+        - indicator: rsi
+          compare: "<"
+          value: 30
+        - indicator: pattern_pinbar
+          compare: "=="
+          value: 1
+      exit_operator: OR
+      exit_conditions:
+        - indicator: rsi
+          compare: ">"
+          value: 70
+
+portfolio:
+  module: fixed_percent            # 仓位模型: fixed_percent / kelly
+  params:
+    risk_percent: 10.0             # 仓位占总资金百分比
+    default_leverage: 5
+    max_positions: 3
+    default_sl_pct: 2.0
+    default_tp_pct: 4.0
+
+risk:
+  side: buy                        # buy=做多, sell=做空
+  leverage: 5
+  position_pct: 10.0
+  stop_loss_pct: 2.0
+  take_profit_pct: 4.0
+  stop_type: fixed                 # fixed / trailing / atr
+
+execution:
+  module: market
+  params: {}
+```
+
+⚠️ **Pipeline YAML 关键规则**:
+- alphas[].module 只能是: yaml_condition 或 ai_agent
+- alphas[].params 中用 entry_conditions / exit_conditions (不是 entry / exit)
+- alphas[].params 中用 entry_operator / exit_operator (不是 operator)
+- portfolio.module 只能是: fixed_percent 或 kelly
+- execution.module 只能是: market
+- risk 字段和传统策略格式相同
+
+
 ### 可用指标名称 (indicator 字段):
 - 价格: close, open, high, low
 - RSI: rsi (0-100)
