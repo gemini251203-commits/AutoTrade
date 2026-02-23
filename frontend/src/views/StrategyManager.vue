@@ -507,25 +507,34 @@ onMounted(() => {
           <div class="pl-title-row">
             <span class="pl-dot" :style="{ background: pipelineStatus.circuit_breaker ? '#ef4444' : '#22c55e' }"></span>
             <span class="pl-title">交易流水线</span>
+            <span class="pl-uptime">{{ Math.floor((pipelineStatus.uptime_seconds || 0) / 3600) }}h 运行</span>
           </div>
           <span class="pl-badge" :class="pipelineStatus.circuit_breaker ? 'pl-badge-danger' : 'pl-badge-ok'">
-            {{ pipelineStatus.circuit_breaker ? '熔断中' : '运行正常' }}
+            {{ pipelineStatus.circuit_breaker ? '⚠ 熔断中' : '✦ 运行正常' }}
           </span>
         </div>
         <div class="pl-flow">
           <template v-for="(layer, idx) in pipelineStatus.layers" :key="layer.name">
-            <div class="pl-layer" :class="'pl-layer--' + layer.name.toLowerCase()">
-              <div class="pl-layer-icon">
-                <span class="pl-layer-dot" :class="layer.status"></span>
-              </div>
-              <div class="pl-layer-body">
+            <div class="pl-layer" :class="['pl-layer--' + layer.name.toLowerCase(), 'pl-layer--' + layer.status]">
+              <div class="pl-layer-top">
+                <span class="pl-layer-icon">
+                  {{ layer.name === 'Alpha' ? '🧠' : layer.name === 'Portfolio' ? '📊' : layer.name === 'Risk' ? '🛡️' : '⚡' }}
+                </span>
                 <span class="pl-layer-name">{{ layer.name }}</span>
-                <span class="pl-layer-tag">{{ layer.status }}</span>
               </div>
-              <span class="pl-layer-count">{{ layer.count }}</span>
+              <div class="pl-layer-count">{{ layer.count }}</div>
+              <div class="pl-layer-detail">{{ layer.detail }}</div>
+              <div class="pl-layer-status">
+                <span class="pl-status-dot" :class="layer.status"></span>
+                <span class="pl-status-text">{{ layer.status === 'active' ? '活跃' : layer.status === 'error' ? '异常' : '就绪' }}</span>
+              </div>
             </div>
-            <div v-if="idx < pipelineStatus.layers.length - 1" class="pl-arrow">
-              <svg width="20" height="20" viewBox="0 0 20 20"><path d="M7 4L13 10L7 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+            <div v-if="idx < pipelineStatus.layers.length - 1" class="pl-connector">
+              <div class="pl-connector-line"></div>
+              <div class="pl-connector-pulse" :class="{ 'pl-connector-active': layer.status === 'active' }"></div>
+              <svg class="pl-connector-arrow" width="12" height="12" viewBox="0 0 12 12">
+                <path d="M2 6H10M10 6L7 3M10 6L7 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              </svg>
             </div>
           </template>
         </div>
@@ -1433,152 +1442,303 @@ onMounted(() => {
   }
 }
 
-/* Pipeline Panel */
+/* Pipeline Panel — Premium */
 .pl-panel {
-  background: linear-gradient(135deg, rgba(30,30,40,0.8) 0%, rgba(20,20,30,0.9) 100%);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 14px;
-  padding: 18px 22px;
+  background: linear-gradient(160deg, rgba(20,16,36,0.95) 0%, rgba(12,12,24,0.98) 100%);
+  border: 1px solid rgba(139,92,246,0.15);
+  border-radius: 18px;
+  padding: 22px 26px;
+  position: relative;
+  overflow: hidden;
+}
+.pl-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 20% 0%, rgba(139,92,246,0.08) 0%, transparent 70%),
+              radial-gradient(ellipse at 80% 100%, rgba(34,197,94,0.06) 0%, transparent 70%);
+  pointer-events: none;
 }
 .pl-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  position: relative;
 }
 .pl-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 .pl-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  animation: pulse-glow 2s ease-in-out infinite;
+  animation: pl-pulse 2s ease-in-out infinite;
+  box-shadow: 0 0 8px currentColor;
 }
-@keyframes pulse-glow {
-  0%, 100% { opacity: 1; box-shadow: 0 0 4px currentColor; }
-  50% { opacity: 0.6; box-shadow: 0 0 8px currentColor; }
+@keyframes pl-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
 }
 .pl-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  color: #e5e7eb;
-  letter-spacing: 0.3px;
+  color: #f0f0f0;
+  letter-spacing: 0.5px;
+}
+.pl-uptime {
+  font-size: 11px;
+  color: #6b7280;
+  font-family: 'JetBrains Mono', monospace;
+  background: rgba(255,255,255,0.04);
+  padding: 2px 8px;
+  border-radius: 6px;
 }
 .pl-badge {
   font-size: 11px;
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 20px;
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
 }
 .pl-badge-ok {
-  background: rgba(34,197,94,0.15);
+  background: rgba(34,197,94,0.12);
   color: #4ade80;
-  border: 1px solid rgba(34,197,94,0.25);
+  border: 1px solid rgba(34,197,94,0.2);
+  box-shadow: 0 0 12px rgba(34,197,94,0.1);
 }
 .pl-badge-danger {
-  background: rgba(239,68,68,0.15);
+  background: rgba(239,68,68,0.12);
   color: #f87171;
-  border: 1px solid rgba(239,68,68,0.25);
+  border: 1px solid rgba(239,68,68,0.2);
+  box-shadow: 0 0 12px rgba(239,68,68,0.1);
+  animation: pl-pulse 1.5s ease-in-out infinite;
 }
+
+/* Flow container */
 .pl-flow {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
   gap: 0;
+  position: relative;
 }
+
+/* Layer card */
 .pl-layer {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.08);
-  min-width: 120px;
-  transition: all 0.25s ease;
+  padding: 16px 18px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.06);
+  min-width: 140px;
+  flex: 1;
+  cursor: default;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+.pl-layer::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  transition: opacity 0.3s;
 }
 .pl-layer:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255,255,255,0.15);
+  transform: translateY(-4px);
+  border-color: rgba(255,255,255,0.12);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
 }
-.pl-layer--alpha { background: linear-gradient(135deg, rgba(168,85,247,0.12) 0%, rgba(139,92,246,0.06) 100%); }
-.pl-layer--portfolio { background: linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(37,99,235,0.06) 100%); }
-.pl-layer--risk { background: linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(217,119,6,0.06) 100%); }
-.pl-layer--execution { background: linear-gradient(135deg, rgba(34,197,94,0.12) 0%, rgba(22,163,74,0.06) 100%); }
+.pl-layer--active::before { opacity: 1; }
+.pl-layer--idle::before { opacity: 0.3; }
+.pl-layer--error::before { opacity: 1; }
 
-.pl-layer-icon {
+/* Layer-specific gradient & accent */
+.pl-layer--alpha { background: linear-gradient(180deg, rgba(168,85,247,0.12) 0%, rgba(168,85,247,0.03) 100%); }
+.pl-layer--alpha::before { background: linear-gradient(90deg, #a855f7, #8b5cf6); }
+.pl-layer--alpha .pl-layer-count { color: #c084fc; }
+
+.pl-layer--portfolio { background: linear-gradient(180deg, rgba(59,130,246,0.12) 0%, rgba(59,130,246,0.03) 100%); }
+.pl-layer--portfolio::before { background: linear-gradient(90deg, #3b82f6, #2563eb); }
+.pl-layer--portfolio .pl-layer-count { color: #60a5fa; }
+
+.pl-layer--risk { background: linear-gradient(180deg, rgba(251,191,36,0.12) 0%, rgba(251,191,36,0.03) 100%); }
+.pl-layer--risk::before { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.pl-layer--risk .pl-layer-count { color: #fbbf24; }
+
+.pl-layer--execution { background: linear-gradient(180deg, rgba(34,197,94,0.12) 0%, rgba(34,197,94,0.03) 100%); }
+.pl-layer--execution::before { background: linear-gradient(90deg, #22c55e, #16a34a); }
+.pl-layer--execution .pl-layer-count { color: #4ade80; }
+
+/* Layer inner elements */
+.pl-layer-top {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
+  margin-bottom: 6px;
 }
-.pl-layer-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-}
-.pl-layer-dot.active {
-  background: #22c55e;
-  border-color: rgba(34,197,94,0.3);
-  box-shadow: 0 0 6px rgba(34,197,94,0.4);
-}
-.pl-layer-dot.idle {
-  background: #4b5563;
-  border-color: rgba(75,85,99,0.3);
-}
-.pl-layer-dot.error {
-  background: #ef4444;
-  border-color: rgba(239,68,68,0.3);
-  box-shadow: 0 0 6px rgba(239,68,68,0.4);
-}
-.pl-layer-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  flex: 1;
+.pl-layer-icon {
+  font-size: 16px;
+  line-height: 1;
 }
 .pl-layer-name {
   font-size: 12px;
   font-weight: 700;
   color: #e5e7eb;
-}
-.pl-layer-tag {
-  font-size: 10px;
-  color: #6b7280;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
 }
 .pl-layer-count {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 800;
   font-family: 'JetBrains Mono', monospace;
-  color: #a1a1aa;
-  min-width: 20px;
-  text-align: right;
+  line-height: 1.1;
+  margin-bottom: 4px;
 }
-.pl-arrow {
-  color: #4b5563;
-  padding: 0 6px;
+.pl-layer-detail {
+  font-size: 10px;
+  color: #6b7280;
+  text-align: center;
+  line-height: 1.4;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pl-layer:hover .pl-layer-detail {
+  white-space: normal;
+  overflow: visible;
+}
+.pl-layer-status {
   display: flex;
   align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+.pl-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.pl-status-dot.active {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34,197,94,0.6);
+}
+.pl-status-dot.idle {
+  background: #4b5563;
+}
+.pl-status-dot.error {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239,68,68,0.6);
+  animation: pl-pulse 1s ease-in-out infinite;
+}
+.pl-status-text {
+  font-size: 10px;
+  color: #6b7280;
+  font-weight: 500;
 }
 
+/* Connector between layers */
+.pl-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  position: relative;
+  flex-shrink: 0;
+}
+.pl-connector-line {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  right: 4px;
+  height: 1px;
+  background: rgba(255,255,255,0.08);
+  transform: translateY(-50%);
+}
+.pl-connector-pulse {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(139,92,246,0.3);
+  transform: translateY(-50%);
+  opacity: 0;
+}
+.pl-connector-active {
+  animation: pl-data-flow 2s ease-in-out infinite;
+  opacity: 1;
+}
+@keyframes pl-data-flow {
+  0% { left: 4px; opacity: 0; }
+  20% { opacity: 0.8; }
+  80% { opacity: 0.8; }
+  100% { left: calc(100% - 12px); opacity: 0; }
+}
+.pl-connector-arrow {
+  position: relative;
+  color: #4b5563;
+  z-index: 1;
+}
+
+/* Mobile responsive */
 @media (max-width: 768px) {
+  .pl-panel {
+    padding: 14px 12px;
+  }
   .pl-flow {
-    flex-wrap: wrap;
-    gap: 6px;
+    flex-direction: column;
+    gap: 4px;
+    align-items: stretch;
   }
   .pl-layer {
+    flex-direction: row;
     min-width: 0;
+    padding: 10px 14px;
+    gap: 12px;
+  }
+  .pl-layer-top {
+    margin-bottom: 0;
+    min-width: 80px;
+  }
+  .pl-layer-count {
+    font-size: 20px;
+    margin-bottom: 0;
+    min-width: 40px;
+    text-align: right;
+  }
+  .pl-layer-detail {
     flex: 1;
-    padding: 8px 10px;
+    text-align: left;
   }
-  .pl-arrow {
-    display: none;
+  .pl-layer-status {
+    margin-top: 0;
   }
+  .pl-connector {
+    width: auto;
+    height: 16px;
+    justify-content: center;
+  }
+  .pl-connector-line {
+    top: 50%;
+    left: 50%;
+    right: auto;
+    width: 1px;
+    height: 12px;
+    transform: translate(-50%, -50%);
+  }
+  .pl-connector-pulse { display: none; }
+  .pl-connector-arrow {
+    transform: rotate(90deg);
+  }
+  .pl-uptime { display: none; }
 }
 
 /* Decision Timeline */

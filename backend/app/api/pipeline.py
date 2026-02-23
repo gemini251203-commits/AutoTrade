@@ -124,25 +124,102 @@ def record_verdict(data: dict):
 
 @router.get("/status", response_model=PipelineStatusResponse)
 async def get_pipeline_status(
+    db: DbSession,
     current_user: CurrentUser,
 ):
     """
     获取 Pipeline 实时状态
 
-    从 core/pipeline.py 的全局 TradingPipeline 实例读取真实统计数据
+    混合数据源:
+    - DB 查询: 策略数、订单数、仓位数 (持久化, 不随重启丢失)
+    - 内存统计: 本次运行期间的流水线计数 (辅助)
     """
+    from sqlalchemy import select, func
+    from app.models.order import Order, OrderStatus
+    from app.models.position import Position, PositionStatus
+    from app.models.strategy import Strategy
+
     pipeline = _get_pipeline()
     risk_model = _get_risk_model()
 
     # 计算运行时间
     uptime = (datetime.utcnow() - _startup_time).total_seconds()
 
-    # 从 Pipeline 获取真实统计
-    stats = {}
-    is_active = False
+    # 从 Pipeline 获取内存统计 (本次运行)
+    mem_stats = {}
     if pipeline:
-        stats = pipeline.get_stats()
-        is_active = stats.get("ticks_processed", 0) > 0 or stats.get("orders_executed", 0) > 0
+        mem_stats = pipeline.get_stats()
+
+    # ===== 从 DB 获取真实持久化统计 =====
+    user_id = current_user.id
+
+    # Alpha: 活跃策略数
+    strategy_count = 0
+    try:
+        r = await db.execute(
+            select(func.count(Strategy.id)).where(
+                Strategy.user_id == user_id,
+                Strategy.is_active == True,
+            )
+        )
+        strategy_count = r.scalar() or 0
+    except Exception:
+        pass
+
+    # Portfolio/Risk/Execution: 订单统计
+    total_orders = 0
+    filled_orders = 0
+    rejected_orders = 0
+    try:
+        r = await db.execute(
+            select(func.count(Order.id)).where(Order.user_id == user_id)
+        )
+        total_orders = r.scalar() or 0
+        r2 = await db.execute(
+            select(func.count(Order.id)).where(
+                Order.user_id == user_id,
+                Order.status == OrderStatus.FILLED,
+            )
+        )
+        filled_orders = r2.scalar() or 0
+        r3 = await db.execute(
+            select(func.count(Order.id)).where(
+                Order.user_id == user_id,
+                Order.status == OrderStatus.REJECTED,
+            )
+        )
+        rejected_orders = r3.scalar() or 0
+    except Exception:
+        pass
+
+    # 仓位统计
+    open_positions = 0
+    closed_positions = 0
+    try:
+        r = await db.execute(
+            select(func.count(Position.id)).where(
+                Position.user_id == user_id,
+                Position.status == PositionStatus.OPEN,
+            )
+        )
+        open_positions = r.scalar() or 0
+        r2 = await db.execute(
+            select(func.count(Position.id)).where(
+                Position.user_id == user_id,
+                Position.status == PositionStatus.CLOSED,
+            )
+        )
+        closed_positions = r2.scalar() or 0
+    except Exception:
+        pass
+
+    # 合并统计
+    alpha_count = strategy_count + mem_stats.get("insights_generated", 0)
+    portfolio_count = total_orders  # 每个订单都经过 Portfolio 计算
+    risk_count = filled_orders + rejected_orders + mem_stats.get("risk_approved", 0) + mem_stats.get("risk_rejected", 0)
+    exec_count = filled_orders + mem_stats.get("orders_executed", 0)
+
+    is_active = total_orders > 0 or strategy_count > 0
 
     # 熔断状态
     circuit_breaker = False
@@ -153,32 +230,28 @@ async def get_pipeline_status(
     layers = []
 
     # Alpha 层
-    alpha_count = stats.get("insights_generated", 0)
-    alpha_detail = ""
+    alpha_detail = f"{strategy_count} 个活跃策略"
     if pipeline and pipeline._alphas:
         alpha_names = [a.get_name() for a in pipeline._alphas]
-        alpha_detail = f"Models: {', '.join(alpha_names)}"
+        alpha_detail += f" · Models: {', '.join(alpha_names)}"
     layers.append(LayerStatus(
         name="Alpha",
-        status="active" if is_active and alpha_count > 0 else "idle",
+        status="active" if strategy_count > 0 else "idle",
         detail=alpha_detail,
         count=alpha_count,
     ))
 
     # Portfolio 层
-    target_count = stats.get("targets_created", 0)
     portfolio_model = pipeline._portfolio if pipeline else None
     portfolio_type = type(portfolio_model).__name__ if portfolio_model else "FixedPercentModel"
     layers.append(LayerStatus(
         name="Portfolio",
-        status="active" if is_active and target_count > 0 else "idle",
-        detail=f"Model: {portfolio_type}",
-        count=target_count,
+        status="active" if is_active else "idle",
+        detail=f"Model: {portfolio_type} · {total_orders} 笔订单",
+        count=portfolio_count,
     ))
 
     # Risk 层
-    approved = stats.get("risk_approved", 0)
-    rejected = stats.get("risk_rejected", 0)
     risk_status = "active"
     if circuit_breaker:
         risk_status = "error"
@@ -187,25 +260,34 @@ async def get_pipeline_status(
     layers.append(LayerStatus(
         name="Risk",
         status=risk_status,
-        detail=f"Approved: {approved}, Rejected: {rejected}" + (" CIRCUIT BREAKER" if circuit_breaker else ""),
-        count=approved + rejected,
+        detail=f"通过: {filled_orders}, 拒绝: {rejected_orders}" + (" ⚠️ 熔断中" if circuit_breaker else ""),
+        count=risk_count,
     ))
 
     # Execution 层
-    exec_count = stats.get("orders_executed", 0)
     layers.append(LayerStatus(
         name="Execution",
-        status="active" if is_active and exec_count > 0 else "idle",
-        detail=f"Orders executed: {exec_count}",
+        status="active" if exec_count > 0 else "idle",
+        detail=f"已执行: {filled_orders} · 持仓: {open_positions} · 已平: {closed_positions}",
         count=exec_count,
     ))
+
+    combined_stats = {
+        **mem_stats,
+        "db_strategies_active": strategy_count,
+        "db_total_orders": total_orders,
+        "db_filled_orders": filled_orders,
+        "db_rejected_orders": rejected_orders,
+        "db_open_positions": open_positions,
+        "db_closed_positions": closed_positions,
+    }
 
     return PipelineStatusResponse(
         is_active=is_active,
         circuit_breaker=circuit_breaker,
         uptime_seconds=uptime,
         layers=layers,
-        stats=stats,
+        stats=combined_stats,
         recent_insights=list(reversed(_recent_insights[-20:])),
         recent_verdicts=list(reversed(_recent_verdicts[-20:])),
     )
