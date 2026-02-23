@@ -45,8 +45,8 @@ class NewsArticle(Base):
 
     # ============ 来源标识 ============
     source: Mapped[str] = mapped_column(
-        String(20),
-        comment="来源: cryptopanic / binance",
+        String(50),
+        comment="来源: cryptocompare / cryptopanic / binance",
     )
     external_id: Mapped[str] = mapped_column(
         String(100),

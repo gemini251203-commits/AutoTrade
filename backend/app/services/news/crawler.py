@@ -191,9 +191,9 @@ class NewsCrawler:
                 if len(cat) <= 5 and cat.isalpha() and cat in _KNOWN_CURRENCIES:
                     currencies.append(cat)
         
-        # 来源
+        # 来源 (截断到20字符, 数据库列限制)
         source_info = post.get("source_info", {}) or {}
-        source_name = source_info.get("name", "cryptocompare")
+        source_name = (source_info.get("name", "cryptocompare") or "cryptocompare")[:20]
         
         # CryptoCompare 没有投票数据, 统一为 0
         votes_positive = 0
