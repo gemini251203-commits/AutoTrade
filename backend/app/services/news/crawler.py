@@ -86,18 +86,41 @@ class NewsCrawler:
             return
         
         saved_count = 0
+        new_articles = []
         async with AsyncSessionLocal() as db:
             for post in raw_posts:
                 try:
                     article = await self._parse_and_save(db, post)
                     if article:
                         saved_count += 1
+                        new_articles.append(article)
                 except Exception as e:
                     logger.warning("[NewsCrawler] 解析失败: %s", e)
             
             if saved_count > 0:
                 await db.commit()
                 logger.info("[NewsCrawler] 新增 %d 条新闻", saved_count)
+            
+            # 新闻监控: 检查新文章是否匹配用户的Alert规则
+            if new_articles:
+                try:
+                    from app.services.news.monitor import NewsMonitor
+                    monitor = NewsMonitor()
+                    for article in new_articles:
+                        matched_alerts = await monitor.check_article(db, article)
+                        for alert in matched_alerts:
+                            try:
+                                await monitor.trigger_alert(
+                                    db, article, alert, user_id=alert.user_id
+                                )
+                            except Exception as e:
+                                logger.error(
+                                    "[NewsCrawler] 触发Alert失败 '%s': %s",
+                                    alert.name, e,
+                                )
+                    await db.commit()
+                except Exception as e:
+                    logger.error("[NewsCrawler] 新闻监控检查失败: %s", e)
     
     async def _fetch_cryptocompare(self) -> List[Dict[str, Any]]:
         """调用 CryptoCompare News API"""
