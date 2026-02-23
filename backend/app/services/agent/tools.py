@@ -2286,3 +2286,247 @@ async def get_market_sentiment(
 
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
+# ==================== 新闻监控规则工具 ====================
+
+
+@register_tool
+async def list_alerts(
+    db: AsyncSession,
+    user_id: int,
+) -> str:
+    """
+    查看所有新闻监控规则
+
+    返回:
+        监控规则列表 (名称、关键词、触发次数、胜率、总盈亏)
+    """
+    from app.services.news.service import get_user_alerts, _alert_to_dict
+
+    try:
+        alerts = await get_user_alerts(db, user_id=user_id)
+
+        if not alerts:
+            return json.dumps({"message": "暂无监控规则，可使用 create_alert 创建"}, ensure_ascii=False)
+
+        result = []
+        for a in alerts:
+            result.append({
+                "id": a["id"],
+                "name": a["name"],
+                "keywords": a["keywords"],
+                "action": a["action"],
+                "is_active": a["is_active"],
+                "trade_symbol": a.get("trade_symbol"),
+                "trade_side": a.get("trade_side"),
+                "triggered_count": a["triggered_count"],
+                "win_count": a["win_count"],
+                "loss_count": a["loss_count"],
+                "win_rate": a["win_rate"],
+                "total_pnl": a["total_pnl"],
+            })
+
+        return json.dumps({
+            "count": len(result),
+            "alerts": result,
+        }, ensure_ascii=False, default=str)
+
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
+@register_tool
+async def create_alert(
+    db: AsyncSession,
+    user_id: int,
+    name: str = "",
+    keywords: str = "",
+    action: str = "notify",
+    trade_symbol: str = "BTCUSDT",
+    trade_side: str = "auto",
+    trade_position_pct: float = 5.0,
+    trade_leverage: int = 5,
+    trade_stop_loss_pct: float = 2.0,
+    trade_take_profit_pct: float = 3.0,
+    news_categories: str = "",
+    currencies: str = "",
+    sentiment_filter: str = "any",
+) -> str:
+    """
+    创建新闻监控规则
+
+    参数:
+        name: 规则名称, 如 "ETF利好做多"
+        keywords: 关键词列表, 逗号分隔, 如 "ETF,BlackRock,降息"
+        action: 动作类型, notify=仅通知, trade=自动交易
+        trade_symbol: 交易对 (action=trade时生效)
+        trade_side: 交易方向, buy/sell/auto (auto=根据新闻情感自动判断)
+        trade_position_pct: 仓位比例% (1-15)
+        trade_leverage: 杠杆倍数 (1-20)
+        trade_stop_loss_pct: 止损百分比
+        trade_take_profit_pct: 止盈百分比
+        news_categories: 可选, 分类过滤, 逗号分隔 (macro/etf/regulation/exchange/whale/project)
+        currencies: 可选, 币种过滤, 逗号分隔 (BTC/ETH/SOL)
+        sentiment_filter: 情感过滤, any/positive/negative
+
+    返回:
+        创建成功的规则详情
+    """
+    from app.models.news import NewsAlert
+    from app.services.news.service import get_user_alerts, _alert_to_dict
+
+    try:
+        if not name:
+            return json.dumps({"error": "请提供规则名称 (name)"}, ensure_ascii=False)
+        if not keywords:
+            return json.dumps({"error": "请提供关键词 (keywords), 逗号分隔"}, ensure_ascii=False)
+
+        # 检查规则数量限制
+        existing = await get_user_alerts(db, user_id=user_id)
+        if len(existing) >= 20:
+            return json.dumps({"error": "监控规则已达上限 (20条)"}, ensure_ascii=False)
+
+        # 解析逗号分隔的列表
+        kw_list = [k.strip() for k in keywords.split(",") if k.strip()]
+        cat_list = [c.strip() for c in news_categories.split(",") if c.strip()] if news_categories else None
+        cur_list = [c.strip().upper() for c in currencies.split(",") if c.strip()] if currencies else None
+
+        # 验证 trade 模式参数
+        if action == "trade" and not trade_symbol:
+            return json.dumps({"error": "交易模式需要指定 trade_symbol"}, ensure_ascii=False)
+
+        alert = NewsAlert(
+            user_id=user_id,
+            name=name,
+            keywords=kw_list,
+            news_categories=cat_list,
+            currencies=cur_list,
+            sentiment_filter=sentiment_filter,
+            action=action,
+            trade_side=trade_side if action == "trade" else None,
+            trade_symbol=trade_symbol if action == "trade" else None,
+            trade_position_pct=trade_position_pct if action == "trade" else None,
+            trade_leverage=trade_leverage if action == "trade" else None,
+            trade_stop_loss_pct=trade_stop_loss_pct if action == "trade" else None,
+            trade_take_profit_pct=trade_take_profit_pct if action == "trade" else None,
+        )
+        db.add(alert)
+        await db.commit()
+        await db.refresh(alert)
+
+        result = _alert_to_dict(alert)
+        return json.dumps({
+            "message": f"监控规则 '{name}' 创建成功",
+            "alert": result,
+        }, ensure_ascii=False, default=str)
+
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
+@register_tool
+async def update_alert(
+    db: AsyncSession,
+    user_id: int,
+    alert_id: int = 0,
+    action: str = "",
+    name: str = "",
+    keywords: str = "",
+    is_active: str = "",
+    trade_side: str = "",
+    trade_symbol: str = "",
+    trade_position_pct: float = 0,
+    trade_leverage: int = 0,
+    trade_stop_loss_pct: float = 0,
+    trade_take_profit_pct: float = 0,
+) -> str:
+    """
+    修改/启停/删除新闻监控规则
+
+    参数:
+        alert_id: 规则 ID (必填)
+        action: 操作类型
+            - update: 修改规则 (默认)
+            - activate: 启用规则
+            - deactivate: 暂停规则
+            - delete: 删除规则
+        name: 新名称 (空=不修改)
+        keywords: 新关键词, 逗号分隔 (空=不修改)
+        is_active: "true"/"false" (空=不修改)
+        trade_side: buy/sell/auto (空=不修改)
+        trade_symbol: 交易对 (空=不修改)
+        trade_position_pct: 仓位比例% (0=不修改)
+        trade_leverage: 杠杆倍数 (0=不修改)
+        trade_stop_loss_pct: 止损% (0=不修改)
+        trade_take_profit_pct: 止盈% (0=不修改)
+
+    返回:
+        更新后的规则详情
+    """
+    from sqlalchemy import select as sa_select
+    from app.models.news import NewsAlert
+    from app.services.news.service import _alert_to_dict
+
+    try:
+        if alert_id <= 0:
+            return json.dumps({"error": "请提供规则 ID (alert_id)"}, ensure_ascii=False)
+
+        result = await db.execute(
+            sa_select(NewsAlert).where(
+                NewsAlert.id == alert_id,
+                NewsAlert.user_id == user_id,
+            )
+        )
+        alert = result.scalar_one_or_none()
+        if not alert:
+            return json.dumps({"error": f"规则 #{alert_id} 不存在"}, ensure_ascii=False)
+
+        # 删除操作
+        if action == "delete":
+            alert_name = alert.name
+            await db.delete(alert)
+            await db.commit()
+            return json.dumps({"message": f"规则 '{alert_name}' 已删除"}, ensure_ascii=False)
+
+        # 快捷启停
+        if action == "activate":
+            alert.is_active = True
+            await db.commit()
+            return json.dumps({"message": f"规则 '{alert.name}' 已启用"}, ensure_ascii=False)
+        if action == "deactivate":
+            alert.is_active = False
+            await db.commit()
+            return json.dumps({"message": f"规则 '{alert.name}' 已暂停"}, ensure_ascii=False)
+
+        # 逐字段更新
+        if name:
+            alert.name = name
+        if keywords:
+            alert.keywords = [k.strip() for k in keywords.split(",") if k.strip()]
+        if is_active:
+            alert.is_active = is_active.lower() == "true"
+        if trade_side:
+            alert.trade_side = trade_side
+        if trade_symbol:
+            alert.trade_symbol = trade_symbol
+        if trade_position_pct > 0:
+            alert.trade_position_pct = trade_position_pct
+        if trade_leverage > 0:
+            alert.trade_leverage = trade_leverage
+        if trade_stop_loss_pct > 0:
+            alert.trade_stop_loss_pct = trade_stop_loss_pct
+        if trade_take_profit_pct > 0:
+            alert.trade_take_profit_pct = trade_take_profit_pct
+
+        await db.commit()
+        await db.refresh(alert)
+
+        return json.dumps({
+            "message": f"规则 '{alert.name}' 已更新",
+            "alert": _alert_to_dict(alert),
+        }, ensure_ascii=False, default=str)
+
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
