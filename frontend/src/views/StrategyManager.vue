@@ -34,6 +34,7 @@ import {
   deleteStrategy,
   startStrategy,
   stopStrategy,
+  runStrategyOnce,
   getStrategyLogs,
   getTemplates,
   getMemories,
@@ -322,6 +323,20 @@ async function handleDecisionIntervalChange(strategy: StrategyResponse, newInter
     }
   } catch (e: any) {
     error.value = e.response?.data?.detail || '更新失败'
+  }
+}
+
+const runningOnce = ref<number | null>(null)
+async function handleRunOnce(strategy: StrategyResponse) {
+  runningOnce.value = strategy.id
+  try {
+    await runStrategyOnce(strategy.id)
+    await fetchDecisionLogs()
+    await fetchAll()
+  } catch (e: any) {
+    error.value = e.response?.data?.detail || '执行失败'
+  } finally {
+    runningOnce.value = null
   }
 }
 
@@ -673,6 +688,18 @@ onMounted(() => {
               
               <!-- Right: Actions -->
               <div class="flex items-center gap-2 flex-shrink-0">
+                <!-- Run Once -->
+                <button
+                  @click="handleRunOnce(s)"
+                  class="px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-all"
+                  style="background: rgba(59,130,246,0.1); color: #3b82f6; border: 1px solid rgba(59,130,246,0.2);"
+                  title="手动运行一次决策"
+                  :disabled="runningOnce === s.id"
+                >
+                  <NSpin v-if="runningOnce === s.id" :size="12" />
+                  <NIcon v-else size="14"><PlayOutline /></NIcon>
+                  {{ runningOnce === s.id ? '分析中...' : '运行一次' }}
+                </button>
                 <!-- Logs -->
                 <button
                   @click="openLogs(s)"

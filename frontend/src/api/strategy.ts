@@ -141,6 +141,12 @@ export async function stopStrategy(id: number): Promise<StrategyResponse> {
   return response.data
 }
 
+/** 手动运行一次策略决策 */
+export async function runStrategyOnce(id: number): Promise<{ message: string; reply: string }> {
+  const response = await request.post<{ message: string; reply: string }>(`/strategy/${id}/run-once`)
+  return response.data
+}
+
 /** 获取策略执行日志 */
 export async function getStrategyLogs(id: number, limit: number = 20): Promise<StrategyLogResponse[]> {
   const response = await request.get<StrategyLogResponse[]>(`/strategy/${id}/logs`, {

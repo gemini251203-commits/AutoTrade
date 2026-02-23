@@ -334,6 +334,39 @@ async def stop_strategy(
     return {"message": f"策略 '{strategy.name}' 已停止", "is_active": False}
 
 
+@router.post("/{strategy_id}/run-once")
+async def run_strategy_once(
+    strategy_id: int,
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """手动触发一次策略决策"""
+    result = await db.execute(
+        select(Strategy).where(
+            Strategy.id == strategy_id,
+            Strategy.user_id == current_user.id,
+        )
+    )
+    strategy = result.scalar_one_or_none()
+    if not strategy:
+        raise HTTPException(status_code=404, detail="策略不存在")
+    
+    from app.services.agent.autopilot import autopilot
+    try:
+        intervals = [strategy.interval]
+        reply = await autopilot._run_cycle(
+            user_id=current_user.id,
+            symbol=strategy.symbol,
+            intervals=intervals,
+        )
+        return {
+            "message": f"策略 '{strategy.name}' 已执行一次决策",
+            "reply": reply,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"决策执行失败: {str(e)}")
+
+
 @router.get("/{strategy_id}/logs", response_model=List[StrategyLogResponse])
 async def get_strategy_logs(
     strategy_id: int,
