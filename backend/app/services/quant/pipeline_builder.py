@@ -46,17 +46,26 @@ def build_pipeline_from_yaml(config: Dict[str, Any], user_id: int) -> TradingPip
             if type_ == "yaml_condition":
                 from app.services.alpha.yaml_alpha import YamlAlpha
                 
-                # 提取子策略配置
-                sub_config = dict(alpha_cfg)
-                if "name" not in sub_config:
-                    sub_config["name"] = name
-                if "symbol" not in sub_config:
-                    sub_config["symbol"] = config.get("symbol", "BTCUSDT")
-                if "interval" not in sub_config:
-                    sub_config["interval"] = config.get("interval", "1h")
+                # 提取 params 中的条件，转换为 StrategyEngine 认识的标准格式
+                params = alpha_cfg.get("params", {})
+                
+                # 构建标准策略配置（只包含 parse_yaml 白名单允许的字段）
+                std_config = {
+                    "name": name,
+                    "symbol": config.get("symbol", "BTCUSDT"),
+                    "interval": config.get("interval", "1h"),
+                    "entry": {
+                        "operator": params.get("entry_operator", "AND"),
+                        "conditions": params.get("entry_conditions", []),
+                    },
+                    "exit": {
+                        "operator": params.get("exit_operator", "OR"),
+                        "conditions": params.get("exit_conditions", []),
+                    },
+                    "risk": config.get("risk", {}),
+                }
                     
-                # 重新转回 YAML 给 YamlAlpha 使用（依赖内部 StrategyEngine 解析）
-                yaml_str = yaml.dump(sub_config)
+                yaml_str = yaml.dump(std_config, allow_unicode=True)
                 alphas.append(YamlAlpha(yaml_config=yaml_str, strategy_name=name))
                 
             elif type_ == "ai_agent":
