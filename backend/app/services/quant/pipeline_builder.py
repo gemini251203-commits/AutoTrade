@@ -40,7 +40,7 @@ def build_pipeline_from_yaml(config: Dict[str, Any], user_id: int) -> TradingPip
             if not isinstance(alpha_cfg, dict):
                 continue
                 
-            type_ = alpha_cfg.get("type", "")
+            type_ = alpha_cfg.get("type") or alpha_cfg.get("module", "")
             name = alpha_cfg.get("name", f"alpha_{idx}")
             
             if type_ == "yaml_condition":
@@ -76,7 +76,7 @@ def build_pipeline_from_yaml(config: Dict[str, Any], user_id: int) -> TradingPip
 
     # 解析 Portfolio (仓位管理层)
     portfolio_cfg = config.get("portfolio", {})
-    p_type = portfolio_cfg.get("type", "fixed_percent")
+    p_type = portfolio_cfg.get("type") or portfolio_cfg.get("module", "fixed_percent")
     portfolio_params = portfolio_cfg.get("params", {})
     
     portfolio: PortfolioModel
@@ -128,7 +128,7 @@ def build_pipeline_from_yaml(config: Dict[str, Any], user_id: int) -> TradingPip
 
     # 解析 Execution (执行层)
     exec_cfg = config.get("execution", {})
-    exec_type = exec_cfg.get("type", "market")
+    exec_type = exec_cfg.get("type") or exec_cfg.get("module", "market")
     exec_params = exec_cfg.get("params", {})
     
     execution = ExecutionModel()
