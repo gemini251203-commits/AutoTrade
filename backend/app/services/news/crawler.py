@@ -1,16 +1,17 @@
 """
 News Crawler
 ================
-CryptoPanic 新闻抓取器
+CryptoCompare 新闻抓取器
 
 职责:
-- 定时轮询 CryptoPanic API (每60秒)
+- 定时轮询 CryptoCompare News API (每5分钟)
 - 解析新闻数据并存入 news_articles 表
 - 自动去重 (external_id)
 - 调用情感分析 + AI翻译
 """
 
 import asyncio
+import hashlib
 import logging
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
@@ -28,14 +29,14 @@ from .sentiment import analyze_sentiment, translate_title, classify_category
 logger = logging.getLogger(__name__)
 
 
-# CryptoPanic API 配置
-CRYPTOPANIC_API_URL = "https://cryptopanic.com/api/developer/v2/posts/"
-POLL_INTERVAL = 60  # 秒
+# CryptoCompare News API 配置
+CRYPTOCOMPARE_NEWS_URL = "https://min-api.cryptocompare.com/data/v2/news/"
+POLL_INTERVAL = 300  # 5 分钟 (免费版 100k 请求/月, 5min 间隔 ≈ 8640/月)
 
 
 class NewsCrawler:
     """
-    CryptoPanic 新闻爬虫
+    CryptoCompare 新闻爬虫
     
     用法:
         crawler = NewsCrawler(api_key="xxx")
@@ -43,7 +44,7 @@ class NewsCrawler:
     """
     
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or getattr(settings, "cryptopanic_api_key", "")
+        self.api_key = api_key or getattr(settings, "cryptocompare_api_key", "")
         self._running = False
         self._task: Optional[asyncio.Task] = None
     
@@ -54,12 +55,12 @@ class NewsCrawler:
             return
         
         if not self.api_key:
-            logger.error("[NewsCrawler] 缺少 CryptoPanic API Key，无法启动")
+            logger.error("[NewsCrawler] 缺少 CryptoCompare API Key，无法启动")
             return
         
         self._running = True
         self._task = asyncio.create_task(self._poll_loop())
-        logger.info("[NewsCrawler] 已启动，每 %ds 轮询一次", POLL_INTERVAL)
+        logger.info("[NewsCrawler] 已启动 (CryptoCompare)，每 %ds 轮询一次", POLL_INTERVAL)
     
     async def stop(self):
         """停止抓取"""
@@ -80,7 +81,7 @@ class NewsCrawler:
     
     async def _fetch_and_save(self):
         """抓取并保存新闻"""
-        raw_posts = await self._fetch_cryptopanic()
+        raw_posts = await self._fetch_cryptocompare()
         if not raw_posts:
             return
         
@@ -98,29 +99,36 @@ class NewsCrawler:
                 await db.commit()
                 logger.info("[NewsCrawler] 新增 %d 条新闻", saved_count)
     
-    async def _fetch_cryptopanic(self) -> List[Dict[str, Any]]:
-        """调用 CryptoPanic API"""
+    async def _fetch_cryptocompare(self) -> List[Dict[str, Any]]:
+        """调用 CryptoCompare News API"""
         from app.core.network import net_manager
         
         params = {
-            "auth_token": self.api_key,
-            "kind": "news",
-            "public": "true",
+            "api_key": self.api_key,
+            "lang": "EN",
+            "sortOrder": "latest",
         }
         
         try:
             async with net_manager.get_client(timeout=15.0) as client:
-                resp = await client.get(CRYPTOPANIC_API_URL, params=params)
+                resp = await client.get(CRYPTOCOMPARE_NEWS_URL, params=params)
                 if resp.status_code != 200:
                     logger.error(
-                        "[NewsCrawler] API 返回 %d: %s",
+                        "[NewsCrawler] CryptoCompare API 返回 %d: %s",
                         resp.status_code,
                         resp.text[:200],
                     )
                     return []
                 
                 data = resp.json()
-                results = data.get("results", [])
+                
+                # CryptoCompare 返回格式: {"Type": 100, "Data": [...]}
+                if data.get("Type") != 100:
+                    msg = data.get("Message", "Unknown error")
+                    logger.error("[NewsCrawler] CryptoCompare API 错误: %s", msg)
+                    return []
+                
+                results = data.get("Data", [])
                 logger.debug("[NewsCrawler] 获取 %d 条原始新闻", len(results))
                 return results
                 
@@ -134,15 +142,14 @@ class NewsCrawler:
         post: Dict[str, Any],
     ) -> Optional[NewsArticle]:
         """解析单条新闻并保存 (去重)"""
-        # v2 API 可能没有 id 字段，用 title+published_at 生成唯一 ID
-        import hashlib
+        # CryptoCompare 的 id 字段
         raw_id = post.get("id")
         if raw_id:
             external_id = str(raw_id)
         else:
-            # 用 title + published_at 的 hash 作为 external_id
+            # 备用: 用 title + published_on 的 hash
             title_raw = post.get("title", "")
-            pub = post.get("published_at", "")
+            pub = str(post.get("published_on", ""))
             hash_input = f"{title_raw}|{pub}"
             external_id = hashlib.md5(hash_input.encode()).hexdigest()
         
@@ -163,60 +170,46 @@ class NewsCrawler:
         if not title:
             return None
         
-        # url: v2 可能没有, 用 CryptoPanic 搜索链接
-        url = post.get("url") or post.get("source_url") or ""
-        if not url and title:
-            url = f"https://cryptopanic.com/news/click/{external_id[:8]}/"
+        # URL
+        url = post.get("url") or post.get("guid") or ""
         
-        published_str = post.get("published_at", "")
-        
-        # 解析发布时间 (去除时区信息，统一存 UTC naive datetime)
+        # 发布时间 (CryptoCompare 用 Unix 时间戳)
+        published_on = post.get("published_on", 0)
         try:
-            dt = datetime.fromisoformat(
-                published_str.replace("Z", "+00:00")
-            )
-            # 转换为 UTC 并去除 timezone info
-            if dt.tzinfo is not None:
-                dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
-            published_at = dt
-        except (ValueError, AttributeError):
+            published_at = datetime.fromtimestamp(published_on, tz=timezone.utc).replace(tzinfo=None)
+        except (ValueError, OSError):
             published_at = datetime.utcnow()
         
-        # 提取关联币种 (v2 可能没有 currencies 字段)
+        # 提取关联币种 (CryptoCompare 的 categories 字段包含币种)
         currencies = []
-        for curr in post.get("currencies", []) or []:
-            if isinstance(curr, dict):
-                code = curr.get("code", "")
-            else:
-                code = str(curr)
-            if code:
-                currencies.append(code)
+        categories_str = post.get("categories", "")
+        if categories_str:
+            # CryptoCompare categories 格式: "BTC|ETH|Trading|Technology"
+            for cat in categories_str.split("|"):
+                cat = cat.strip().upper()
+                # 常见加密货币代码 (3-5 字符全大写)
+                if len(cat) <= 5 and cat.isalpha() and cat in _KNOWN_CURRENCIES:
+                    currencies.append(cat)
         
-        # CryptoPanic 投票数据 (v2 可能没有)
-        votes = post.get("votes") or {}
-        votes_positive = (
-            votes.get("positive", 0)
-            + votes.get("important", 0)
-            + votes.get("liked", 0)
-            + votes.get("saved", 0)
-        )
-        votes_negative = (
-            votes.get("negative", 0)
-            + votes.get("disliked", 0)
-            + votes.get("toxic", 0)
-        )
+        # 来源
+        source_info = post.get("source_info", {}) or {}
+        source_name = source_info.get("name", "cryptocompare")
         
-        # 情感分析
+        # CryptoCompare 没有投票数据, 统一为 0
+        votes_positive = 0
+        votes_negative = 0
+        
+        # 情感分析 (无投票时会走关键词分析)
         sentiment, sentiment_score = analyze_sentiment(
             title, votes_positive, votes_negative
         )
         
-        # AI 翻译标题 + 分类 (仅在 DeepSeek API Key 配置时)
+        # AI 翻译标题 (仅在 DeepSeek API Key 配置时)
         title_zh = None
         if settings.deepseek_api_key:
             title_zh = await translate_title(title)
         
-        # 分类 (优先关键词匹配，无需 AI)
+        # 分类 (关键词匹配, 无需 AI)
         news_category = await classify_category(title)
         
         # 判断重要性
@@ -226,7 +219,7 @@ class NewsCrawler:
         
         # 创建记录
         article = NewsArticle(
-            source="cryptopanic",
+            source=source_name,
             external_id=external_id,
             title=title,
             title_zh=title_zh,
@@ -270,9 +263,21 @@ class NewsCrawler:
         if news_category == "regulation":
             return "high" if total_votes >= 5 else "medium"
         
-        # 根据投票判断
+        # 根据投票判断 (CryptoCompare 没投票, 默认 low/medium)
         if total_votes >= 10:
             return "high"
         if total_votes >= 3:
             return "medium"
         return "low"
+
+
+# 常见加密货币代码 (用于从 CryptoCompare categories 提取币种)
+_KNOWN_CURRENCIES = {
+    "BTC", "ETH", "BNB", "SOL", "XRP", "ADA", "DOGE", "AVAX",
+    "DOT", "LINK", "MATIC", "UNI", "ATOM", "LTC", "FIL",
+    "APT", "ARB", "OP", "SUI", "SEI", "TIA", "NEAR",
+    "SHIB", "PEPE", "BONK", "WIF", "MEME",
+    "USDT", "USDC", "DAI", "BUSD",
+    "AAVE", "MKR", "CRV", "SNX", "COMP",
+    "FTM", "ALGO", "XLM", "VET", "EOS", "TRX", "HBAR",
+}

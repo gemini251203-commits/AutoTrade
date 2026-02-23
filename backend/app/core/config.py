@@ -60,7 +60,8 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     
     # 新闻模块
-    cryptopanic_api_key: str = ""  # CryptoPanic API Key
+    cryptopanic_api_key: str = ""  # CryptoPanic API Key (legacy)
+    cryptocompare_api_key: str = ""  # CryptoCompare API Key (推荐)
     
     # 深度回填配置
     deep_backfill_enabled: bool = True       # 是否启用深度回填

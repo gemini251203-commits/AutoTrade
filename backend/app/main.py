@@ -77,15 +77,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Autopilot scheduler skipped: {e}")
     
-    # 启动新闻爬虫
+    # 启动新闻爬虫 (优先 CryptoCompare, 备用 CryptoPanic)
     news_crawler = None
-    if settings.cryptopanic_api_key:
+    _news_api_key = settings.cryptocompare_api_key or settings.cryptopanic_api_key
+    if _news_api_key:
         from app.services.news.crawler import NewsCrawler
-        news_crawler = NewsCrawler(api_key=settings.cryptopanic_api_key)
+        news_crawler = NewsCrawler(api_key=_news_api_key)
         await news_crawler.start()
-        logger.info("News Crawler started")
+        logger.info("News Crawler started (CryptoCompare)")
     else:
-        logger.warning("CRYPTOPANIC_API_KEY not set, News Crawler disabled")
+        logger.warning("CRYPTOCOMPARE_API_KEY not set, News Crawler disabled")
     
     # 启动趋势分析定时调度器 (每日自动分析)
     try:
