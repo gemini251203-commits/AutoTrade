@@ -31,10 +31,14 @@ import {
   deleteConversation,
   getMessages,
   sendMessage,
+  startAutopilot,
+  stopAutopilot,
+  getAutopilotStatus,
 
   type Conversation,
   type ChatMessage,
   type SSEEvent,
+  type AutopilotStatus,
 } from '@/api/chat'
 import { useAuthStore } from '@/stores/auth'
 
@@ -65,6 +69,11 @@ const mobileShowSidebar = ref(false)
 // SSE 控制器
 let abortController: AbortController | null = null
 
+// AI 主理人 (Autopilot)
+const autopilotStatus = ref<AutopilotStatus | null>(null)
+const autopilotLoading = ref(false)
+let autopilotPollTimer: ReturnType<typeof setInterval> | null = null
+
 
 
 // ==================== Computed ====================
@@ -84,6 +93,9 @@ const displayMessages = computed(() => {
 
 onMounted(async () => {
   await loadConversations()
+  await pollAutopilotStatus()
+  // 每 10 秒检查一次状态
+  autopilotPollTimer = setInterval(pollAutopilotStatus, 10000)
 })
 
 // 自动滚动到底部
@@ -94,6 +106,39 @@ watch(
   },
 )
 
+
+
+// ==================== Autopilot ====================
+
+async function pollAutopilotStatus() {
+  try {
+    autopilotStatus.value = await getAutopilotStatus()
+  } catch (e) {
+    // silent
+  }
+}
+
+async function toggleAutopilot() {
+  autopilotLoading.value = true
+  try {
+    if (autopilotStatus.value?.running) {
+      await stopAutopilot()
+      message.success('AI 主理人已停止')
+    } else {
+      await startAutopilot({
+        symbols: ['BTCUSDT'],
+        interval: '15m',
+        intervals: ['15m'],
+      })
+      message.success('AI 主理人已启动')
+    }
+    await pollAutopilotStatus()
+  } catch (e: any) {
+    message.error(e.response?.data?.detail || '操作失败')
+  } finally {
+    autopilotLoading.value = false
+  }
+}
 
 
 // ==================== API Methods ====================
@@ -361,6 +406,23 @@ function formatTime(iso: string): string {
           </div>
           <div class="header-spacer" v-else></div>
 
+          <!-- AI 主理人开关 -->
+          <div class="autopilot-toggle">
+            <button
+              :class="['autopilot-btn', { running: autopilotStatus?.running }]"
+              @click="toggleAutopilot"
+              :disabled="autopilotLoading"
+            >
+              <span class="autopilot-dot" :class="{ active: autopilotStatus?.running }"></span>
+              <span v-if="autopilotLoading">加载中...</span>
+              <span v-else-if="autopilotStatus?.running">主理人运行中</span>
+              <span v-else>启动 AI 主理人</span>
+            </button>
+            <div v-if="autopilotStatus?.running" class="autopilot-info">
+              <span>已运行 {{ autopilotStatus.total_cycles }} 轮</span>
+              <span>执行 {{ autopilotStatus.actions_taken }} 次交易</span>
+            </div>
+          </div>
         </div>
 
         <!-- 空状态 -->
@@ -721,6 +783,75 @@ function renderMarkdown(text: string): string {
   font-weight: 600;
   font-size: 14px;
   color: #e0e0e0;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Autopilot Toggle */
+.autopilot-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.autopilot-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #aaa;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.autopilot-btn:hover {
+  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(139, 92, 246, 0.08);
+  color: #d8b4fe;
+}
+.autopilot-btn.running {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.08);
+  color: #10b981;
+}
+.autopilot-btn.running:hover {
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+}
+.autopilot-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.autopilot-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #555;
+  transition: all 0.3s;
+}
+.autopilot-dot.active {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+  animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 4px rgba(16, 185, 129, 0.4); }
+  50% { box-shadow: 0 0 12px rgba(16, 185, 129, 0.8); }
+}
+.autopilot-info {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: #10b981;
+  opacity: 0.8;
 }
 
 /* ==================== Messages ==================== */
