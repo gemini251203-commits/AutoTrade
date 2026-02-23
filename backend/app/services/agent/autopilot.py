@@ -761,6 +761,12 @@ class AgentAutopilot:
                     strategy_name=active_strategy_name,
                 )
                 db.add(log)
+
+                # 更新策略的上次运行时间和信号
+                if matched_strat:
+                    matched_strat.last_run_at = datetime.utcnow()
+                    matched_strat.last_signal = decision.value
+
                 await db.commit()
 
                 # 更新统计
