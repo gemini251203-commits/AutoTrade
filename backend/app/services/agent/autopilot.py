@@ -616,7 +616,7 @@ class AgentAutopilot:
                                     f"\n=== 策略: {strat.name} (ID={strat.id}, 周期={strat.interval}) ===\n"
                                     f"```yaml\n{strat.config_yaml}\n```"
                                 )
-                            strategy_text += "\n\n用户定义的策略详细配置 (你必须严格遵守以下规则):\n" + "\n".join(strategy_configs)
+                            strategy_text += "\n\n用户定义的策略详细配置 (供参考):\n" + "\n".join(strategy_configs)
                 except Exception as e:
                     logger.warning(f"[Autopilot] Strategy evaluation failed: {e}")
 
@@ -694,23 +694,18 @@ class AgentAutopilot:
                 now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
                 prompt = (
                     f"[Autopilot {now}] "
-                    f"请严格按照用户定义的策略规则分析 {symbol} 并做出交易决策。\n\n"
-                    f"⚠ 核心规则: 你的决策必须完全基于策略中定义的开仓/平仓条件。\n"
-                    f"如果策略是做空策略，你只能做空或观望，不得做多。\n"
-                    f"如果策略条件未满足，你必须选择观望。\n\n"
+                    f"请分析 {symbol} 当前市场状况并做出交易决策。\n\n"
                     f"{indicator_text}\n"
                     f"{strategy_text}\n"
                     f"{trend_text}\n"
                     f"{funding_text}\n"
                     f"{memory_text}\n\n"
                     f"请按以下步骤操作:\n"
-                    f"1. 查看上方策略配置中的开仓/平仓条件\n"
-                    f"2. 对照当前技术指标，逐条检查策略条件是否满足\n"
-                    f"3. 只有当策略条件满足时才执行对应的交易操作\n"
-                    f"4. 如果条件不满足，必须选择观望\n"
-                    f"5. 如果决定交易, 直接执行 (使用 run_strategy 工具以关联策略)\n\n"
+                    f"1. 参考上方策略配置、技术指标、趋势分析和交易记忆\n"
+                    f"2. 综合分析当前市场状况\n"
+                    f"3. 给出决策: 开仓/平仓/观望, 并说明理由\n"
+                    f"4. 如果决定交易, 直接执行 (使用 run_strategy 工具以关联策略)\n\n"
                     f"回复要简洁, 列出关键数据和理由。\n"
-                    f"说明你检查了哪些策略条件，哪些满足/不满足。\n"
                     f"最后一行请明确写出你的决策: 观望/开多/开空/平多/平空"
                 )
 
