@@ -2530,3 +2530,375 @@ async def update_alert(
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
+
+# ==================== 新闻-市场关联分析工具 ====================
+
+
+@register_tool
+async def analyze_news_impact(
+    db: AsyncSession,
+    user_id: int,
+    symbol: str = "BTCUSDT",
+    days: int = 30,
+    window_hours: str = "1,4,24",
+) -> str:
+    """
+    分析新闻对市场的影响 — 发现新闻-价格关联规律
+
+    对过去N天的新闻，计算新闻发布后的价格变化，按分类/情感分组统计，
+    找出"哪类新闻发生后市场如何反应"的规律。
+
+    参数:
+        symbol: 交易对 (默认 BTCUSDT)
+        days: 回看天数 (默认30, 最大90)
+        window_hours: 观察窗口, 逗号分隔 (默认 "1,4,24" 表示1h/4h/24h后的涨跌)
+
+    返回:
+        各分类/情感组合下的平均涨跌幅、胜率、样本数, 以及发现的规律总结
+    """
+    from sqlalchemy import select as sa_select, and_
+    from app.models.news import NewsArticle
+    from app.models.market import Kline
+    from datetime import datetime, timedelta
+
+    try:
+        days = min(days, 90)
+        windows = [int(h.strip()) for h in window_hours.split(",") if h.strip()]
+        if not windows:
+            windows = [1, 4, 24]
+
+        cutoff = datetime.utcnow() - timedelta(days=days)
+
+        # 1. 查询有 currency 标签的新闻
+        news_result = await db.execute(
+            sa_select(NewsArticle).where(
+                NewsArticle.published_at >= cutoff,
+            ).order_by(NewsArticle.published_at.desc()).limit(500)
+        )
+        articles = news_result.scalars().all()
+
+        if not articles:
+            return json.dumps({
+                "message": f"过去 {days} 天没有新闻数据，无法分析",
+            }, ensure_ascii=False)
+
+        # 2. 对每条新闻，获取发布时 + 各窗口后的价格
+        base_symbol = symbol.upper()
+        impact_records = []
+
+        for article in articles:
+            pub_ts = int(article.published_at.timestamp() * 1000)
+
+            # 获取新闻发布时的1h K线 (作为基准价)
+            base_kline = await db.execute(
+                sa_select(Kline).where(
+                    and_(
+                        Kline.symbol == base_symbol,
+                        Kline.interval == "1h",
+                        Kline.open_time <= pub_ts,
+                    )
+                ).order_by(Kline.open_time.desc()).limit(1)
+            )
+            base_k = base_kline.scalar_one_or_none()
+            if not base_k:
+                continue
+
+            base_price = float(base_k.close)
+            if base_price <= 0:
+                continue
+
+            # 各窗口后的价格变化
+            changes = {}
+            for w in windows:
+                target_ts = pub_ts + w * 3600 * 1000
+                future_kline = await db.execute(
+                    sa_select(Kline).where(
+                        and_(
+                            Kline.symbol == base_symbol,
+                            Kline.interval == "1h",
+                            Kline.open_time <= target_ts,
+                        )
+                    ).order_by(Kline.open_time.desc()).limit(1)
+                )
+                future_k = future_kline.scalar_one_or_none()
+                if future_k:
+                    future_price = float(future_k.close)
+                    pct_change = ((future_price - base_price) / base_price) * 100
+                    changes[f"{w}h"] = round(pct_change, 3)
+
+            if not changes:
+                continue
+
+            impact_records.append({
+                "title": article.title[:60],
+                "category": article.news_category or "other",
+                "sentiment": article.sentiment or "neutral",
+                "importance": article.importance or "low",
+                "published_at": str(article.published_at),
+                "base_price": base_price,
+                "changes": changes,
+            })
+
+        if not impact_records:
+            return json.dumps({
+                "message": f"有 {len(articles)} 条新闻但无法匹配到 {base_symbol} K线数据",
+            }, ensure_ascii=False)
+
+        # 3. 按 (category, sentiment) 分组统计
+        from collections import defaultdict
+        groups = defaultdict(list)
+        for rec in impact_records:
+            key = f"{rec['category']}|{rec['sentiment']}"
+            groups[key].append(rec)
+
+        # 4. 计算统计指标
+        group_stats = []
+        for key, records in groups.items():
+            category, sentiment = key.split("|")
+            sample_count = len(records)
+            if sample_count < 2:
+                continue
+
+            stats_entry = {
+                "category": category,
+                "sentiment": sentiment,
+                "sample_count": sample_count,
+            }
+
+            for w in windows:
+                w_key = f"{w}h"
+                changes_in_window = [r["changes"].get(w_key) for r in records if w_key in r["changes"]]
+                if not changes_in_window:
+                    continue
+
+                avg_change = sum(changes_in_window) / len(changes_in_window)
+                positive_count = sum(1 for c in changes_in_window if c > 0)
+                win_rate = positive_count / len(changes_in_window) * 100
+                max_up = max(changes_in_window)
+                max_down = min(changes_in_window)
+
+                stats_entry[f"{w_key}_avg_change"] = round(avg_change, 3)
+                stats_entry[f"{w_key}_win_rate"] = round(win_rate, 1)
+                stats_entry[f"{w_key}_max_up"] = round(max_up, 2)
+                stats_entry[f"{w_key}_max_down"] = round(max_down, 2)
+                stats_entry[f"{w_key}_samples"] = len(changes_in_window)
+
+            group_stats.append(stats_entry)
+
+        # 按 4h 平均涨幅排序
+        sort_key = "4h_avg_change" if "4h" in windows else f"{windows[0]}h_avg_change"
+        group_stats.sort(key=lambda x: abs(x.get(sort_key, 0)), reverse=True)
+
+        # 5. 发现规律 (显著模式)
+        patterns = []
+        for s in group_stats:
+            for w in windows:
+                w_key = f"{w}h"
+                avg = s.get(f"{w_key}_avg_change", 0)
+                wr = s.get(f"{w_key}_win_rate", 50)
+                samples = s.get(f"{w_key}_samples", 0)
+                if samples < 3:
+                    continue
+
+                if avg > 0.5 and wr >= 60:
+                    patterns.append({
+                        "rule": f"{s['category']}类 + {s['sentiment']}情感 → {w}h后平均涨{avg:.2f}%",
+                        "direction": "做多",
+                        "avg_change": avg,
+                        "win_rate": wr,
+                        "confidence": "高" if (samples >= 5 and wr >= 70) else "中",
+                        "category": s["category"],
+                        "sentiment": s["sentiment"],
+                        "window": w,
+                        "samples": samples,
+                    })
+                elif avg < -0.5 and wr <= 40:
+                    real_wr = 100 - wr  # 做空胜率
+                    patterns.append({
+                        "rule": f"{s['category']}类 + {s['sentiment']}情感 → {w}h后平均跌{abs(avg):.2f}%",
+                        "direction": "做空",
+                        "avg_change": avg,
+                        "win_rate": real_wr,
+                        "confidence": "高" if (samples >= 5 and real_wr >= 70) else "中",
+                        "category": s["category"],
+                        "sentiment": s["sentiment"],
+                        "window": w,
+                        "samples": samples,
+                    })
+
+        patterns.sort(key=lambda x: abs(x["avg_change"]), reverse=True)
+
+        return json.dumps({
+            "symbol": base_symbol,
+            "analysis_period": f"过去{days}天",
+            "total_news": len(articles),
+            "matched_news": len(impact_records),
+            "windows": [f"{w}h" for w in windows],
+            "group_stats": group_stats[:15],
+            "discovered_patterns": patterns[:10],
+            "hint": "使用 auto_generate_alerts 可将发现的规律自动创建为监控规则",
+        }, ensure_ascii=False, default=str)
+
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
+@register_tool
+async def auto_generate_alerts(
+    db: AsyncSession,
+    user_id: int,
+    symbol: str = "BTCUSDT",
+    days: int = 30,
+    min_win_rate: float = 60.0,
+    min_samples: int = 3,
+    action: str = "notify",
+    trade_position_pct: float = 5.0,
+    trade_leverage: int = 3,
+    trade_stop_loss_pct: float = 2.0,
+    trade_take_profit_pct: float = 4.0,
+) -> str:
+    """
+    根据历史新闻-市场关联分析, 自动生成监控规则
+
+    先运行 analyze_news_impact 发现规律, 然后对胜率超过阈值的模式自动创建 Alert。
+
+    参数:
+        symbol: 交易对 (默认 BTCUSDT)
+        days: 分析回看天数 (默认30)
+        min_win_rate: 最低胜率阈值% (默认60, 低于此值不创建)
+        min_samples: 最少样本数 (默认3)
+        action: 规则动作, notify=仅通知, trade=自动交易
+        trade_position_pct: 仓位% (action=trade时)
+        trade_leverage: 杠杆 (action=trade时)
+        trade_stop_loss_pct: 止损% (action=trade时)
+        trade_take_profit_pct: 止盈% (action=trade时)
+
+    返回:
+        自动创建的规则列表
+    """
+    from app.models.news import NewsAlert
+    from app.services.news.service import get_user_alerts
+
+    try:
+        # 1. 先运行分析
+        analysis_result = await analyze_news_impact(
+            db=db,
+            user_id=user_id,
+            symbol=symbol,
+            days=days,
+            window_hours="1,4,24",
+        )
+        analysis = json.loads(analysis_result)
+
+        if "error" in analysis:
+            return json.dumps({"error": analysis["error"]}, ensure_ascii=False)
+
+        patterns = analysis.get("discovered_patterns", [])
+        if not patterns:
+            return json.dumps({
+                "message": f"过去{days}天未发现显著的新闻-市场关联规律 (需要更多数据)",
+                "total_news_analyzed": analysis.get("total_news", 0),
+            }, ensure_ascii=False)
+
+        # 2. 检查已有规则数量
+        existing = await get_user_alerts(db, user_id=user_id)
+        remaining_slots = 20 - len(existing)
+        if remaining_slots <= 0:
+            return json.dumps({"error": "监控规则已达上限(20条), 请先删除旧规则"}, ensure_ascii=False)
+
+        # 3. 按规则生成 Alert
+        # 分类到关键词的映射
+        category_keywords = {
+            "macro": ["fed", "rate cut", "rate hike", "inflation", "CPI", "GDP", "FOMC", "联储", "降息", "加息"],
+            "etf": ["ETF", "BlackRock", "Grayscale", "Fidelity", "inflow", "outflow", "spot ETF"],
+            "regulation": ["SEC", "regulation", "lawsuit", "compliance", "ban", "license", "监管"],
+            "exchange": ["Binance", "Coinbase", "listing", "delist", "exchange", "上币"],
+            "whale": ["whale", "transfer", "wallet", "dormant", "accumulation", "巨鲸"],
+            "project": ["upgrade", "fork", "mainnet", "partnership", "hack", "exploit", "airdrop"],
+        }
+
+        created_alerts = []
+        for pattern in patterns:
+            if len(created_alerts) >= remaining_slots:
+                break
+
+            win_rate = pattern.get("win_rate", 0)
+            samples = pattern.get("samples", 0)
+
+            if win_rate < min_win_rate or samples < min_samples:
+                continue
+
+            category = pattern["category"]
+            sentiment = pattern["sentiment"]
+            direction = pattern["direction"]
+            avg_change = pattern["avg_change"]
+            window = pattern.get("window", 4)
+
+            # 生成规则名
+            cat_zh = {
+                "macro": "宏观", "etf": "ETF", "regulation": "监管",
+                "exchange": "交易所", "whale": "巨鲸", "project": "项目",
+            }.get(category, category)
+            sent_zh = {"positive": "利好", "negative": "利空", "neutral": "中性"}.get(sentiment, sentiment)
+
+            name = f"[AI发现] {cat_zh}{sent_zh}→{direction} ({win_rate:.0f}%胜率)"
+
+            # 检查是否已存在同名规则
+            if any(e.get("name") == name for e in existing):
+                continue
+
+            # 获取关键词
+            keywords = category_keywords.get(category, [category])
+
+            # 根据方向设置交易方向
+            trade_side = "buy" if direction == "做多" else "sell"
+            sentiment_filter = sentiment if sentiment != "neutral" else "any"
+
+            alert = NewsAlert(
+                user_id=user_id,
+                name=name,
+                keywords=keywords,
+                news_categories=[category] if category != "other" else None,
+                currencies=None,
+                sentiment_filter=sentiment_filter,
+                action=action,
+                trade_side=trade_side if action == "trade" else None,
+                trade_symbol=symbol if action == "trade" else None,
+                trade_position_pct=trade_position_pct if action == "trade" else None,
+                trade_leverage=trade_leverage if action == "trade" else None,
+                trade_stop_loss_pct=trade_stop_loss_pct if action == "trade" else None,
+                trade_take_profit_pct=trade_take_profit_pct if action == "trade" else None,
+            )
+            db.add(alert)
+            await db.flush()
+
+            created_alerts.append({
+                "id": alert.id,
+                "name": name,
+                "category": category,
+                "sentiment": sentiment,
+                "direction": direction,
+                "avg_change": f"{avg_change:+.2f}%",
+                "win_rate": f"{win_rate:.0f}%",
+                "samples": samples,
+                "keywords": keywords[:5],
+                "action": action,
+            })
+
+        if created_alerts:
+            await db.commit()
+
+        return json.dumps({
+            "message": f"基于过去{days}天分析, 自动创建了 {len(created_alerts)} 条监控规则",
+            "analysis_summary": {
+                "total_news": analysis.get("total_news", 0),
+                "matched_news": analysis.get("matched_news", 0),
+                "patterns_found": len(patterns),
+                "rules_created": len(created_alerts),
+            },
+            "created_alerts": created_alerts,
+            "skipped_reason": f"跳过胜率<{min_win_rate}%或样本<{min_samples}的模式" if len(patterns) > len(created_alerts) else None,
+        }, ensure_ascii=False, default=str)
+
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
