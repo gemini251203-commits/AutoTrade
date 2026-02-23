@@ -49,7 +49,12 @@ def _parse_tool_args(args_str: str) -> Dict[str, str]:
         pair = pair.strip()
         if "=" in pair:
             key, value = pair.split("=", 1)
-            params[key.strip()] = value.strip()
+            value = value.strip()
+            # AI 经常在值两端加引号, 去掉它们
+            if (value.startswith('"') and value.endswith('"')) or \
+               (value.startswith("'") and value.endswith("'")):
+                value = value[1:-1]
+            params[key.strip()] = value
     return params
 
 
