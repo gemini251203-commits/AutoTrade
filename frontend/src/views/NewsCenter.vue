@@ -42,8 +42,9 @@ const filterCurrency = ref<string | null>(null)
 const filterCategory = ref<string>('')
 const filterKeyword = ref('')
 
-// 创建 Alert 弹窗
+// 创建/编辑 Alert 弹窗
 const showCreateAlert = ref(false)
+const editingAlertId = ref<number | null>(null)
 const alertForm = ref({
   name: '',
   keywords: '',
@@ -59,6 +60,36 @@ const alertForm = ref({
   trade_take_profit_pct: 9,
 })
 const alertSaving = ref(false)
+
+function resetAlertForm() {
+  editingAlertId.value = null
+  alertForm.value = {
+    name: '', keywords: '', currencies: '',
+    news_categories: [], sentiment_filter: 'any', action: 'notify',
+    trade_side: 'buy', trade_symbol: 'BTCUSDT',
+    trade_position_pct: 10, trade_leverage: 5,
+    trade_stop_loss_pct: 3, trade_take_profit_pct: 9,
+  }
+}
+
+function onEditAlert(alert: NewsAlert) {
+  editingAlertId.value = alert.id
+  alertForm.value = {
+    name: alert.name,
+    keywords: (alert.keywords || []).join(', '),
+    currencies: (alert.currencies || []).join(', '),
+    news_categories: alert.news_categories || [],
+    sentiment_filter: alert.sentiment_filter || 'any',
+    action: alert.action || 'notify',
+    trade_side: alert.trade_side || 'buy',
+    trade_symbol: alert.trade_symbol || 'BTCUSDT',
+    trade_position_pct: alert.trade_position_pct || 10,
+    trade_leverage: alert.trade_leverage || 5,
+    trade_stop_loss_pct: alert.trade_stop_loss_pct || 3,
+    trade_take_profit_pct: alert.trade_take_profit_pct || 9,
+  }
+  showCreateAlert.value = true
+}
 
 // ==================== 分类/情感配置 ====================
 const categoryOptions = [
@@ -140,7 +171,7 @@ async function loadStats() {
 }
 
 // ==================== 监控规则操作 ====================
-async function onCreateAlert() {
+async function onSaveAlert() {
   if (!alertForm.value.name || !alertForm.value.keywords) {
     message.warning('请填写规则名称和关键词')
     return
@@ -152,7 +183,7 @@ async function onCreateAlert() {
       ? alertForm.value.currencies.split(',').map(c => c.trim().toUpperCase()).filter(Boolean)
       : undefined
 
-    await createNewsAlert({
+    const payload = {
       name: alertForm.value.name,
       keywords,
       currencies,
@@ -168,12 +199,20 @@ async function onCreateAlert() {
         trade_stop_loss_pct: alertForm.value.trade_stop_loss_pct,
         trade_take_profit_pct: alertForm.value.trade_take_profit_pct,
       } : {}),
-    })
-    message.success('监控规则已创建')
+    }
+
+    if (editingAlertId.value) {
+      await updateNewsAlert(editingAlertId.value, payload)
+      message.success('监控规则已更新')
+    } else {
+      await createNewsAlert(payload)
+      message.success('监控规则已创建')
+    }
     showCreateAlert.value = false
+    resetAlertForm()
     await loadAlerts()
   } catch (e: any) {
-    message.error(e.response?.data?.detail || '创建失败')
+    message.error(e.response?.data?.detail || '保存失败')
   } finally {
     alertSaving.value = false
   }
@@ -393,7 +432,7 @@ onMounted(loadAll)
         <!-- 监控规则 -->
         <n-card title="监控规则" class="alerts-card">
           <template #header-extra>
-            <n-button size="small" type="primary" @click="showCreateAlert = true">
+            <n-button size="small" type="primary" @click="resetAlertForm(); showCreateAlert = true">
               + 新建
             </n-button>
           </template>
@@ -421,6 +460,28 @@ onMounted(loadAll)
               <div class="alert-keywords">
                 <n-tag v-for="kw in (alert.keywords || [])" :key="kw" size="tiny" :bordered="false">{{ kw }}</n-tag>
               </div>
+              <!-- 交易详情 -->
+              <div v-if="alert.action === 'trade'" class="alert-trade-detail">
+                <n-tag size="tiny" :type="alert.trade_side === 'buy' ? 'success' : alert.trade_side === 'sell' ? 'error' : 'info'">
+                  {{ alert.trade_side === 'buy' ? '做多' : alert.trade_side === 'sell' ? '做空' : '自动' }}
+                </n-tag>
+                <span>{{ alert.trade_symbol || 'BTCUSDT' }}</span>
+                <span>{{ alert.trade_leverage || 5 }}x</span>
+                <span>仓{{ alert.trade_position_pct || 5 }}%</span>
+                <span>损{{ alert.trade_stop_loss_pct || 2 }}%</span>
+                <span>盈{{ alert.trade_take_profit_pct || 3 }}%</span>
+              </div>
+              <div v-else class="alert-trade-detail">
+                <n-tag size="tiny" type="default">仅通知</n-tag>
+              </div>
+              <!-- 分类/情感过滤 -->
+              <div v-if="(alert.news_categories && alert.news_categories.length > 0) || (alert.sentiment_filter && alert.sentiment_filter !== 'any')" class="alert-filters">
+                <n-tag v-for="c in (alert.news_categories || [])" :key="c" size="tiny" :bordered="false" class="cat-tag">{{ categoryMap[c] || c }}</n-tag>
+                <n-tag v-if="alert.sentiment_filter && alert.sentiment_filter !== 'any'" size="tiny" :bordered="false"
+                  :color="{ color: sentimentColor[alert.sentiment_filter] + '20', textColor: sentimentColor[alert.sentiment_filter] }">
+                  {{ alert.sentiment_filter === 'positive' ? '仅看多' : '仅看空' }}
+                </n-tag>
+              </div>
               <div class="alert-stats">
                 <span>触发 {{ alert.triggered_count }}次</span>
                 <span v-if="alert.action === 'trade'" :style="{ color: alert.total_pnl >= 0 ? '#10b981' : '#ef4444' }">
@@ -428,6 +489,7 @@ onMounted(loadAll)
                 </span>
               </div>
               <div class="alert-actions">
+                <n-button size="tiny" @click="onEditAlert(alert)">编辑</n-button>
                 <n-button
                   size="tiny"
                   :type="alert.is_reliable ? 'default' : 'warning'"
@@ -483,7 +545,7 @@ onMounted(loadAll)
     </div>
 
     <!-- 创建监控规则弹窗 -->
-    <n-modal v-model:show="showCreateAlert" preset="card" title="新建监控规则" style="width: 560px">
+    <n-modal v-model:show="showCreateAlert" preset="card" :title="editingAlertId ? '编辑监控规则' : '新建监控规则'" style="width: 560px" @after-leave="resetAlertForm">
       <n-form label-placement="left" label-width="100" :model="alertForm">
         <n-form-item label="规则名称">
           <n-input v-model:value="alertForm.name" placeholder="如: 美联储降息做多" />
@@ -545,7 +607,9 @@ onMounted(loadAll)
       <template #footer>
         <n-space justify="end">
           <n-button @click="showCreateAlert = false">取消</n-button>
-          <n-button type="primary" @click="onCreateAlert" :loading="alertSaving">创建</n-button>
+          <n-button type="primary" @click="onSaveAlert" :loading="alertSaving">
+            {{ editingAlertId ? '保存' : '创建' }}
+          </n-button>
         </n-space>
       </template>
     </n-modal>
@@ -722,6 +786,20 @@ onMounted(loadAll)
   gap: 4px;
   flex-wrap: wrap;
   margin-bottom: 6px;
+}
+.alert-trade-detail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #aaa;
+  margin-bottom: 4px;
+}
+.alert-filters {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
 }
 .alert-stats {
   font-size: 12px;
