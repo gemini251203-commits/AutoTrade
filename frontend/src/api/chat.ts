@@ -188,6 +188,7 @@ export interface AutopilotLogResponse {
   order_id: number | null
   strategy_id: number | null
   strategy_name: string | null
+  source: string | null
   signal_raw: Record<string, unknown> | null
   error_message: string | null
   created_at: string

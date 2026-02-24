@@ -103,6 +103,15 @@ class AutopilotLog(Base):
         nullable=True,
         comment="策略名称",
     )
+
+    # 来源标识
+    source: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        nullable=True,
+        default="autopilot",
+        comment="来源: autopilot/agent/news/quant",
+    )
+
     signal_raw: Mapped[Optional[dict]] = mapped_column(
         JSON,
         nullable=True,

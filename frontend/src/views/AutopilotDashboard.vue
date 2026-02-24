@@ -90,11 +90,25 @@ const decisionColors: Record<string, string> = {
 
 const decisionLabels: Record<string, string> = {
   hold: '观望',
-  open_long: '开多',
-  open_short: '开空',
+  open_long: '做多',
+  open_short: '做空',
   close_long: '平多',
   close_short: '平空',
   error: '异常',
+}
+
+// 来源标签
+const sourceLabels: Record<string, string> = {
+  autopilot: 'Autopilot',
+  agent: 'AI Agent',
+  news: '新闻监控',
+  quant: '量化策略',
+}
+const sourceColors: Record<string, string> = {
+  autopilot: '#8b5cf6',
+  agent: '#3b82f6',
+  news: '#f59e0b',
+  quant: '#10b981',
 }
 
 // 基于选择的交易对过滤日志
@@ -535,6 +549,12 @@ function formatTime(iso: string): string {
                 <div class="card-header">
                   <span class="decision-badge" :style="{ color: decisionColors[log.decision] || '#666' }">
                     {{ log.action_taken ? (decisionLabels[log.decision] || log.decision) : (log.decision === 'hold' ? '观望' : '分析:' + (decisionLabels[log.decision] || log.decision)) }}
+                  </span>
+                  <span
+                    class="source-badge"
+                    :style="{ background: sourceColors[log.source || 'autopilot'] || '#666', color: '#fff' }"
+                  >
+                    {{ sourceLabels[log.source || 'autopilot'] || log.source || 'Autopilot' }}
                   </span>
                   <span class="symbol-label">{{ log.symbol }}</span>
                   <span class="time-label">{{ formatTime(log.created_at) }}</span>
@@ -1176,12 +1196,23 @@ function formatTime(iso: string): string {
 }
 
 .decision-badge {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   padding: 3px 10px;
   border-radius: 100px;
   background: rgba(255, 255, 255, 0.05); /* Fallback */
   border: 1px solid rgba(255, 255, 255, 0.05);
+  letter-spacing: 0.3px;
+}
+
+.source-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .symbol-label {

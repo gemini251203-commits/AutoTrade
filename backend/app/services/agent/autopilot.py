@@ -309,6 +309,9 @@ class AgentAutopilot:
                     "market_snapshot": log.market_snapshot,
                     "action_taken": log.action_taken,
                     "order_id": log.order_id,
+                    "strategy_id": log.strategy_id,
+                    "strategy_name": log.strategy_name,
+                    "source": log.source or "autopilot",
                     "error_message": log.error_message,
                     "created_at": log.created_at.isoformat() if log.created_at else None,
                 }
@@ -761,6 +764,7 @@ class AgentAutopilot:
                     order_id=order_id,
                     strategy_id=active_strategy_id,
                     strategy_name=active_strategy_name,
+                    source="autopilot",
                 )
                 db.add(log)
 
@@ -798,6 +802,7 @@ class AgentAutopilot:
                         thinking=f"Error: {str(e)}",
                         summary=f"分析异常: {str(e)[:100]}",
                         error_message=str(e),
+                        source="autopilot",
                     )
                     db.add(error_log)
                     await db.commit()
