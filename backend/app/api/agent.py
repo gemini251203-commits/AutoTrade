@@ -336,7 +336,7 @@ async def autopilot_status(current_user: CurrentUser):
 @router.get("/autopilot/logs")
 async def autopilot_logs(
     current_user: CurrentUser,
-    limit: int = Query(default=50, ge=1, le=200, description="返回条数"),
+    limit: int = Query(default=200, ge=1, le=500, description="返回条数"),
     symbol: Optional[str] = Query(default=None, description="按交易对过滤"),
     since: Optional[str] = Query(default=None, description="只返回此时间之后的日志 (ISO格式)"),
 ):
