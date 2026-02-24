@@ -34,6 +34,7 @@ class PipelineStatusResponse(BaseModel):
     """Pipeline 整体状态"""
     is_active: bool
     circuit_breaker: bool           # 是否熔断
+    risk_bypass: bool = False       # 风控是否已关闭
     uptime_seconds: float
     layers: List[LayerStatus]       # 四层状态
     stats: Dict                     # 流水线统计
@@ -73,6 +74,16 @@ class CircuitBreakerRequest(BaseModel):
 
 class CircuitBreakerResponse(BaseModel):
     circuit_breaker: bool
+    message: str
+
+
+class RiskBypassRequest(BaseModel):
+    """风控开关"""
+    enabled: bool                   # True=关闭风控, False=恢复风控
+
+
+class RiskBypassResponse(BaseModel):
+    risk_bypass: bool
     message: str
 
 
@@ -221,10 +232,12 @@ async def get_pipeline_status(
 
     is_active = total_orders > 0 or strategy_count > 0
 
-    # 熔断状态
+    # 熔断 / 风控旁路状态
     circuit_breaker = False
+    risk_bypass = False
     if risk_model:
         circuit_breaker = risk_model.is_circuit_breaker_active
+        risk_bypass = risk_model.risk_bypass
 
     # 构造四层状态
     layers = []
@@ -255,12 +268,21 @@ async def get_pipeline_status(
     risk_status = "active"
     if circuit_breaker:
         risk_status = "error"
+    elif risk_bypass:
+        risk_status = "disabled"
     elif not is_active:
         risk_status = "idle"
+    
+    risk_detail = f"通过: {filled_orders}, 拒绝: {rejected_orders}"
+    if circuit_breaker:
+        risk_detail += " ⚠️ 熔断中"
+    elif risk_bypass:
+        risk_detail += " ⚠️ 风控已关闭"
+    
     layers.append(LayerStatus(
         name="Risk",
         status=risk_status,
-        detail=f"通过: {filled_orders}, 拒绝: {rejected_orders}" + (" ⚠️ 熔断中" if circuit_breaker else ""),
+        detail=risk_detail,
         count=risk_count,
     ))
 
@@ -285,6 +307,7 @@ async def get_pipeline_status(
     return PipelineStatusResponse(
         is_active=is_active,
         circuit_breaker=circuit_breaker,
+        risk_bypass=risk_bypass,
         uptime_seconds=uptime,
         layers=layers,
         stats=combined_stats,
@@ -367,3 +390,34 @@ async def control_circuit_breaker(
         )
     else:
         raise HTTPException(400, f"Unknown action: {body.action}")
+
+
+@router.post("/risk-bypass", response_model=RiskBypassResponse)
+async def control_risk_bypass(
+    current_user: CurrentUser,
+    body: RiskBypassRequest,
+):
+    """
+    控制系统风控开关
+
+    - enabled=true: 关闭系统风控 (策略自行管理风险)
+    - enabled=false: 恢复系统风控
+    """
+    risk_model = _get_risk_model()
+
+    if not risk_model:
+        from app.services.risk.risk_model import RiskModel
+        risk_model = RiskModel()
+
+    risk_model.set_risk_bypass(body.enabled)
+
+    if body.enabled:
+        return RiskBypassResponse(
+            risk_bypass=True,
+            message="⚠️ 系统风控已关闭, 所有交易将由策略自行管理风险"
+        )
+    else:
+        return RiskBypassResponse(
+            risk_bypass=False,
+            message="✅ 系统风控已恢复"
+        )

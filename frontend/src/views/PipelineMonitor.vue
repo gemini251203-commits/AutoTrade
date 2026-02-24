@@ -8,7 +8,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { NCard, NTag, NButton, NIcon, NStatistic, NSpin, NAlert, NEmpty, NTooltip, useMessage, NSwitch } from 'naive-ui'
 import { ShieldCheckmarkOutline, FlashOutline, WarningOutline, CheckmarkCircleOutline, CloseCircleOutline, RefreshOutline } from '@vicons/ionicons5'
 import MainLayout from '@/layouts/MainLayout.vue'
-import { getPipelineStatus, getPipelineConfig, controlCircuitBreaker } from '@/api/pipeline'
+import { getPipelineStatus, getPipelineConfig, controlCircuitBreaker, controlRiskBypass } from '@/api/pipeline'
 import type { PipelineStatusResponse, PipelineConfigResponse } from '@/api/pipeline'
 
 const message = useMessage()
@@ -18,6 +18,7 @@ const loading = ref(true)
 const status = ref<PipelineStatusResponse | null>(null)
 const config = ref<PipelineConfigResponse | null>(null)
 const circuitBreakerLoading = ref(false)
+const riskBypassLoading = ref(false)
 
 // Auto-refresh
 let refreshTimer: ReturnType<typeof setInterval> | null = null
@@ -114,6 +115,21 @@ async function handleCircuitBreaker() {
   }
 }
 
+async function handleRiskBypass() {
+  if (!status.value) return
+  riskBypassLoading.value = true
+  try {
+    const newState = !status.value.risk_bypass
+    const result = await controlRiskBypass(newState)
+    message.success(result.message)
+    await fetchStatus()
+  } catch (e: any) {
+    message.error('操作失败: ' + (e.message || '未知错误'))
+  } finally {
+    riskBypassLoading.value = false
+  }
+}
+
 onMounted(() => {
   fetchStatus()
   refreshTimer = setInterval(fetchStatus, 5000) // 5s 刷新
@@ -185,6 +201,19 @@ onUnmounted(() => {
                 round
               >
                 {{ status.circuit_breaker ? '已熔断 · 解除' : '正常' }}
+              </NButton>
+            </div>
+            <div class="status-divider" />
+            <div class="status-item">
+              <span class="status-label">系统风控</span>
+              <NButton
+                :type="status.risk_bypass ? 'warning' : 'default'"
+                size="small"
+                :loading="riskBypassLoading"
+                @click="handleRiskBypass"
+                round
+              >
+                {{ status.risk_bypass ? '❗ 已关闭 · 开启' : '✅ 已开启' }}
               </NButton>
             </div>
           </div>

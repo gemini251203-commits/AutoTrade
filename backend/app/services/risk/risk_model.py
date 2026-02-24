@@ -108,10 +108,24 @@ class RiskModel:
         self._daily_pnl: Dict[int, Decimal] = {}           # user_id → 当日 PnL
         self._daily_reset_date: Optional[date] = None
         self._circuit_breaker: bool = False                  # 紧急熔断
+        self._risk_bypass: bool = False                      # 风控旁路 (跳过所有检查)
     
     @property
     def config(self) -> RiskConfig:
         return self._config
+    
+    @property
+    def risk_bypass(self) -> bool:
+        """风控是否已关闭 (旁路模式)"""
+        return self._risk_bypass
+    
+    def set_risk_bypass(self, enabled: bool) -> None:
+        """开启/关闭风控旁路"""
+        self._risk_bypass = enabled
+        if enabled:
+            logger.warning("[RiskModel] ⚠️ 风控已关闭 — 所有交易将跳过系统风控检查")
+        else:
+            logger.info("[RiskModel] ✅ 风控已恢复")
     
     # ==============================================================
     # 1. Pipeline 接口: approve_target()
@@ -140,12 +154,17 @@ class RiskModel:
         """
         warnings = []
         
-        # — 紧急熔断 —
+        # — 紧急熔断 (永远生效, 不受旁路影响) —
         if self._circuit_breaker:
             return RiskVerdict(
                 approved=False,
                 reason="🚨 风控熔断中, 禁止一切交易"
             )
+        
+        # — 风控旁路: 跳过所有检查 —
+        if self._risk_bypass:
+            logger.info(f"[RiskModel] ⚡ 风控已关闭, 直接放行: {target.summary()}")
+            return RiskVerdict(approved=True, warnings=["⚠️ 系统风控已关闭"])
         
         # — 黑名单 —
         if target.symbol in self._config.blacklist:
@@ -276,6 +295,15 @@ class RiskModel:
                 reason="🚨 风控熔断中, 禁止一切交易"
             ))
             return False, results
+
+        # 0.5 风控旁路
+        if self._risk_bypass:
+            results.append(RiskCheckResult(
+                passed=True, rule="bypass",
+                reason="⚠️ 系统风控已关闭, 由策略自行控制风险"
+            ))
+            logger.info(f"[RiskModel] ⚡ 风控已关闭, 跳过 check_all: {symbol} {signal_side}")
+            return True, results
 
         # 1. 日亏损限制
         results.append(self._check_daily_loss(today_pnl, wallet_balance))

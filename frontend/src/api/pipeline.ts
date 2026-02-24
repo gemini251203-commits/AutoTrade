@@ -7,6 +7,7 @@
  *   GET  /pipeline/status          -> getPipelineStatus()
  *   GET  /pipeline/config          -> getPipelineConfig()
  *   POST /pipeline/circuit-breaker -> controlCircuitBreaker()
+ *   POST /pipeline/risk-bypass     -> controlRiskBypass()
  */
 
 import request from '@/utils/request'
@@ -23,6 +24,7 @@ export interface LayerStatus {
 export interface PipelineStatusResponse {
   is_active: boolean
   circuit_breaker: boolean
+  risk_bypass: boolean
   uptime_seconds: number
   layers: LayerStatus[]
   stats: Record<string, number>
@@ -74,6 +76,24 @@ export async function controlCircuitBreaker(
   const response = await request.post<CircuitBreakerResponse>(
     '/pipeline/circuit-breaker',
     { action, reason }
+  )
+  return response.data
+}
+
+export interface RiskBypassResponse {
+  risk_bypass: boolean
+  message: string
+}
+
+/**
+ * 控制风控开关
+ */
+export async function controlRiskBypass(
+  enabled: boolean
+): Promise<RiskBypassResponse> {
+  const response = await request.post<RiskBypassResponse>(
+    '/pipeline/risk-bypass',
+    { enabled }
   )
   return response.data
 }
