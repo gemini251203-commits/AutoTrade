@@ -35,6 +35,7 @@ import {
   startAutopilot,
   stopAutopilot,
   getAutopilotStatus,
+  runOnceAutopilot,
 
   type Conversation,
   type ChatMessage,
@@ -70,9 +71,11 @@ const mobileShowSidebar = ref(false)
 // SSE 控制器
 let abortController: AbortController | null = null
 
-// AI 主理人 (Autopilot)
+// Autopilot
 const autopilotStatus = ref<AutopilotStatus | null>(null)
 const autopilotLoading = ref(false)
+const autopilotRunOnceLoading = ref(false)
+const autopilotInterval = ref('15m')
 let autopilotPollTimer: ReturnType<typeof setInterval> | null = null
 
 
@@ -124,20 +127,33 @@ async function toggleAutopilot() {
   try {
     if (autopilotStatus.value?.running) {
       await stopAutopilot()
-      message.success('AI 主理人已停止')
+      message.success('Autopilot 已停止')
     } else {
       await startAutopilot({
         symbols: ['BTCUSDT'],
-        interval: '15m',
-        intervals: ['15m'],
+        interval: autopilotInterval.value,
+        intervals: [autopilotInterval.value],
       })
-      message.success('AI 主理人已启动')
+      message.success('Autopilot 已启动')
     }
     await pollAutopilotStatus()
   } catch (e: any) {
     message.error(e.response?.data?.detail || '操作失败')
   } finally {
     autopilotLoading.value = false
+  }
+}
+
+async function handleRunOnce() {
+  autopilotRunOnceLoading.value = true
+  try {
+    await runOnceAutopilot('BTCUSDT')
+    message.success('Autopilot 已执行一次决策')
+    await pollAutopilotStatus()
+  } catch (e: any) {
+    message.error(e.response?.data?.detail || '运行失败')
+  } finally {
+    autopilotRunOnceLoading.value = false
   }
 }
 
@@ -404,7 +420,7 @@ const formatTime = formatTimeBJ
           </div>
           <div class="header-spacer" v-else></div>
 
-          <!-- AI 主理人开关 -->
+          <!-- Autopilot 控制 -->
           <div class="autopilot-toggle">
             <button
               :class="['autopilot-btn', { running: autopilotStatus?.running }]"
@@ -413,8 +429,27 @@ const formatTime = formatTimeBJ
             >
               <span class="autopilot-dot" :class="{ active: autopilotStatus?.running }"></span>
               <span v-if="autopilotLoading">加载中...</span>
-              <span v-else-if="autopilotStatus?.running">主理人运行中</span>
-              <span v-else>启动 AI 主理人</span>
+              <span v-else-if="autopilotStatus?.running">Autopilot 运行中</span>
+              <span v-else>启动 Autopilot</span>
+            </button>
+            <select
+              v-model="autopilotInterval"
+              class="autopilot-interval-select"
+              :disabled="autopilotStatus?.running"
+              title="决策间隔"
+            >
+              <option value="5m">5m</option>
+              <option value="15m">15m</option>
+              <option value="30m">30m</option>
+              <option value="1h">1h</option>
+            </select>
+            <button
+              class="autopilot-run-once-btn"
+              @click="handleRunOnce"
+              :disabled="autopilotRunOnceLoading"
+              title="手动执行一次 Autopilot 决策"
+            >
+              {{ autopilotRunOnceLoading ? '执行中...' : '▷ 运行一次' }}
             </button>
             <div v-if="autopilotStatus?.running" class="autopilot-info">
               <span>已运行 {{ autopilotStatus.total_cycles }} 轮</span>
@@ -427,7 +462,7 @@ const formatTime = formatTimeBJ
         <div v-if="!activeConversationId" class="empty-state">
           <div class="empty-icon">AI</div>
           <h2>AI Agent</h2>
-          <p>你的 AI 交易主理人，帮你分析市场、制定策略、自动交易</p>
+          <p>你的 AI 交易助手，帮你分析市场、制定策略、自动交易</p>
           <button class="create-chat-btn empty-start-btn" @click="handleCreateConversation">
             开始对话
           </button>
@@ -850,6 +885,54 @@ function renderMarkdown(text: string): string {
   font-size: 11px;
   color: #10b981;
   opacity: 0.8;
+}
+.autopilot-interval-select {
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(20, 20, 32, 0.8);
+  color: #d8b4fe;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  outline: none;
+  appearance: auto;
+  -webkit-appearance: auto;
+  transition: all 0.2s;
+}
+.autopilot-interval-select:focus {
+  border-color: rgba(139, 92, 246, 0.5);
+  box-shadow: 0 0 6px rgba(139, 92, 246, 0.2);
+}
+.autopilot-interval-select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.autopilot-interval-select option {
+  background: #1a1a2e;
+  color: #e0e0e0;
+}
+.autopilot-run-once-btn {
+  padding: 5px 12px;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 16px;
+  background: rgba(139, 92, 246, 0.08);
+  color: #a78bfa;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.autopilot-run-once-btn:hover {
+  border-color: rgba(139, 92, 246, 0.6);
+  background: rgba(139, 92, 246, 0.15);
+  color: #d8b4fe;
+}
+.autopilot-run-once-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ==================== Messages ==================== */
