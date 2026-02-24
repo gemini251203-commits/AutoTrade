@@ -37,8 +37,7 @@ import {
   runStrategyOnce,
   getStrategyLogs,
   getTemplates,
-  getMemories,
-  deleteMemory,
+
   type StrategyResponse,
   type StrategyLogResponse,
   type StrategyTemplate,
@@ -64,7 +63,7 @@ import {
 
 const strategies = ref<StrategyResponse[]>([])
 const templates = ref<StrategyTemplate[]>([])
-const memories = ref<TradeMemoryResponse[]>([])
+
 const loading = ref(false)
 const error = ref('')
 const pipelineStatus = ref<PipelineStatusResponse | null>(null)
@@ -139,7 +138,7 @@ const compareOptions = [
 ]
 
 // Tab state
-type TabKey = 'strategies' | 'memories' | 'timeline' | 'trend'
+type TabKey = 'strategies' | 'timeline' | 'trend'
 const activeTab = ref<TabKey>('strategies')
 const timelineFilter = ref<'all' | 'ai' | 'strategy'>('all')
 const strategyNameFilter = ref<string>('')
@@ -377,23 +376,7 @@ async function openLogs(strategy: StrategyResponse) {
   }
 }
 
-async function fetchMemories() {
-  try {
-    memories.value = await getMemories(undefined, 50)
-  } catch {
-    memories.value = []
-  }
-}
 
-async function handleDeleteMemory(id: number) {
-  if (!confirm('确定删除这条交易记忆？')) return
-  try {
-    await deleteMemory(id)
-    memories.value = memories.value.filter(m => m.id !== id)
-  } catch (e: any) {
-    error.value = e.response?.data?.detail || '删除失败'
-  }
-}
 
 const formatDate = formatDateBJ
 
@@ -573,16 +556,7 @@ onMounted(() => {
         >
           策略列表
         </button>
-        <button
-          @click="activeTab = 'memories'; fetchMemories()"
-          class="px-4 py-2 rounded-md text-sm transition-all"
-          :style="{
-            background: activeTab === 'memories' ? 'rgba(138,43,226,0.15)' : 'transparent',
-            color: activeTab === 'memories' ? '#a855f7' : '#6b7280',
-          }"
-        >
-          交易记忆
-        </button>
+
         <button
           @click="activeTab = 'timeline'; fetchDecisionLogs()"
           class="px-4 py-2 rounded-md text-sm transition-all"
@@ -780,62 +754,7 @@ onMounted(() => {
         </div>
       </template>
 
-      <!-- Memories Tab -->
-      <template v-else-if="activeTab === 'memories'">
-        <div v-if="memories.length === 0" class="text-center py-16">
-          <NIcon size="48" style="color: #374151;"><BulbOutline /></NIcon>
-          <p class="text-gray-500 mt-4">暂无交易记忆</p>
-          <p class="text-gray-600 text-sm mt-1">AI 会在完成交易后自动总结经验</p>
-        </div>
-        <div v-else class="space-y-3">
-          <div
-            v-for="m in memories"
-            :key="m.id"
-            class="memory-card"
-          >
-            <div class="flex items-center justify-between mb-2">
-              <div class="flex items-center gap-2">
-                <span
-                  class="px-2 py-0.5 rounded text-xs font-mono"
-                  :style="{
-                    background: m.trade_result === 'win' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-                    color: m.trade_result === 'win' ? '#22c55e' : '#ef4444',
-                  }"
-                >
-                  {{ m.trade_result === 'win' ? 'WIN' : 'LOSS' }}
-                </span>
-                <span class="text-sm text-white font-mono">{{ m.symbol }}</span>
-                <span v-if="m.side" class="px-1.5 py-0.5 rounded text-[10px] font-mono" :style="{
-                  background: m.side === 'long' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-                  color: m.side === 'long' ? '#22c55e' : '#ef4444',
-                }">{{ m.side === 'long' ? '做多' : '做空' }}</span>
-                <span v-if="m.leverage" class="px-1.5 py-0.5 rounded text-[10px] font-mono" style="background: rgba(139,92,246,0.1); color: #a78bfa;">{{ m.leverage }}x</span>
-                <span class="text-xs text-gray-500">{{ m.strategy_name }}</span>
-              </div>
-              <div class="flex items-center gap-3 text-xs text-gray-500">
-                <div class="text-right">
-                  <span :style="{ color: pnlColor(m.pnl_pct) }" class="font-mono font-medium">
-                    {{ m.pnl_pct >= 0 ? '+' : '' }}{{ m.pnl_pct.toFixed(2) }}%
-                  </span>
-                  <span v-if="m.pnl_usdt != null" class="block text-[11px] font-mono" :style="{ color: pnlColor(m.pnl_usdt), opacity: 0.8 }">
-                    {{ m.pnl_usdt >= 0 ? '+' : '' }}{{ m.pnl_usdt.toFixed(2) }} USDT
-                  </span>
-                </div>
-                <span>{{ formatDate(m.created_at || '') }}</span>
-                <button
-                  @click.stop="handleDeleteMemory(m.id)"
-                  class="ml-1 p-1 rounded hover:bg-red-500/10 transition-colors text-gray-500 hover:text-red-400"
-                  title="删除"
-                >
-                  <NIcon size="14"><TrashOutline /></NIcon>
-                </button>
-              </div>
-            </div>
-            <div class="text-sm text-gray-300 mb-1">{{ m.lesson }}</div>
-            <div v-if="m.open_reason" class="text-xs text-gray-500">{{ m.open_reason }}</div>
-          </div>
-        </div>
-      </template>
+
 
       <!-- Decision Timeline Tab -->
       <template v-else-if="activeTab === 'timeline'">
