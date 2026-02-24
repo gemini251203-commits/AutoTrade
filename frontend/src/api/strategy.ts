@@ -148,7 +148,7 @@ export async function runStrategyOnce(id: number): Promise<{ message: string; re
 }
 
 /** 获取策略执行日志 */
-export async function getStrategyLogs(id: number, limit: number = 20): Promise<StrategyLogResponse[]> {
+export async function getStrategyLogs(id: number, limit: number = 50): Promise<StrategyLogResponse[]> {
   const response = await request.get<StrategyLogResponse[]>(`/strategy/${id}/logs`, {
     params: { limit },
   })
