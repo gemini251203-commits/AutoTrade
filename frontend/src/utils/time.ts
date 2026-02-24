@@ -3,17 +3,33 @@
  * ===================================================
  * 后端存储 UTC，前端显示统一转为北京时间。
  * 所有页面共用这些函数，避免各页面重复实现。
+ *
+ * 关键: 后端返回的时间字符串不带 "Z" 后缀，
+ * 例如 "2026-02-24T18:45:00"，JS 会当成本地时间解析。
+ * toUTC() 确保无时区标记的字符串被正确当作 UTC 解析。
  */
 
 const TIMEZONE = 'Asia/Shanghai'
 
 /**
+ * 确保 ISO 字符串被当作 UTC 解析
+ * - 已含 Z / +xx:xx / -xx:xx → 原样返回
+ * - 无时区信息 → 追加 "Z"
+ */
+function toUTC(iso: string): string {
+  const s = iso.trim()
+  // 已有时区标记 (Z, +xx:xx, -xx:xx)
+  if (/Z$/i.test(s) || /[+-]\d{2}:\d{2}$/.test(s)) return s
+  return s + 'Z'
+}
+
+/**
  * 格式化为北京时间: "M/D HH:mm"
- * 例: "2/24 09:30"
+ * 例: "2/25 02:30"
  */
 export function formatDateBJ(iso: string | null | undefined): string {
   if (!iso) return '--'
-  const d = new Date(iso)
+  const d = new Date(toUTC(iso))
   if (isNaN(d.getTime())) return '--'
   
   const parts = new Intl.DateTimeFormat('zh-CN', {
@@ -35,11 +51,11 @@ export function formatDateBJ(iso: string | null | undefined): string {
 
 /**
  * 格式化为北京时间: "HH:mm"
- * 例: "09:30"
+ * 例: "02:30"
  */
 export function formatTimeBJ(iso: string | null | undefined): string {
   if (!iso) return '--'
-  const d = new Date(iso)
+  const d = new Date(toUTC(iso))
   if (isNaN(d.getTime())) return '--'
 
   return d.toLocaleTimeString('zh-CN', {
@@ -52,11 +68,11 @@ export function formatTimeBJ(iso: string | null | undefined): string {
 
 /**
  * 格式化为北京时间完整格式: "YYYY-MM-DD HH:mm:ss"
- * 例: "2026-02-24 17:30:45"
+ * 例: "2026-02-25 02:30:45"
  */
 export function formatFullBJ(iso: string | null | undefined): string {
   if (!iso) return '--'
-  const d = new Date(iso)
+  const d = new Date(toUTC(iso))
   if (isNaN(d.getTime())) return '--'
 
   return d.toLocaleString('zh-CN', {
@@ -73,11 +89,11 @@ export function formatFullBJ(iso: string | null | undefined): string {
 
 /**
  * 格式化为北京时间: "MM-DD HH:mm"
- * 例: "02-24 17:30"
+ * 例: "02-25 02:30"
  */
 export function formatDateTimeBJ(iso: string | null | undefined): string {
   if (!iso) return '--'
-  const d = new Date(iso)
+  const d = new Date(toUTC(iso))
   if (isNaN(d.getTime())) return '--'
 
   return d.toLocaleString('zh-CN', {
@@ -95,7 +111,7 @@ export function formatDateTimeBJ(iso: string | null | undefined): string {
  */
 export function formatHHMMSSBJ(iso: string | null | undefined): string {
   if (!iso) return '--'
-  const d = new Date(iso)
+  const d = new Date(toUTC(iso))
   if (isNaN(d.getTime())) return '--'
 
   return d.toLocaleTimeString('zh-CN', {
