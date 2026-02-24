@@ -407,7 +407,7 @@ function pnlColor(v: number) {
 
 async function fetchDecisionLogs() {
   try {
-    decisionLogs.value = await getAutopilotLogs(20)
+    decisionLogs.value = await getAutopilotLogs(200)
   } catch (e) {
     console.warn('Failed to fetch decision logs', e)
   }
