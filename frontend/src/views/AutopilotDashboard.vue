@@ -38,6 +38,7 @@ import {
   type AutopilotStatus,
   type AutopilotLogResponse,
 } from '@/api/chat'
+import { formatDateTimeBJ } from '@/utils/time'
 
 // ==================== State ====================
 const message = useMessage()
@@ -262,17 +263,7 @@ async function handleClearLogs() {
   loading.value = false
 }
 
-function formatTime(iso: string): string {
-  if (!iso) return '-'
-  const d = new Date(iso)
-  return d.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-}
+const formatTime = formatDateTimeBJ
 </script>
 
 <template>

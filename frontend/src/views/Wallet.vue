@@ -19,6 +19,7 @@ import {
 import MainLayout from '@/layouts/MainLayout.vue'
 import { useWalletStore } from '@/stores/wallet'
 import request from '@/utils/request'
+import { formatFullBJ } from '@/utils/time'
 
 const walletStore = useWalletStore()
 
@@ -249,7 +250,7 @@ const columns = [
     key: 'created_at',
     width: 180,
     render(row: any) {
-      return new Date(row.created_at).toLocaleString()
+      return formatFullBJ(row.created_at)
     },
   },
   {

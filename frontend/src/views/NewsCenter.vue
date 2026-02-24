@@ -25,6 +25,7 @@ import {
   getNewsTradingStats,
   getFearGreedIndex,
 } from '@/api/news'
+import { formatFullBJ } from '@/utils/time'
 
 const message = useMessage()
 
@@ -252,11 +253,7 @@ async function onDeleteAlert(id: number) {
 }
 
 // ==================== 辅助 ====================
-function formatTime(isoStr: string) {
-  if (!isoStr) return '-'
-  const d = new Date(isoStr)
-  return d.toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-')
-}
+const formatTime = formatFullBJ
 
 function sentimentPercent(s: MarketSentiment | null) {
   if (!s || s.total_articles === 0) return 50

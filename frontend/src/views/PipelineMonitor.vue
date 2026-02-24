@@ -10,6 +10,7 @@ import { ShieldCheckmarkOutline, FlashOutline, WarningOutline, CheckmarkCircleOu
 import MainLayout from '@/layouts/MainLayout.vue'
 import { getPipelineStatus, getPipelineConfig, controlCircuitBreaker, controlRiskBypass } from '@/api/pipeline'
 import type { PipelineStatusResponse, PipelineConfigResponse } from '@/api/pipeline'
+import { formatHHMMSSBJ } from '@/utils/time'
 
 const message = useMessage()
 
@@ -373,7 +374,7 @@ onUnmounted(() => {
                     {{ (Number(insight.confidence) * 100).toFixed(0) }}%
                   </span>
                   <span class="activity-source">{{ insight.source }}</span>
-                  <span class="activity-time">{{ String(insight.timestamp).slice(11, 19) }}</span>
+                  <span class="activity-time">{{ formatHHMMSSBJ(String(insight.timestamp)) }}</span>
                 </div>
               </div>
             </div>
@@ -394,7 +395,7 @@ onUnmounted(() => {
                   </span>
                   <span class="activity-symbol mono">{{ verdict.symbol }}</span>
                   <span class="activity-reason">{{ verdict.reason || 'Approved' }}</span>
-                  <span class="activity-time">{{ String(verdict.timestamp).slice(11, 19) }}</span>
+                  <span class="activity-time">{{ formatHHMMSSBJ(String(verdict.timestamp)) }}</span>
                 </div>
               </div>
             </div>

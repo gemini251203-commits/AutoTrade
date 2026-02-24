@@ -13,6 +13,7 @@ import { BookOutline, TrendingUpOutline, TrendingDownOutline, TimeOutline, Shiel
 import MainLayout from '@/layouts/MainLayout.vue'
 import request from '@/utils/request'
 import type { TradeMemoryResponse as TradeMemory } from '@/api/strategy'
+import { formatDateTimeBJ } from '@/utils/time'
 
 // ========== Types ==========
 // TradeMemory imported from '@/api/strategy' as TradeMemoryResponse
@@ -147,12 +148,7 @@ function formatPrice(price: number | null): string {
   return price.toFixed(4)
 }
 
-function formatTime(iso: string | null): string {
-  if (!iso) return '-'
-  const d = new Date(iso)
-  return d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }) + ' ' +
-    d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-}
+const formatTime = formatDateTimeBJ
 
 onMounted(fetchAll)
 </script>

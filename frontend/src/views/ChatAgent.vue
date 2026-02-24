@@ -24,6 +24,7 @@ import {
   ChevronBackOutline,
 } from '@vicons/ionicons5'
 import MainLayout from '@/layouts/MainLayout.vue'
+import { formatTimeBJ } from '@/utils/time'
 import {
 
   createConversation,
@@ -316,10 +317,7 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-function formatTime(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-}
+const formatTime = formatTimeBJ
 </script>
 
 <template>

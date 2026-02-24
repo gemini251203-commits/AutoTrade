@@ -44,6 +44,7 @@ import {
   type StrategyTemplate,
   type TradeMemoryResponse,
 } from '@/api/strategy'
+import { formatDateBJ } from '@/utils/time'
 import {
   getPipelineStatus,
   type PipelineStatusResponse,
@@ -394,10 +395,7 @@ async function handleDeleteMemory(id: number) {
   }
 }
 
-function formatDate(iso: string) {
-  const d = new Date(iso)
-  return `${d.getMonth()+1}/${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`
-}
+const formatDate = formatDateBJ
 
 function pnlColor(v: number) {
   if (v > 0) return '#22c55e'
