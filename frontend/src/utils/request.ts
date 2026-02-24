@@ -15,7 +15,7 @@ import router from '@/router'
 // Create axios instance
 const request: AxiosInstance = axios.create({
   baseURL: '/api',  // Vite proxy will forward to backend
-  timeout: 15000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
