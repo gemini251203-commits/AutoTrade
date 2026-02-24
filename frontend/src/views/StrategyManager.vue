@@ -525,7 +525,7 @@ onMounted(() => {
             <div class="pl-layer" :class="['pl-layer--' + layer.name.toLowerCase(), 'pl-layer--' + layer.status]">
               <div class="pl-layer-top">
                 <span class="pl-layer-icon">
-                  {{ layer.name === 'Alpha' ? '🧠' : layer.name === 'Portfolio' ? '📊' : layer.name === 'Risk' ? '🛡️' : '⚡' }}
+                  {{ layer.name === 'Alpha' ? 'A' : layer.name === 'Portfolio' ? 'P' : layer.name === 'Risk' ? 'R' : 'E' }}
                 </span>
                 <span class="pl-layer-name">{{ layer.name }}</span>
               </div>
@@ -830,8 +830,8 @@ onMounted(() => {
           <button
             v-for="f in [
               { key: 'all', label: '全部', count: decisionLogs.length },
-              { key: 'ai', label: '🤖 AI主理人', count: decisionLogs.filter(l => !l.strategy_name).length },
-              { key: 'strategy', label: '📊 量化策略', count: decisionLogs.filter(l => !!l.strategy_name).length },
+              { key: 'ai', label: 'AI主理人', count: decisionLogs.filter(l => !l.strategy_name).length },
+              { key: 'strategy', label: '量化策略', count: decisionLogs.filter(l => !!l.strategy_name).length },
             ]"
             :key="f.key"
             :class="['tl-filter-btn', { active: timelineFilter === f.key }]"
@@ -856,10 +856,10 @@ onMounted(() => {
               <div class="tl-header">
                 <!-- 来源标签 -->
                 <span v-if="log.strategy_name" class="tl-source tl-source-strategy">
-                  📊 {{ log.strategy_name }}
+                  {{ log.strategy_name }}
                 </span>
                 <span v-else class="tl-source tl-source-ai">
-                  🤖 AI主理人
+                  AI主理人
                 </span>
                 <span class="tl-badge" :style="{ color: decisionColor(log.decision), borderColor: decisionColor(log.decision) + '40' }">
                   {{ decisionLabel(log.decision) }}
