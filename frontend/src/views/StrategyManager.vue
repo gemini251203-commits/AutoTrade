@@ -140,6 +140,13 @@ const compareOptions = [
 // Tab state
 type TabKey = 'strategies' | 'memories' | 'timeline' | 'trend'
 const activeTab = ref<TabKey>('strategies')
+const timelineFilter = ref<'all' | 'ai' | 'strategy'>('all')
+
+const filteredDecisionLogs = computed(() => {
+  if (timelineFilter.value === 'all') return decisionLogs.value
+  if (timelineFilter.value === 'ai') return decisionLogs.value.filter(l => !l.strategy_name)
+  return decisionLogs.value.filter(l => !!l.strategy_name)
+})
 
 // ==================== Computed ====================
 
@@ -818,24 +825,46 @@ onMounted(() => {
 
       <!-- Decision Timeline Tab -->
       <template v-else-if="activeTab === 'timeline'">
-        <div v-if="decisionLogs.length === 0" class="text-center py-16">
+        <!-- 来源筛选按钮 -->
+        <div class="tl-filters">
+          <button
+            v-for="f in [
+              { key: 'all', label: '全部', count: decisionLogs.length },
+              { key: 'ai', label: '🤖 AI主理人', count: decisionLogs.filter(l => !l.strategy_name).length },
+              { key: 'strategy', label: '📊 量化策略', count: decisionLogs.filter(l => !!l.strategy_name).length },
+            ]"
+            :key="f.key"
+            :class="['tl-filter-btn', { active: timelineFilter === f.key }]"
+            @click="timelineFilter = f.key as any"
+          >
+            {{ f.label }} ({{ f.count }})
+          </button>
+        </div>
+
+        <div v-if="filteredDecisionLogs.length === 0" class="text-center py-16">
           <p class="text-gray-500 mt-4">暂无决策记录</p>
           <p class="text-gray-600 text-sm mt-1">启动策略自动交易后，AI 的每次决策将显示在此</p>
         </div>
         <div v-else class="tl-list">
           <div
-            v-for="log in decisionLogs"
+            v-for="log in filteredDecisionLogs"
             :key="log.id"
             class="tl-item"
           >
             <div class="tl-dot" :style="{ background: decisionColor(log.decision) }"></div>
             <div class="tl-content">
               <div class="tl-header">
+                <!-- 来源标签 -->
+                <span v-if="log.strategy_name" class="tl-source tl-source-strategy">
+                  📊 {{ log.strategy_name }}
+                </span>
+                <span v-else class="tl-source tl-source-ai">
+                  🤖 AI主理人
+                </span>
                 <span class="tl-badge" :style="{ color: decisionColor(log.decision), borderColor: decisionColor(log.decision) + '40' }">
                   {{ decisionLabel(log.decision) }}
                 </span>
                 <span class="tl-symbol">{{ log.symbol }}</span>
-                <span v-if="log.strategy_name" class="tl-strategy">策略: {{ log.strategy_name }}</span>
                 <span class="tl-time">{{ formatDate(log.created_at) }}</span>
               </div>
               <div class="tl-summary">{{ log.summary }}</div>
@@ -1783,12 +1812,48 @@ onMounted(() => {
   color: #e5e7eb;
   font-family: 'JetBrains Mono', monospace;
 }
-.tl-strategy {
+.tl-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.tl-filter-btn {
+  padding: 5px 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tl-filter-btn:hover {
+  border-color: rgba(139,92,246,0.3);
+  color: #d8b4fe;
+}
+.tl-filter-btn.active {
+  border-color: rgba(139,92,246,0.5);
+  background: rgba(139,92,246,0.12);
+  color: #a855f7;
+  font-weight: 600;
+}
+.tl-source {
   font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tl-source-ai {
+  color: #10b981;
+  background: rgba(16,185,129,0.12);
+  border: 1px solid rgba(16,185,129,0.2);
+}
+.tl-source-strategy {
   color: #a78bfa;
   background: rgba(139,92,246,0.1);
-  padding: 1px 6px;
-  border-radius: 4px;
+  border: 1px solid rgba(139,92,246,0.2);
 }
 .tl-time {
   font-size: 11px;
