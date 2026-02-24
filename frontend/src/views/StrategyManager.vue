@@ -46,6 +46,7 @@ import {
 import { formatDateBJ } from '@/utils/time'
 import {
   getPipelineStatus,
+  controlRiskBypass,
   type PipelineStatusResponse,
 } from '@/api/pipeline'
 import {
@@ -65,6 +66,7 @@ const strategies = ref<StrategyResponse[]>([])
 const templates = ref<StrategyTemplate[]>([])
 
 const loading = ref(false)
+const riskBypassLoading = ref(false)
 const error = ref('')
 const pipelineStatus = ref<PipelineStatusResponse | null>(null)
 const decisionLogs = ref<AutopilotLogResponse[]>([])
@@ -377,6 +379,19 @@ async function openLogs(strategy: StrategyResponse) {
 }
 
 
+async function handleRiskBypass() {
+  if (!pipelineStatus.value) return
+  riskBypassLoading.value = true
+  try {
+    const newState = !pipelineStatus.value.risk_bypass
+    await controlRiskBypass(newState)
+    pipelineStatus.value = await getPipelineStatus()
+  } catch (e: any) {
+    error.value = '风控开关操作失败'
+  } finally {
+    riskBypassLoading.value = false
+  }
+}
 
 const formatDate = formatDateBJ
 
@@ -513,9 +528,19 @@ onMounted(() => {
             <span class="pl-title">交易流水线</span>
             <span class="pl-uptime">{{ Math.floor((pipelineStatus.uptime_seconds || 0) / 3600) }}h 运行</span>
           </div>
-          <span class="pl-badge" :class="pipelineStatus.circuit_breaker ? 'pl-badge-danger' : 'pl-badge-ok'">
-            {{ pipelineStatus.circuit_breaker ? '⚠ 熔断中' : '✦ 运行正常' }}
-          </span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button
+              class="pl-risk-btn"
+              :class="pipelineStatus.risk_bypass ? 'pl-risk-off' : 'pl-risk-on'"
+              :disabled="riskBypassLoading"
+              @click="handleRiskBypass"
+            >
+              {{ pipelineStatus.risk_bypass ? '⚠️ 风控已关闭 · 开启' : '✅ 风控开启中' }}
+            </button>
+            <span class="pl-badge" :class="pipelineStatus.circuit_breaker ? 'pl-badge-danger' : 'pl-badge-ok'">
+              {{ pipelineStatus.circuit_breaker ? '⚠ 熔断中' : '✦ 运行正常' }}
+            </span>
+          </div>
         </div>
         <div class="pl-flow">
           <template v-for="(layer, idx) in pipelineStatus.layers" :key="layer.name">
@@ -1488,8 +1513,28 @@ onMounted(() => {
   box-shadow: 0 0 12px rgba(239,68,68,0.1);
   animation: pl-pulse 1.5s ease-in-out infinite;
 }
-
-/* Flow container */
+.pl-risk-btn {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid;
+  transition: all 0.2s;
+}
+.pl-risk-on {
+  background: rgba(34,197,94,0.12);
+  color: #4ade80;
+  border-color: rgba(34,197,94,0.2);
+}
+.pl-risk-off {
+  background: rgba(245,158,11,0.12);
+  color: #fbbf24;
+  border-color: rgba(245,158,11,0.3);
+  animation: pl-pulse 1.5s ease-in-out infinite;
+}
+.pl-risk-btn:hover { opacity: 0.8; }
+.pl-risk-btn:disabled { opacity: 0.5; cursor: wait; }
 .pl-flow {
   display: flex;
   align-items: stretch;
