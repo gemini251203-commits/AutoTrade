@@ -360,6 +360,7 @@ async def run_strategy_once(
             user_id=current_user.id,
             symbol=strategy.symbol,
             intervals=intervals,
+            strategy_id=strategy.id,
         )
         return {
             "message": f"策略 '{strategy.name}' 已执行一次决策",

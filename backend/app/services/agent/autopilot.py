@@ -252,9 +252,9 @@ class AgentAutopilot:
                 pass
         logger.info(f"[Autopilot] Stopped for user {user_id}")
 
-    async def run_once(self, user_id: int, symbol: str = "BTCUSDT") -> str:
+    async def run_once(self, user_id: int, symbol: str = "BTCUSDT", strategy_id: int = None) -> str:
         """手动触发一次决策"""
-        return await self._run_cycle(user_id, symbol)
+        return await self._run_cycle(user_id, symbol, strategy_id=strategy_id)
 
     def get_status(self, user_id: int) -> dict:
         """获取运行状态 (增强版)"""
@@ -473,7 +473,7 @@ class AgentAutopilot:
         except Exception as e:
             logger.warning(f"[Autopilot] Strategy reflection failed: {e}")
 
-    async def _run_cycle(self, user_id: int, symbol: str, intervals: list = None) -> str:
+    async def _run_cycle(self, user_id: int, symbol: str, intervals: list = None, strategy_id: int = None) -> str:
         """
         单次决策周期 (增强版)
 
@@ -504,12 +504,21 @@ class AgentAutopilot:
                     from sqlalchemy import select as _select
 
                     engine = StrategyEngine()
-                    strat_result = await db.execute(
-                        _select(Strategy).where(
-                            Strategy.user_id == user_id,
-                            Strategy.is_active == True,
+                    if strategy_id:
+                        # run-once: only evaluate the specified strategy
+                        strat_result = await db.execute(
+                            _select(Strategy).where(
+                                Strategy.id == strategy_id,
+                                Strategy.user_id == user_id,
+                            )
                         )
-                    )
+                    else:
+                        strat_result = await db.execute(
+                            _select(Strategy).where(
+                                Strategy.user_id == user_id,
+                                Strategy.is_active == True,
+                            )
+                        )
                     active_strategies = strat_result.scalars().all()
 
                     if active_strategies:
@@ -740,13 +749,23 @@ class AgentAutopilot:
                 active_strategy_name = None
                 signal_data = None
                 try:
-                    strat_q = await db.execute(
-                        select(Strategy).where(
-                            Strategy.user_id == user_id,
-                            Strategy.symbol == symbol,
-                            Strategy.is_active == True,
-                        ).limit(1)
-                    )
+                    if strategy_id:
+                        # 指定了策略 ID，精确匹配
+                        strat_q = await db.execute(
+                            select(Strategy).where(
+                                Strategy.id == strategy_id,
+                                Strategy.user_id == user_id,
+                            ).limit(1)
+                        )
+                    else:
+                        # 未指定，匹配第一个活跃策略
+                        strat_q = await db.execute(
+                            select(Strategy).where(
+                                Strategy.user_id == user_id,
+                                Strategy.symbol == symbol,
+                                Strategy.is_active == True,
+                            ).limit(1)
+                        )
                     matched_strat = strat_q.scalar_one_or_none()
                     if matched_strat:
                         active_strategy_id = matched_strat.id
