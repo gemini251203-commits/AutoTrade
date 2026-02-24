@@ -141,11 +141,27 @@ const compareOptions = [
 type TabKey = 'strategies' | 'memories' | 'timeline' | 'trend'
 const activeTab = ref<TabKey>('strategies')
 const timelineFilter = ref<'all' | 'ai' | 'strategy'>('all')
+const strategyNameFilter = ref<string>('')
+
+// 从日志中提取去重的策略名列表
+const uniqueStrategyNames = computed(() => {
+  const names = new Set<string>()
+  for (const l of decisionLogs.value) {
+    if (l.strategy_name) names.add(l.strategy_name)
+  }
+  return Array.from(names)
+})
 
 const filteredDecisionLogs = computed(() => {
-  if (timelineFilter.value === 'all') return decisionLogs.value
-  if (timelineFilter.value === 'ai') return decisionLogs.value.filter(l => !l.strategy_name)
-  return decisionLogs.value.filter(l => !!l.strategy_name)
+  let logs = decisionLogs.value
+  // 来源筛选
+  if (timelineFilter.value === 'ai') logs = logs.filter(l => !l.strategy_name)
+  else if (timelineFilter.value === 'strategy') logs = logs.filter(l => !!l.strategy_name)
+  // 策略名筛选
+  if (strategyNameFilter.value) {
+    logs = logs.filter(l => l.strategy_name === strategyNameFilter.value)
+  }
+  return logs
 })
 
 // ==================== Computed ====================
@@ -834,11 +850,21 @@ onMounted(() => {
               { key: 'strategy', label: '量化策略', count: decisionLogs.filter(l => !!l.strategy_name).length },
             ]"
             :key="f.key"
-            :class="['tl-filter-btn', { active: timelineFilter === f.key }]"
-            @click="timelineFilter = f.key as any"
+            :class="['tl-filter-btn', { active: timelineFilter === f.key && !strategyNameFilter }]"
+            @click="timelineFilter = f.key as any; strategyNameFilter = ''"
           >
             {{ f.label }} ({{ f.count }})
           </button>
+          <!-- 按策略名筛选 -->
+          <select
+            v-if="uniqueStrategyNames.length > 1"
+            v-model="strategyNameFilter"
+            class="tl-strategy-select"
+            @change="if (strategyNameFilter) { timelineFilter = 'strategy' }"
+          >
+            <option value="">所有策略</option>
+            <option v-for="name in uniqueStrategyNames" :key="name" :value="name">{{ name }}</option>
+          </select>
         </div>
 
         <div v-if="filteredDecisionLogs.length === 0" class="text-center py-16">
@@ -1837,6 +1863,23 @@ onMounted(() => {
   background: rgba(139,92,246,0.12);
   color: #a855f7;
   font-weight: 600;
+}
+.tl-strategy-select {
+  padding: 4px 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  background: rgba(30,30,40,0.8);
+  color: #d1d5db;
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+  margin-left: 4px;
+}
+.tl-strategy-select:hover,
+.tl-strategy-select:focus {
+  border-color: rgba(139,92,246,0.4);
+  color: #e9d5ff;
 }
 .tl-source {
   font-size: 11px;
