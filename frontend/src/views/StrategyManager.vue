@@ -860,7 +860,7 @@ onMounted(() => {
             v-if="uniqueStrategyNames.length > 1"
             v-model="strategyNameFilter"
             class="tl-strategy-select"
-            @change="if (strategyNameFilter) { timelineFilter = 'strategy' }"
+            @change="strategyNameFilter && (timelineFilter = 'strategy')"
           >
             <option value="">所有策略</option>
             <option v-for="name in uniqueStrategyNames" :key="name" :value="name">{{ name }}</option>
