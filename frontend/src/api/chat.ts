@@ -222,7 +222,7 @@ export async function getAutopilotStatus(): Promise<AutopilotStatus> {
 
 /** 获取 autopilot 决策日志 */
 export async function getAutopilotLogs(
-  limit: number = 50,
+  limit: number = 200,
   symbol?: string,
   since?: string,
 ): Promise<AutopilotLogResponse[]> {
