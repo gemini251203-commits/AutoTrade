@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 # 默认分析的交易对
 DEFAULT_SYMBOLS = ["BTCUSDT"]
 
-# 分析间隔 (秒): 24 小时
-ANALYSIS_INTERVAL = 24 * 60 * 60
+# 分析间隔 (秒): 4 小时
+ANALYSIS_INTERVAL = 4 * 60 * 60
 
 # 启动后首次分析的延迟 (秒): 30 秒
 INITIAL_DELAY = 30
