@@ -788,7 +788,7 @@ onMounted(() => {
           <button
             v-for="f in [
               { key: 'all', label: '全部', count: decisionLogs.length },
-              { key: 'ai', label: 'AI主理人', count: decisionLogs.filter(l => !l.strategy_name).length },
+              { key: 'ai', label: 'Autopilot', count: decisionLogs.filter(l => !l.strategy_name).length },
               { key: 'strategy', label: '量化策略', count: decisionLogs.filter(l => !!l.strategy_name).length },
             ]"
             :key="f.key"
@@ -827,7 +827,7 @@ onMounted(() => {
                   {{ log.strategy_name }}
                 </span>
                 <span v-else class="tl-source tl-source-ai">
-                  AI主理人
+                  Autopilot
                 </span>
                 <span class="tl-badge" :style="{ color: decisionColor(log.decision), borderColor: decisionColor(log.decision) + '40' }">
                   {{ decisionLabel(log.decision) }}
