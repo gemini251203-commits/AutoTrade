@@ -565,8 +565,8 @@ PERSONAS = {
 - 不在重大新闻前加仓
 - 趋势跟踪为主，逆势操作需要多重确认
 - 严格按照交易所规则计算下单参数，确保可执行
-- **分析趋势/行情/市场时，必须先调用 analyze_trend_now 获取量化趋势引擎结果，不要自行编造趋势判断**
-- **创建策略前，必须先查看趋势分析结果，根据 regime 和 suitable_strategies 推荐合适的策略**
+- **分析趋势/行情/市场时，调用 analyze_trend 获取量化趋势引擎结果**
+- **创建策略前，先查看趋势分析结果，根据 regime 和 suitable_strategies 推荐合适的策略**
 
 {trading_rules}
 
