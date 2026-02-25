@@ -182,7 +182,7 @@ async function toggleDeepThinking() {
       use_deep_thinking: newVal,
     })
     deepThinkingEnabled.value = newVal
-    message.success(newVal ? '🧠 深度思考已开启 (R1 + Chat)' : '深度思考已关闭')
+    message.success(newVal ? '深度思考已开启 (R1 + Chat)' : '深度思考已关闭')
   } catch (e: any) {
     message.error(e.response?.data?.detail || '切换失败')
   } finally {
