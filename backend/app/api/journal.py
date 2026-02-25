@@ -1,12 +1,12 @@
 """
 Trade Journal API
 ==================
-交易记忆查询端点
+浜ゆ槗璁板繂鏌ヨ绔偣
 
-端点:
-    GET    /api/journal/           - 获取交易记忆列表
-    GET    /api/journal/stats      - 获取交易统计
-    DELETE /api/journal/{id}       - 删除单条交易记忆
+绔偣:
+    GET    /api/journal/           - 鑾峰彇浜ゆ槗璁板繂鍒楄〃
+    GET    /api/journal/stats      - 鑾峰彇浜ゆ槗缁熻
+    DELETE /api/journal/{id}       - 鍒犻櫎鍗曟潯浜ゆ槗璁板繂
 """
 
 from typing import Optional, List
@@ -27,7 +27,7 @@ router = APIRouter(tags=["TradeJournal"])
 # ==================== Schemas ====================
 
 class TradeMemoryResponse(BaseModel):
-    """交易记忆响应"""
+    """浜ゆ槗璁板繂鍝嶅簲"""
     id: int
     symbol: str
     source: Optional[str] = None
@@ -54,7 +54,7 @@ class TradeMemoryResponse(BaseModel):
 
 
 class JournalStatsResponse(BaseModel):
-    """交易统计响应"""
+    """浜ゆ槗缁熻鍝嶅簲"""
     total_trades: int
     win_count: int
     loss_count: int
@@ -77,7 +77,7 @@ async def list_trade_memories(
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
 ):
-    """获取交易记忆列表"""
+    """鑾峰彇浜ゆ槗璁板繂鍒楄〃"""
     query = (
         select(TradeMemory)
         .where(TradeMemory.user_id == current_user.id)
@@ -129,12 +129,12 @@ async def get_journal_stats(
     db: DbSession,
     symbol: Optional[str] = None,
 ):
-    """获取交易统计"""
+    """鑾峰彇浜ゆ槗缁熻"""
     base_filter = [TradeMemory.user_id == current_user.id]
     if symbol:
         base_filter.append(TradeMemory.symbol == symbol.upper())
     
-    # 总体统计
+    # 鎬讳綋缁熻
     result = await db.execute(
         select(
             func.count(TradeMemory.id).label("total"),
@@ -147,7 +147,7 @@ async def get_journal_stats(
     row = result.one()
     total = row.total or 0
     
-    # 按来源分�?
+    # 鎸夋潵婧愬垎缁?
     source_result = await db.execute(
         select(
             TradeMemory.source,
@@ -164,7 +164,7 @@ async def get_journal_stats(
             "pnl_usdt": float(sr.pnl or 0),
         }
     
-    # win/loss 统计
+    # win/loss 缁熻
     win_result = await db.execute(
         select(func.count(TradeMemory.id))
         .where(*base_filter, TradeMemory.trade_result == "win")
@@ -195,7 +195,7 @@ async def delete_memory(
     current_user: CurrentUser,
     db: DbSession,
 ):
-    """删除单条交易记忆"""
+    """鍒犻櫎鍗曟潯浜ゆ槗璁板繂"""
     from fastapi import HTTPException
     
     result = await db.execute(
@@ -207,7 +207,7 @@ async def delete_memory(
     memory = result.scalar_one_or_none()
     
     if not memory:
-        raise HTTPException(status_code=404, detail="记录不存�?)
+        raise HTTPException(status_code=404, detail="璁板綍涓嶅瓨鍦?)
     
     await db.delete(memory)
     await db.commit()

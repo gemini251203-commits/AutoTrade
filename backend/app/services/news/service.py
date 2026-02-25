@@ -1,13 +1,13 @@
 """
 News Service
 ================
-新闻业务查询 + 统计
+閺備即妞堟稉姘閺屻儴顕?+ 缂佺喕顓?
 
-职责:
-- 查询最新新�?(支持币种/分类/关键词过�?
-- 计算市场情绪指标
-- 新闻交易绩效统计
-- 新闻监控规则 CRUD
+閼卞矁鐭?
+- 閺屻儴顕楅張鈧弬鐗堟煀闂?(閺€顖涘瘮鐢胶顫?閸掑棛琚?閸忔娊鏁拠宥堢箖濠?
+- 鐠侊紕鐣荤敮鍌氭簚閹懐鍗庨幐鍥ㄧ垼
+- 閺備即妞堟禍銈嗘缂佲晜鏅ョ紒鐔活吀
+- 閺備即妞堥惄鎴炲付鐟欏嫬鍨?CRUD
 """
 
 import logging
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================
-# 新闻查询
+# 閺備即妞堥弻銉嚄
 # ============================================================
 
 async def get_latest_news(
@@ -35,31 +35,31 @@ async def get_latest_news(
     limit: int = 20,
 ) -> List[Dict[str, Any]]:
     """
-    查询最新新�?
+    閺屻儴顕楅張鈧弬鐗堟煀闂?
     
     Args:
-        db: 数据库会�?
-        currency: 币种过滤 (�?"BTC")
-        news_category: 分类过滤 (�?"macro")
-        keyword: 关键词搜�?(标题模糊匹配)
-        limit: 返回条数
+        db: 閺佺増宓佹惔鎾茬窗鐠?
+        currency: 鐢胶顫掓潻鍥ㄦ姢 (婵?"BTC")
+        news_category: 閸掑棛琚潻鍥ㄦ姢 (婵?"macro")
+        keyword: 閸忔娊鏁拠宥嗘偝缁?(閺嶅洭顣藉Ο锛勭ˇ閸栧綊鍘?
+        limit: 鏉╂柨娲栭弶鈩冩殶
     
     Returns:
-        新闻列表 (字典)
+        閺備即妞堥崚妤勩€?(鐎涙鍚€)
     """
     query = select(NewsArticle).order_by(desc(NewsArticle.published_at))
     
-    # 币种过滤 (JSON包含)
+    # 鐢胶顫掓潻鍥ㄦ姢 (JSON閸栧懎鎯?
     if currency:
         query = query.where(
             NewsArticle.currencies.isnot(None),
         )
     
-    # 分类过滤
+    # 閸掑棛琚潻鍥ㄦ姢
     if news_category:
         query = query.where(NewsArticle.news_category == news_category)
     
-    # 关键词搜�?
+    # 閸忔娊鏁拠宥嗘偝缁?
     if keyword:
         query = query.where(
             or_(
@@ -72,7 +72,7 @@ async def get_latest_news(
     result = await db.execute(query)
     articles = result.scalars().all()
     
-    # 如果有币种过滤，�?Python 层再过滤 (JSON 查询兼容�?
+    # 婵″倹鐏夐張澶婄缁夊秷绻冨銈忕礉閸?Python 鐏炲倸鍟€鏉╁洦鎶?(JSON 閺屻儴顕楅崗鐓庮啇閹?
     if currency:
         currency_upper = currency.upper()
         articles = [
@@ -89,12 +89,12 @@ async def get_market_sentiment(
     hours: int = 24,
 ) -> Dict[str, Any]:
     """
-    计算市场情绪指标
+    鐠侊紕鐣荤敮鍌氭簚閹懐鍗庨幐鍥ㄧ垼
     
     Args:
-        db: 数据库会�?
-        currency: 币种 (�?"BTC")
-        hours: 回看时间窗口
+        db: 閺佺増宓佹惔鎾茬窗鐠?
+        currency: 鐢胶顫?(婵?"BTC")
+        hours: 閸ョ偟婀呴弮鍫曟？缁愭褰?
     
     Returns:
         {
@@ -116,7 +116,7 @@ async def get_market_sentiment(
     result = await db.execute(query)
     articles = result.scalars().all()
     
-    # 如果有币种过�?
+    # 婵″倹鐏夐張澶婄缁夊秷绻冨?
     if currency:
         currency_upper = currency.upper()
         articles = [
@@ -137,16 +137,16 @@ async def get_market_sentiment(
             "currency": currency,
         }
     
-    # 统计
+    # 缂佺喕顓?
     positive_count = sum(1 for a in articles if a.sentiment == "positive")
     negative_count = sum(1 for a in articles if a.sentiment == "negative")
     neutral_count = sum(1 for a in articles if a.sentiment == "neutral")
     
-    # 加权平均�?
+    # 閸旂姵娼堥獮鍐叉綆閸?
     total_score = sum(a.sentiment_score or 0.0 for a in articles)
     avg_score = total_score / len(articles) if articles else 0.0
     
-    # 按分类统�?
+    # 閹稿鍨庣猾鑽ょ埠鐠?
     by_category: Dict[str, Dict] = {}
     for a in articles:
         cat = a.news_category or "other"
@@ -162,7 +162,7 @@ async def get_market_sentiment(
             )
         del cat_data["total_score"]
     
-    # 整体判断
+    # 閺佺繝缍嬮崚銈嗘焽
     if avg_score > 0.15:
         overall = "positive"
     elif avg_score < -0.15:
@@ -184,7 +184,7 @@ async def get_market_sentiment(
 
 
 # ============================================================
-# 监控规则 CRUD
+# 閻╂垶甯剁憴鍕灟 CRUD
 # ============================================================
 
 async def get_user_alerts(
@@ -192,7 +192,7 @@ async def get_user_alerts(
     user_id: int,
     active_only: bool = False,
 ) -> List[Dict[str, Any]]:
-    """查询用户的所有监控规�?""
+    """閺屻儴顕楅悽銊﹀煕閻ㄥ嫭澧嶉張澶屾磧閹貉嗩潐閸?""
     query = (
         select(NewsAlert)
         .where(NewsAlert.user_id == user_id)
@@ -212,7 +212,7 @@ async def get_news_trading_stats(
     alert_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
-    新闻交易绩效统计
+    閺備即妞堟禍銈嗘缂佲晜鏅ョ紒鐔活吀
     
     Returns:
         {
@@ -260,7 +260,7 @@ async def get_news_trading_stats(
 
 
 # ============================================================
-# 思考记录查�?
+# 閹繆鈧啳顔囪ぐ鏇熺叀鐠?
 # ============================================================
 
 async def get_thinkings(
@@ -269,7 +269,7 @@ async def get_thinkings(
     news_article_id: Optional[int] = None,
     limit: int = 20,
 ) -> List[Dict[str, Any]]:
-    """查询 AI 思考记�?""
+    """閺屻儴顕?AI 閹繆鈧啳顔囪ぐ?""
     query = (
         select(NewsThinking)
         .where(NewsThinking.user_id == user_id)
@@ -285,11 +285,11 @@ async def get_thinkings(
 
 
 # ============================================================
-# 转换辅助函数
+# 鏉烆剚宕叉潏鍛И閸戣姤鏆?
 # ============================================================
 
 def _article_to_dict(a: NewsArticle) -> Dict[str, Any]:
-    """NewsArticle ORM �?字典"""
+    """NewsArticle ORM 閳?鐎涙鍚€"""
     return {
         "id": a.id,
         "source": a.source,
@@ -309,7 +309,7 @@ def _article_to_dict(a: NewsArticle) -> Dict[str, Any]:
 
 
 def _alert_to_dict(a: NewsAlert) -> Dict[str, Any]:
-    """NewsAlert ORM �?字典"""
+    """NewsAlert ORM 閳?鐎涙鍚€"""
     win_rate = 0.0
     total = a.win_count + a.loss_count
     if total > 0:
@@ -346,7 +346,7 @@ def _alert_to_dict(a: NewsAlert) -> Dict[str, Any]:
 
 
 def _thinking_to_dict(t: NewsThinking) -> Dict[str, Any]:
-    """NewsThinking ORM �?字典"""
+    """NewsThinking ORM 閳?鐎涙鍚€"""
     return {
         "id": t.id,
         "user_id": t.user_id,
