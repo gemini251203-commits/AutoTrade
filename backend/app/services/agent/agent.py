@@ -278,6 +278,12 @@ async def chat_stream(
 
             # 查找所有工具调用
             tool_matches = TOOL_CALL_PATTERN.findall(ai_content)
+            
+            # 调试日志: 追踪 AI 回复和工具调用
+            logger.info(
+                f"[Agent] Round {round_i} | tools_found={len(tool_matches)} | "
+                f"response_len={len(ai_content)} | preview={ai_content[:200]!r}"
+            )
 
             if not tool_matches:
                 # 没有工具调用 → 这就是最终回复
@@ -441,6 +447,12 @@ async def chat_complete(
             ai_content = response.content
 
             tool_matches = TOOL_CALL_PATTERN.findall(ai_content)
+            
+            # 调试日志
+            logger.info(
+                f"[Agent Complete] Round {round_i} | tools_found={len(tool_matches)} | "
+                f"response_len={len(ai_content)} | preview={ai_content[:200]!r}"
+            )
 
             if not tool_matches:
                 final_content = ai_content
