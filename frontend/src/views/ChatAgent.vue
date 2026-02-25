@@ -490,9 +490,7 @@ const formatTime = formatTimeBJ
               :disabled="deepThinkingLoading"
               title="深度思考: R1推理分析 + Chat执行"
             >
-              <span v-if="deepThinkingLoading">⏳</span>
-              <span v-else>🧠</span>
-              {{ deepThinkingEnabled ? 'R1' : 'R1' }}
+              {{ deepThinkingLoading ? '...' : (deepThinkingEnabled ? 'R1 ON' : 'R1') }}
             </button>
             <div v-if="autopilotStatus?.running" class="autopilot-info">
               <span>已运行 {{ autopilotStatus.total_cycles }} 轮</span>
