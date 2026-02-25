@@ -707,20 +707,23 @@ class AgentAutopilot:
                 # 构造分析指令 (直接注入指标数据 + 策略信号 + 交易记忆 + 趋势分析 + 资金费率)
                 now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
                 prompt = (
-                    f"[Autopilot {now}] "
-                    f"请分析 {symbol} 当前市场状况并做出交易决策。\n\n"
-                    f"{indicator_text}\n"
-                    f"{strategy_text}\n"
-                    f"{trend_text}\n"
-                    f"{funding_text}\n"
-                    f"{memory_text}\n\n"
-                    f"请按以下步骤操作:\n"
-                    f"1. 参考上方策略配置、技术指标、趋势分析和交易记忆\n"
-                    f"2. 综合分析当前市场状况\n"
-                    f"3. 给出决策: 开仓/平仓/观望, 并说明理由\n"
-                    f"4. 如果决定交易, 直接执行 (使用 run_strategy 工具以关联策略)\n\n"
-                    f"回复要简洁, 列出关键数据和理由。\n"
-                    f"最后一行请明确写出你的决策: 观望/开多/开空/平多/平空"
+                    f"[Autopilot {now}] {symbol} 决策周期\n\n"
+                    f"=== 市场数据 ===\n{indicator_text}\n"
+                    f"{strategy_text}\n{trend_text}\n{funding_text}\n{memory_text}\n\n"
+                    f"=== 你的任务 ===\n"
+                    f"你是独立交易员，必须基于上述数据做出决策并执行。\n\n"
+                    f"执行规则:\n"
+                    f"1. 先用上下文中的余额和价格计算参数，不需要调用 get_balance/get_price\n"
+                    f"2. 如果有明确信号(策略入场+趋势确认+指标支持)，必须下单:\n"
+                    f"   [TOOL_CALL: place_order(symbol={symbol}, side=buy/sell, order_type=market, "
+                    f"quantity=计算值, leverage=杠杆, stop_loss=止损价, take_profit=止盈价)]\n"
+                    f"3. 如果已有持仓，根据行情决定: 持有/移动止损/止盈/平仓\n"
+                    f"4. 信号不明确时才选择观望，但不要永远观望\n"
+                    f"5. 仓位不超过余额30%，必须设止损\n\n"
+                    f"回复格式 (简洁≤150字):\n"
+                    f"**分析**: 一句话总结行情\n"
+                    f"**决策**: 做多/做空/观望/平仓 (理由)\n"
+                    f"**执行**: [TOOL_CALL: ...] 或 无操作"
                 )
 
                 # 调用 Agent (非流式) — 设置来源上下文

@@ -471,6 +471,8 @@ const formatTime = formatTimeBJ
               :disabled="autopilotStatus?.running"
               title="决策间隔"
             >
+              <option value="1m">1m</option>
+              <option value="3m">3m</option>
               <option value="5m">5m</option>
               <option value="15m">15m</option>
               <option value="30m">30m</option>
