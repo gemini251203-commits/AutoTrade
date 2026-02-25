@@ -1,13 +1,13 @@
 """
-Order API (鍚堢害浜ゆ槗鐗?
+Order API (合约交易版)
 =======================
-璁㈠崟绠＄悊绔偣
+订单管理端点
 
-绔偣:
-    GET  /api/order/              - 鑾峰彇鐢ㄦ埛璁㈠崟鍒楄〃
-    POST /api/order/              - 鍒涘缓璁㈠崟
-    POST /api/order/{id}/cancel   - 鍙栨秷璁㈠崟
-    GET  /api/order/{id}          - 鑾峰彇璁㈠崟璇︽儏
+端点:
+    GET  /api/order/              - 获取用户订单列表
+    POST /api/order/              - 创建订单
+    POST /api/order/{id}/cancel   - 取消订单
+    GET  /api/order/{id}          - 获取订单详情
 """
 
 from decimal import Decimal
@@ -28,7 +28,7 @@ router = APIRouter(tags=["Order"])
 # ==================== Schemas ====================
 
 class OrderCreateRequest(BaseModel):
-    """鍒涘缓璁㈠崟璇锋眰"""
+    """创建订单请求"""
     symbol: str = Field(..., example="BTCUSDT")
     side: OrderSide = Field(..., example="buy")
     order_type: OrderType = Field(..., example="market")
@@ -44,7 +44,7 @@ class OrderCreateRequest(BaseModel):
 
 
 class OrderResponse(BaseModel):
-    """璁㈠崟鍝嶅簲"""
+    """订单响应"""
     model_config = {"from_attributes": True, "json_encoders": {Decimal: str}}
 
     id: int
@@ -80,11 +80,11 @@ async def list_orders(
     limit: int = 50,
 ):
     """
-    鑾峰彇鐢ㄦ埛璁㈠崟鍒楄〃
+    获取用户订单列表
     
-    鍙€夎繃婊ゆ潯浠?
+    可选过滤条件:
     - status_filter: pending, open, filled, cancelled
-    - symbol: BTCUSDT 绛?
+    - symbol: BTCUSDT 等
     """
     orders = await OrderExecutor.get_user_orders(
         db, current_user.id, status_filter, symbol, limit
@@ -124,17 +124,17 @@ async def create_order(
     db: DbSession,
 ):
     """
-    鍒涘缓璁㈠崟 (閫氳繃缁熶竴 Pipeline)
+    创建订单 (通过统一 Pipeline)
     
-    璁㈠崟绫诲瀷:
-    - market: 甯備环鍗?(绔嬪嵆鎴愪氦)
-    - limit: 闄愪环鍗?(鎸傚崟绛夊緟)
-    - stop_market: 姝㈡崯甯備环鍗?(闇€瑕?trigger_price)
-    - stop_limit: 姝㈡崯闄愪环鍗?(闇€瑕?trigger_price + price)
-    - take_profit_market: 姝㈢泩甯備环鍗?
-    - take_profit_limit: 姝㈢泩闄愪环鍗?
+    订单类型:
+    - market: 市价单 (立即成交)
+    - limit: 限价单 (挂单等待)
+    - stop_market: 止损市价单 (需要 trigger_price)
+    - stop_limit: 止损限价单 (需要 trigger_price + price)
+    - take_profit_market: 止盈市价单
+    - take_profit_limit: 止盈限价单
     
-    鈿狅笍 鎵€鏈夎鍗曢€氳繃 Pipeline 缁熶竴鍏ュ彛: Risk 瀹℃壒 鈫?Execution 鎵ц
+    ⚠️ 所有订单通过 Pipeline 统一入口: Risk 审批 → Execution 执行
     """
     from app.core.pipeline import get_pipeline
     from sqlalchemy import select
@@ -144,7 +144,7 @@ async def create_order(
     try:
         pipeline = get_pipeline(current_user.id)
         
-        # 鑾峰彇浣欓鍜屾寔浠撶敤浜庨鎺?
+        # 获取余额和持仓用于风控
         wallet_result = await db.execute(
             select(Wallet).where(Wallet.user_id == current_user.id)
         )
@@ -183,9 +183,9 @@ async def create_order(
         )
         
         if not result.get("success"):
-            raise OrderError(result.get("error", "Pipeline 鎵ц澶辫触"))
+            raise OrderError(result.get("error", "Pipeline 执行失败"))
         
-        # 浠?DB 鍔犺浇瀹屾暣 order 瀵硅薄浠ユ瀯閫犲搷搴?
+        # 从 DB 加载完整 order 对象以构造响应
         order_id = result.get("order_id")
         order = await db.get(Order, order_id)
         
@@ -230,10 +230,10 @@ async def cancel_order(
     db: DbSession,
 ):
     """
-    鍙栨秷璁㈠崟
+    取消订单
     
-    鍙湁娲昏穬璁㈠崟 (pending/open/partial) 鍙互鍙栨秷
-    鍙栨秷鍚庝細閲婃斁鍐荤粨鐨勪繚璇侀噾
+    只有活跃订单 (pending/open/partial) 可以取消
+    取消后会释放冻结的保证金
     """
     try:
         order = await OrderExecutor.cancel_order(
@@ -280,10 +280,10 @@ async def cancel_order(
         )
 
 
-# ==================== 姝㈢泩姝㈡崯鐩堜簭棰勮 ====================
+# ==================== 止盈止损盈亏预览 ====================
 
 class TpSlPreviewRequest(BaseModel):
-    """姝㈢泩姝㈡崯鐩堜簭棰勮璇锋眰"""
+    """止盈止损盈亏预览请求"""
     symbol: str = Field(..., example="BTCUSDT")
     side: str = Field(..., example="long")  # long or short
     quantity: Decimal = Field(..., gt=0, example=0.01)
@@ -294,22 +294,22 @@ class TpSlPreviewRequest(BaseModel):
 
 
 class TpSlPreviewResponse(BaseModel):
-    """姝㈢泩姝㈡崯鐩堜簭棰勮鍝嶅簲"""
-    take_profit_pnl: float  # 姝㈢泩鐩堜簭 (USDT)
-    take_profit_pct: float  # 姝㈢泩鏀剁泭鐜?(%)
-    stop_loss_pnl: float    # 姝㈡崯鐩堜簭 (USDT)
-    stop_loss_pct: float    # 姝㈡崯鏀剁泭鐜?(%)
-    risk_reward_ratio: float  # 椋庨櫓鍥炴姤姣?
-    margin_required: float  # 鎵€闇€淇濊瘉閲?
-    notional: float         # 鍚嶄箟浠峰€?
+    """止盈止损盈亏预览响应"""
+    take_profit_pnl: float  # 止盈盈亏 (USDT)
+    take_profit_pct: float  # 止盈收益率 (%)
+    stop_loss_pnl: float    # 止损盈亏 (USDT)
+    stop_loss_pct: float    # 止损收益率 (%)
+    risk_reward_ratio: float  # 风险回报比
+    margin_required: float  # 所需保证金
+    notional: float         # 名义价值
 
 
 @router.post("/tp-sl-preview", response_model=TpSlPreviewResponse)
 async def preview_tp_sl(request: TpSlPreviewRequest):
     """
-    璁＄畻姝㈢泩姝㈡崯鐨勯璁＄泩浜?
+    计算止盈止损的预计盈亏
     
-    鐢ㄤ簬鍦ㄤ笅鍗曞墠棰勮娼滃湪鐨勭泩浜忔儏鍐?
+    用于在下单前预览潜在的盈亏情况
     """
     from app.services.margin.calculator import MarginCalculator
     from app.models.position import PositionSide
@@ -339,10 +339,10 @@ async def preview_tp_sl(request: TpSlPreviewRequest):
     )
 
 
-# ==================== 鏉犳潌淇℃伅鏌ヨ ====================
+# ==================== 杠杆信息查询 ====================
 
 class LeverageInfoRequest(BaseModel):
-    """鏉犳潌淇℃伅鏌ヨ璇锋眰"""
+    """杠杆信息查询请求"""
     symbol: str = Field(..., example="BTCUSDT")
     notional: Optional[Decimal] = Field(default=None, example=10000)
     quantity: Optional[Decimal] = Field(default=None, example=0.1)
@@ -350,20 +350,20 @@ class LeverageInfoRequest(BaseModel):
 
 
 class LeverageInfoResponse(BaseModel):
-    """鏉犳潌淇℃伅鍝嶅簲"""
+    """杠杆信息响应"""
     symbol: str
-    max_leverage: int           # 鏈€澶ф潬鏉?
-    maintenance_margin_rate: float  # 缁存寔淇濊瘉閲戠巼 (%)
-    notional: float             # 鍚嶄箟浠峰€?
-    min_notional: float = 5.0   # 鏈€灏忓悕涔変环鍊?
+    max_leverage: int           # 最大杠杆
+    maintenance_margin_rate: float  # 维持保证金率 (%)
+    notional: float             # 名义价值
+    min_notional: float = 5.0   # 最小名义价值
 
 
 @router.post("/leverage-info", response_model=LeverageInfoResponse)
 async def get_leverage_info(request: LeverageInfoRequest):
     """
-    鏌ヨ鎸囧畾浠撲綅鐨勬渶澶ф潬鏉嗗拰缁存寔淇濊瘉閲戠巼
+    查询指定仓位的最大杠杆和维持保证金率
     
-    鏍规嵁甯佸畨瑙勫垯锛屼粨浣嶈秺澶э紝鍏佽鐨勬渶澶ф潬鏉嗚秺浣?
+    根据币安规则，仓位越大，允许的最大杠杆越低
     """
     from app.services.margin.leverage_tiers import (
         get_max_leverage,
@@ -371,7 +371,7 @@ async def get_leverage_info(request: LeverageInfoRequest):
         MIN_NOTIONAL_VALUE,
     )
     
-    # 璁＄畻鍚嶄箟浠峰€?
+    # 计算名义价值
     if request.notional:
         notional = request.notional
     elif request.quantity and request.price:
@@ -385,7 +385,7 @@ async def get_leverage_info(request: LeverageInfoRequest):
     return LeverageInfoResponse(
         symbol=request.symbol.upper(),
         max_leverage=max_lev,
-        maintenance_margin_rate=float(mmr * 100),  # 杞负鐧惧垎姣?
+        maintenance_margin_rate=float(mmr * 100),  # 转为百分比
         notional=float(notional),
         min_notional=float(MIN_NOTIONAL_VALUE),
     )

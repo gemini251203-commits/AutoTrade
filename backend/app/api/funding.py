@@ -1,13 +1,13 @@
 """
-Funding Rate API 鈥?璧勯噾璐圭巼绔偣
+Funding Rate API — 资金费率端点
 =================================
-鎻愪緵璧勯噾璐圭巼鏌ヨ鎺ュ彛, 鏀寔鎵€鏈夌郴缁熷唴甯佺
+提供资金费率查询接口, 支持所有系统内币种
 
-绔偣:
-- GET  /api/funding/rates          鎵€鏈変氦鏄撳褰撳墠璐圭巼
-- GET  /api/funding/rates/{symbol} 鍗曚釜浜ゆ槗瀵硅鎯?(鍚勾鍖?
-- GET  /api/funding/history/{symbol} 鍘嗗彶璐圭巼
-- GET  /api/funding/my-fees        鐢ㄦ埛绱琚墸鐨勮祫閲戣垂鐢?
+端点:
+- GET  /api/funding/rates          所有交易对当前费率
+- GET  /api/funding/rates/{symbol} 单个交易对详情 (含年化)
+- GET  /api/funding/history/{symbol} 历史费率
+- GET  /api/funding/my-fees        用户累计被扣的资金费用
 """
 
 from decimal import Decimal
@@ -25,13 +25,13 @@ router = APIRouter()
 @router.get("/rates")
 async def get_all_rates():
     """
-    鑾峰彇鎵€鏈変氦鏄撳鐨勫綋鍓嶈祫閲戣垂鐜?(浠庡唴瀛樼紦瀛樿鍙?
+    获取所有交易对的当前资金费率 (从内存缓存读取)
 
-    杩斿洖绯荤粺涓墍鏈夊竵绉嶇殑璐圭巼銆佹爣璁颁环銆佷笅娆＄粨绠楁椂闂?
+    返回系统中所有币种的费率、标记价、下次结算时间
     """
     cached = FundingRateService.get_all_cached_rates()
     if not cached:
-        # 缂撳瓨涓虹┖, 灏濊瘯鍗虫椂閲囬泦
+        # 缓存为空, 尝试即时采集
         await funding_rate_service.fetch_all_rates()
         cached = FundingRateService.get_all_cached_rates()
 
@@ -46,11 +46,11 @@ async def get_all_rates():
             "funding_rate_pct": f"{rate * 100:.4f}%",
             "annualized_pct": f"{annualized:.2f}%",
             "next_funding_time": data.get("nextFundingTime", 0),
-            "direction": "澶氬ご浠樿垂" if rate > 0 else "绌哄ご浠樿垂" if rate < 0 else "闆惰垂鐜?,
+            "direction": "多头付费" if rate > 0 else "空头付费" if rate < 0 else "零费率",
             "updated_at": data.get("updated_at"),
         })
 
-    # 鎸夎垂鐜囩粷瀵瑰€奸檷搴忔帓鍒?
+    # 按费率绝对值降序排列
     result.sort(key=lambda x: abs(float(x.get("funding_rate", 0))), reverse=True)
     return {"rates": result, "count": len(result)}
 
@@ -58,20 +58,20 @@ async def get_all_rates():
 @router.get("/rates/{symbol}")
 async def get_rate_detail(symbol: str):
     """
-    鑾峰彇鍗曚釜浜ゆ槗瀵圭殑瀹屾暣璐圭巼淇℃伅 (鍚勾鍖栥€佷笅娆＄粨绠楀€掕鏃?
+    获取单个交易对的完整费率信息 (含年化、下次结算倒计时)
     """
     info = await funding_rate_service.get_funding_info(symbol.upper())
     if not info:
-        return {"error": f"鏃犳硶鑾峰彇 {symbol} 鐨勮垂鐜囦俊鎭?}
+        return {"error": f"无法获取 {symbol} 的费率信息"}
     return info
 
 
 @router.get("/history/{symbol}")
 async def get_rate_history(symbol: str, limit: int = Query(100, ge=1, le=1000)):
     """
-    鑾峰彇鍘嗗彶璧勯噾璐圭巼 (鐢ㄤ簬鍥捐〃灞曠ず)
+    获取历史资金费率 (用于图表展示)
 
-    鐩存帴杞彂甯佸畨 /fapi/v1/fundingRate
+    直接转发币安 /fapi/v1/fundingRate
     """
     from app.services.exchange import BinanceClient
     client = BinanceClient()
@@ -85,16 +85,16 @@ async def get_my_fees(
     user: CurrentUser,
 ):
     """
-    鏌ヨ褰撳墠鐢ㄦ埛鐨勮祫閲戣垂鐜囩疮璁′俊鎭?
+    查询当前用户的资金费率累计信息
 
-    鍖呭惈:
-    - 鍚勪粨浣嶇殑绱璐圭敤
-    - 鎬昏璐圭敤
+    包含:
+    - 各仓位的累计费用
+    - 总计费用
     """
     from app.models.position import Position, PositionStatus
     from app.models.wallet_transaction import WalletTransaction, TransactionType
 
-    # 娲昏穬浠撲綅鐨勮垂鐢?
+    # 活跃仓位的费用
     pos_result = await db.execute(
         select(Position).where(
             Position.user_id == user.id,
@@ -114,7 +114,7 @@ async def get_my_fees(
             "total_funding_fee": fee,
         })
 
-    # 鎬昏 (浠庢祦姘寸粺璁?
+    # 总计 (从流水统计)
     total_result = await db.execute(
         select(func.coalesce(func.sum(WalletTransaction.amount), 0)).where(
             WalletTransaction.user_id == user.id,
@@ -123,7 +123,7 @@ async def get_my_fees(
     )
     total_funding = float(total_result.scalar() or 0)
 
-    # 鏈€杩?20 鏉¤祫閲戣垂鐜囨祦姘?
+    # 最近 20 条资金费率流水
     recent_result = await db.execute(
         select(WalletTransaction).where(
             WalletTransaction.user_id == user.id,

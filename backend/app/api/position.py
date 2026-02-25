@@ -1,14 +1,14 @@
 """
 Position API
 =============
-浠撲綅绠＄悊绔偣
+仓位管理端点
 
-绔偣:
-    GET  /api/position/           - 鑾峰彇鐢ㄦ埛鎵€鏈変粨浣?
-    GET  /api/position/{id}       - 鑾峰彇鍗曚釜浠撲綅璇︽儏
-    POST /api/position/open       - 寮€浠?
-    POST /api/position/{id}/close - 骞充粨
-    POST /api/position/{id}/tp-sl - 璁剧疆姝㈢泩姝㈡崯
+端点:
+    GET  /api/position/           - 获取用户所有仓位
+    GET  /api/position/{id}       - 获取单个仓位详情
+    POST /api/position/open       - 开仓
+    POST /api/position/{id}/close - 平仓
+    POST /api/position/{id}/tp-sl - 设置止盈止损
 """
 
 from decimal import Decimal
@@ -28,33 +28,33 @@ router = APIRouter(tags=["Position"])
 # ==================== Schemas ====================
 
 class OpenPositionRequest(BaseModel):
-    """寮€浠撹姹?""
+    """开仓请求"""
     symbol: str = Field(..., example="BTCUSDT")
     side: PositionSide = Field(..., example="long")
     quantity: Decimal = Field(..., gt=0, example=0.01)
     entry_price: Decimal = Field(..., gt=0, example=80000)
     leverage: int = Field(default=10, ge=1, le=125, example=10)
     margin_mode: MarginMode = Field(default=MarginMode.CROSS)
-    reduce_only: bool = Field(default=False, description="鍙噺浠?(骞充粨妯″紡)")
+    reduce_only: bool = Field(default=False, description="只减仓 (平仓模式)")
     stop_loss: Optional[Decimal] = Field(default=None, example=75000)
     take_profit: Optional[Decimal] = Field(default=None, example=90000)
 
 
 class ClosePositionRequest(BaseModel):
-    """骞充粨璇锋眰"""
+    """平仓请求"""
     close_price: Decimal = Field(..., gt=0, example=82000)
-    quantity: Optional[Decimal] = Field(default=None, gt=0, description="骞充粨鏁伴噺锛屼笉濉垯鍏ㄥ钩")
+    quantity: Optional[Decimal] = Field(default=None, gt=0, description="平仓数量，不填则全平")
 
 
 class SetTpSlRequest(BaseModel):
-    """璁剧疆姝㈢泩姝㈡崯"""
+    """设置止盈止损"""
     stop_loss: Optional[Decimal] = Field(default=None)
     take_profit: Optional[Decimal] = Field(default=None)
-    mark_price: Optional[Decimal] = Field(default=None, description="褰撳墠鏍囪浠锋牸 (鐢ㄤ簬鏍￠獙)")
+    mark_price: Optional[Decimal] = Field(default=None, description="当前标记价格 (用于校验)")
 
 
 class PositionResponse(BaseModel):
-    """浠撲綅鍝嶅簲"""
+    """仓位响应"""
     model_config = {"from_attributes": True, "json_encoders": {Decimal: str}}
 
     id: int
@@ -75,13 +75,13 @@ class PositionResponse(BaseModel):
 
 
 class PositionWithPnlResponse(PositionResponse):
-    """甯︽湭瀹炵幇鐩堜簭鐨勪粨浣嶅搷搴?""
+    """带未实现盈亏的仓位响应"""
     unrealized_pnl: Optional[Decimal] = None
     roe_percent: Optional[Decimal] = None
 
 
 class ClosePositionResponse(BaseModel):
-    """骞充粨鍝嶅簲"""
+    """平仓响应"""
     position: PositionResponse
     realized_pnl: Decimal
 
@@ -95,9 +95,9 @@ async def list_positions(
     status_filter: Optional[PositionStatus] = None,
 ):
     """
-    鑾峰彇鐢ㄦ埛鎵€鏈変粨浣?
+    获取用户所有仓位
     
-    鍙€夋寜鐘舵€佽繃婊? open, closed, liquidated
+    可选按状态过滤: open, closed, liquidated
     """
     positions = await PositionManager.get_user_positions(
         db, current_user.id, status_filter
@@ -132,19 +132,19 @@ async def open_position(
     db: DbSession,
 ):
     """
-    寮€浠?/ 鍙噺浠?
+    开仓 / 只减仓
     
-    鈿狅笍 璧勯噾鍘熷瓙鎬? 鍐荤粨淇濊瘉閲戝拰鍒涘缓浠撲綅鍦ㄥ悓涓€浜嬪姟涓畬鎴?
+    ⚠️ 资金原子性: 冻结保证金和创建仓位在同一事务中完成
     
-    褰?reduce_only=True 鏃讹紝鍙兘骞虫帀鐜版湁浠撲綅锛屼笉鑳藉紑鏂颁粨浣?
+    当 reduce_only=True 时，只能平掉现有仓位，不能开新仓位
     """
     try:
         if request.reduce_only:
-            # 鍙噺浠撴ā寮?- 鎵ц骞充粨
-            # 纭畾瑕佸钩浠撶殑浠撲綅鏂瑰悜 (鍙嶅悜)
+            # 只减仓模式 - 执行平仓
+            # 确定要平仓的仓位方向 (反向)
             close_side = PositionSide.SHORT if request.side == PositionSide.LONG else PositionSide.LONG
             
-            # 鏌ユ壘鐜版湁浠撲綅
+            # 查找现有仓位
             existing = await PositionManager.get_open_position(
                 db, current_user.id, request.symbol, close_side
             )
@@ -152,10 +152,10 @@ async def open_position(
             if not existing:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"鍙噺浠撴ā寮? 娌℃湁鍙钩浠撶殑 {close_side.value} 浠撲綅",
+                    detail=f"只减仓模式: 没有可平仓的 {close_side.value} 仓位",
                 )
             
-            # 骞充粨
+            # 平仓
             position, pnl = await PositionManager.close_position(
                 db=db,
                 position_id=existing.id,
@@ -184,9 +184,9 @@ async def open_position(
                 created_at=position.created_at.isoformat() + "Z",
             )
         else:
-            # 姝ｅ父寮€浠撴ā寮?
+            # 正常开仓模式
             
-            # ========== 姝㈢泩姝㈡崯浠锋牸鍚堢悊鎬ф牎楠?(涓?set_tp_sl 淇濇寔涓€鑷? ==========
+            # ========== 止盈止损价格合理性校验 (与 set_tp_sl 保持一致) ==========
             if request.stop_loss is not None or request.take_profit is not None:
                 ref_price = request.entry_price
                 is_long = request.side == PositionSide.LONG
@@ -197,41 +197,41 @@ async def open_position(
                     if is_long and new_sl >= ref_price:
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"澶氬崟姝㈡崯浠?({new_sl}) 蹇呴』浣庝簬寮€浠撲环 ({ref_price})锛?
-                                   f"鍚﹀垯浼氱珛鍗宠Е鍙?,
+                            detail=f"多单止损价 ({new_sl}) 必须低于开仓价 ({ref_price})，"
+                                   f"否则会立即触发",
                         )
                     if not is_long and new_sl <= ref_price:
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"绌哄崟姝㈡崯浠?({new_sl}) 蹇呴』楂樹簬寮€浠撲环 ({ref_price})锛?
-                                   f"鍚﹀垯浼氱珛鍗宠Е鍙?,
+                            detail=f"空单止损价 ({new_sl}) 必须高于开仓价 ({ref_price})，"
+                                   f"否则会立即触发",
                         )
                 
                 if new_tp is not None and new_tp > 0:
                     if is_long and new_tp <= ref_price:
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"澶氬崟姝㈢泩浠?({new_tp}) 蹇呴』楂樹簬寮€浠撲环 ({ref_price})锛?
-                                   f"鍚﹀垯浼氱珛鍗宠Е鍙?,
+                            detail=f"多单止盈价 ({new_tp}) 必须高于开仓价 ({ref_price})，"
+                                   f"否则会立即触发",
                         )
                     if not is_long and new_tp >= ref_price:
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"绌哄崟姝㈢泩浠?({new_tp}) 蹇呴』浣庝簬寮€浠撲环 ({ref_price})锛?
-                                   f"鍚﹀垯浼氱珛鍗宠Е鍙?,
+                            detail=f"空单止盈价 ({new_tp}) 必须低于开仓价 ({ref_price})，"
+                                   f"否则会立即触发",
                         )
                 
-                # 姝㈢泩姝㈡崯涓嶈兘浜ゅ弶
+                # 止盈止损不能交叉
                 if new_sl and new_tp and new_sl > 0 and new_tp > 0:
                     if is_long and new_sl >= new_tp:
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"澶氬崟姝㈡崯 ({new_sl}) 涓嶈兘楂樹簬姝㈢泩 ({new_tp})",
+                            detail=f"多单止损 ({new_sl}) 不能高于止盈 ({new_tp})",
                         )
                     if not is_long and new_sl <= new_tp:
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"绌哄崟姝㈡崯 ({new_sl}) 涓嶈兘浣庝簬姝㈢泩 ({new_tp})",
+                            detail=f"空单止损 ({new_sl}) 不能低于止盈 ({new_tp})",
                         )
             
             position = await PositionManager.open_position(
@@ -297,12 +297,12 @@ async def close_position(
     db: DbSession,
 ):
     """
-    骞充粨
+    平仓
     
-    鈿狅笍 璧勯噾鍘熷瓙鎬? 閲婃斁淇濊瘉閲戝拰缁撶畻鐩堜簭鍦ㄥ悓涓€浜嬪姟涓畬鎴?
+    ⚠️ 资金原子性: 释放保证金和结算盈亏在同一事务中完成
     """
     try:
-        # 楠岃瘉浠撲綅灞炰簬褰撳墠鐢ㄦ埛
+        # 验证仓位属于当前用户
         from sqlalchemy import select
         result = await db.execute(
             select(Position).where(Position.id == position_id)
@@ -328,7 +328,7 @@ async def close_position(
             close_quantity=request.quantity,
         )
         
-        # 鎻愪氦浜嬪姟
+        # 提交事务
         await db.commit()
         await db.refresh(position)
         
@@ -360,7 +360,7 @@ async def close_position(
             detail="Position not found",
         )
     except HTTPException:
-        # 閲嶆柊鎶涘嚭 HTTP 寮傚父
+        # 重新抛出 HTTP 异常
         raise
     except Exception as e:
         await db.rollback()
@@ -378,7 +378,7 @@ async def set_tp_sl(
     current_user: CurrentUser,
     db: DbSession,
 ):
-    """璁剧疆姝㈢泩姝㈡崯"""
+    """设置止盈止损"""
     from sqlalchemy import select
     
     result = await db.execute(
@@ -401,8 +401,8 @@ async def set_tp_sl(
             detail="Cannot modify closed position",
         )
     
-    # ========== 姝㈢泩姝㈡崯浠锋牸鍚堢悊鎬ф牎楠?==========
-    # 浣跨敤鍓嶇浼犳潵鐨勬爣璁颁环鏍硷紝鑻ユ病鏈夊垯鐢ㄥ紑浠撲环
+    # ========== 止盈止损价格合理性校验 ==========
+    # 使用前端传来的标记价格，若没有则用开仓价
     ref_price = request.mark_price or position.entry_price
     is_long = position.side == PositionSide.LONG
     
@@ -413,43 +413,43 @@ async def set_tp_sl(
         if is_long and new_sl >= ref_price:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"澶氬崟姝㈡崯浠?({new_sl}) 蹇呴』浣庝簬褰撳墠鏍囪浠?({ref_price})锛?
-                       f"鍚﹀垯浼氱珛鍗宠Е鍙戞垨鍙樻垚姝㈢泩",
+                detail=f"多单止损价 ({new_sl}) 必须低于当前标记价 ({ref_price})，"
+                       f"否则会立即触发或变成止盈",
             )
         if not is_long and new_sl <= ref_price:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"绌哄崟姝㈡崯浠?({new_sl}) 蹇呴』楂樹簬褰撳墠鏍囪浠?({ref_price})锛?
-                       f"鍚﹀垯浼氱珛鍗宠Е鍙戞垨鍙樻垚姝㈢泩",
+                detail=f"空单止损价 ({new_sl}) 必须高于当前标记价 ({ref_price})，"
+                       f"否则会立即触发或变成止盈",
             )
     
     if new_tp is not None and new_tp > 0:
         if is_long and new_tp <= ref_price:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"澶氬崟姝㈢泩浠?({new_tp}) 蹇呴』楂樹簬褰撳墠鏍囪浠?({ref_price})锛?
-                       f"鍚﹀垯浼氱珛鍗宠Е鍙戞垨鍙樻垚姝㈡崯",
+                detail=f"多单止盈价 ({new_tp}) 必须高于当前标记价 ({ref_price})，"
+                       f"否则会立即触发或变成止损",
             )
         if not is_long and new_tp >= ref_price:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"绌哄崟姝㈢泩浠?({new_tp}) 蹇呴』浣庝簬褰撳墠鏍囪浠?({ref_price})锛?
-                       f"鍚﹀垯浼氱珛鍗宠Е鍙戞垨鍙樻垚姝㈡崯",
+                detail=f"空单止盈价 ({new_tp}) 必须低于当前标记价 ({ref_price})，"
+                       f"否则会立即触发或变成止损",
             )
     
-    # 姝㈢泩姝㈡崯涓嶈兘浜ゅ弶
+    # 止盈止损不能交叉
     final_sl = new_sl if new_sl is not None else position.stop_loss
     final_tp = new_tp if new_tp is not None else position.take_profit
     if final_sl and final_tp and final_sl > 0 and final_tp > 0:
         if is_long and final_sl >= final_tp:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"澶氬崟姝㈡崯 ({final_sl}) 涓嶈兘楂樹簬姝㈢泩 ({final_tp})",
+                detail=f"多单止损 ({final_sl}) 不能高于止盈 ({final_tp})",
             )
         if not is_long and final_sl <= final_tp:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"绌哄崟姝㈡崯 ({final_sl}) 涓嶈兘浣庝簬姝㈢泩 ({final_tp})",
+                detail=f"空单止损 ({final_sl}) 不能低于止盈 ({final_tp})",
             )
     
     if request.stop_loss is not None:
@@ -479,16 +479,16 @@ async def set_tp_sl(
     )
 
 
-# ==================== 鍔ㄦ€佸己骞充环鏍?(Cross Margin) ====================
+# ==================== 动态强平价格 (Cross Margin) ====================
 
 class LiquidationInfoRequest(BaseModel):
-    """鍔ㄦ€佸己骞充环鏍艰绠楄姹?""
+    """动态强平价格计算请求"""
     position_id: int
-    current_price: Decimal = Field(..., gt=0, description="褰撳墠甯傚満浠锋牸")
+    current_price: Decimal = Field(..., gt=0, description="当前市场价格")
 
 
 class LiquidationInfoResponse(BaseModel):
-    """鍔ㄦ€佸己骞充环鏍煎搷搴?""
+    """动态强平价格响应"""
     position_id: int
     symbol: str
     side: str
@@ -497,8 +497,8 @@ class LiquidationInfoResponse(BaseModel):
     liquidation_price: Decimal
     is_dynamic: bool
     unrealized_pnl: Decimal
-    margin_ratio: Decimal  # 淇濊瘉閲戠巼 (>= 1.0 鏃惰Е鍙戝己骞?
-    account_equity: Decimal  # 璐︽埛鏉冪泭 (浠呭叏浠撴ā寮忔湁鎰忎箟)
+    margin_ratio: Decimal  # 保证金率 (>= 1.0 时触发强平)
+    account_equity: Decimal  # 账户权益 (仅全仓模式有意义)
 
 
 @router.post("/liquidation-info", response_model=LiquidationInfoResponse)
@@ -508,18 +508,18 @@ async def get_liquidation_info(
     db: DbSession,
 ):
     """
-    鑾峰彇浠撲綅鍔ㄦ€佸己骞充俊鎭?
+    获取仓位动态强平信息
     
-    - 閫愪粨妯″紡: 杩斿洖鍥哄畾寮哄钩浠?(寮€浠撴椂纭畾)
-    - 鍏ㄤ粨妯″紡: 鏍规嵁璐︽埛鏉冪泭鍔ㄦ€佽绠楀己骞充环
+    - 逐仓模式: 返回固定强平价 (开仓时确定)
+    - 全仓模式: 根据账户权益动态计算强平价
     
-    鈿狅笍 鍏ㄤ粨妯″紡涓嬪己骞充环浼氶殢璐︽埛浣欓鍜屽叾浠栦粨浣嶇泩浜忓彉鍖?
+    ⚠️ 全仓模式下强平价会随账户余额和其他仓位盈亏变化
     """
     from sqlalchemy import select, and_
     from app.services.margin import MarginCalculator
     from app.services.wallet import WalletManager
     
-    # 1. 鑾峰彇鎸囧畾浠撲綅
+    # 1. 获取指定仓位
     result = await db.execute(
         select(Position).where(
             Position.id == request.position_id,
@@ -535,12 +535,12 @@ async def get_liquidation_info(
             detail="Position not found or not open",
         )
     
-    # 2. 璁＄畻璇ヤ粨浣嶇殑鏈疄鐜扮泩浜?(浣跨敤 Position 妯″瀷鏂规硶)
+    # 2. 计算该仓位的未实现盈亏 (使用 Position 模型方法)
     unrealized_pnl = position.calculate_unrealized_pnl(request.current_price)
     
-    # 3. 鏍规嵁淇濊瘉閲戞ā寮忚绠楀己骞充环鏍?
+    # 3. 根据保证金模式计算强平价格
     if position.margin_mode == MarginMode.ISOLATED:
-        # 閫愪粨: 浣跨敤鍥哄畾寮哄钩浠?
+        # 逐仓: 使用固定强平价
         liq_price = position.liquidation_price or MarginCalculator.calculate_isolated_liquidation_price(
             entry_price=position.entry_price,
             leverage=position.leverage,
@@ -549,8 +549,8 @@ async def get_liquidation_info(
         is_dynamic = False
         account_equity = position.margin + unrealized_pnl
     else:
-        # 鍏ㄤ粨: 鍔ㄦ€佽绠?
-        # 3.1 鑾峰彇璐︽埛浣欓 (鍙敤 + 鍐荤粨)
+        # 全仓: 动态计算
+        # 3.1 获取账户余额 (可用 + 冻结)
         wallet = await WalletManager.get_wallet(db, current_user.id)
         if not wallet:
             raise HTTPException(
@@ -560,7 +560,7 @@ async def get_liquidation_info(
         
         account_balance = wallet.balance + wallet.frozen
         
-        # 3.2 鑾峰彇鎵€鏈夊叾浠栦粨浣嶇殑淇濊瘉閲戝拰鐩堜簭
+        # 3.2 获取所有其他仓位的保证金和盈亏
         other_positions = await db.execute(
             select(Position).where(
                 and_(
@@ -578,7 +578,7 @@ async def get_liquidation_info(
             for p in other_pos_list
         )
         
-        # 3.3 璁＄畻鍔ㄦ€佸己骞充环
+        # 3.3 计算动态强平价
         liq_price = MarginCalculator.calculate_cross_liquidation_price(
             entry_price=position.entry_price,
             quantity=position.size,
@@ -591,14 +591,14 @@ async def get_liquidation_info(
         is_dynamic = True
         account_equity = account_balance + total_unrealized_pnl
     
-    # 4. 璁＄畻淇濊瘉閲戠巼
+    # 4. 计算保证金率
     maintenance_margin = position.size * position.entry_price * Decimal("0.004")
     equity_for_position = position.margin + unrealized_pnl
     
     if equity_for_position > 0:
         margin_ratio = maintenance_margin / equity_for_position
     else:
-        margin_ratio = Decimal("999")  # 宸茬垎浠?
+        margin_ratio = Decimal("999")  # 已爆仓
     
     return LiquidationInfoResponse(
         position_id=position.id,

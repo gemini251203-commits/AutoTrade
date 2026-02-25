@@ -1,7 +1,7 @@
 """
 Trend Analysis API
 ==================
-瓒嬪娍鍒嗘瀽鏂规 CRUD + 鎵嬪姩瑙﹀彂鍒嗘瀽
+趋势分析方案 CRUD + 手动触发分析
 """
 
 from datetime import datetime
@@ -69,7 +69,7 @@ async def list_schemes(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    """鍒楀嚭鐢ㄦ埛鐨勬墍鏈夎秼鍔垮垎鏋愭柟妗?""
+    """列出用户的所有趋势分析方案"""
     result = await db.execute(
         select(TrendScheme).where(
             TrendScheme.user_id == current_user.id,
@@ -98,8 +98,8 @@ async def create_scheme(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    """鍒涘缓鏂扮殑瓒嬪娍鍒嗘瀽鏂规"""
-    # 楠岃瘉 YAML
+    """创建新的趋势分析方案"""
+    # 验证 YAML
     analyzer = TrendAnalyzer()
     try:
         analyzer.parse_yaml(body.config_yaml)
@@ -116,7 +116,7 @@ async def create_scheme(
     await db.commit()
     await db.refresh(scheme)
 
-    return {"id": scheme.id, "name": scheme.name, "message": f"鏂规 '{scheme.name}' 宸插垱寤?}
+    return {"id": scheme.id, "name": scheme.name, "message": f"方案 '{scheme.name}' 已创建"}
 
 
 @router.put("/schemes/{scheme_id}")
@@ -126,7 +126,7 @@ async def update_scheme(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    """淇敼瓒嬪娍鍒嗘瀽鏂规"""
+    """修改趋势分析方案"""
     result = await db.execute(
         select(TrendScheme).where(
             TrendScheme.id == scheme_id,
@@ -135,12 +135,12 @@ async def update_scheme(
     )
     scheme = result.scalar_one_or_none()
     if not scheme:
-        raise HTTPException(status_code=404, detail="鏂规涓嶅瓨鍦?)
+        raise HTTPException(status_code=404, detail="方案不存在")
 
     if body.name is not None:
         scheme.name = body.name
     if body.config_yaml is not None:
-        # 楠岃瘉 YAML
+        # 验证 YAML
         analyzer = TrendAnalyzer()
         try:
             analyzer.parse_yaml(body.config_yaml)
@@ -151,7 +151,7 @@ async def update_scheme(
         scheme.is_active = body.is_active
 
     await db.commit()
-    return {"id": scheme.id, "message": f"鏂规 '{scheme.name}' 宸叉洿鏂?}
+    return {"id": scheme.id, "message": f"方案 '{scheme.name}' 已更新"}
 
 
 @router.delete("/schemes/{scheme_id}")
@@ -160,7 +160,7 @@ async def delete_scheme(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    """鍒犻櫎瓒嬪娍鍒嗘瀽鏂规"""
+    """删除趋势分析方案"""
     result = await db.execute(
         select(TrendScheme).where(
             TrendScheme.id == scheme_id,
@@ -169,11 +169,11 @@ async def delete_scheme(
     )
     scheme = result.scalar_one_or_none()
     if not scheme:
-        raise HTTPException(status_code=404, detail="鏂规涓嶅瓨鍦?)
+        raise HTTPException(status_code=404, detail="方案不存在")
 
     await db.delete(scheme)
     await db.commit()
-    return {"message": f"鏂规 '{scheme.name}' 宸插垹闄?}
+    return {"message": f"方案 '{scheme.name}' 已删除"}
 
 
 @router.post("/schemes/{scheme_id}/run")
@@ -183,7 +183,7 @@ async def run_analysis(
     symbol: str = "BTCUSDT",
     db: AsyncSession = Depends(get_db),
 ):
-    """鎵嬪姩瑙﹀彂瓒嬪娍鍒嗘瀽"""
+    """手动触发趋势分析"""
     result = await db.execute(
         select(TrendScheme).where(
             TrendScheme.id == scheme_id,
@@ -192,9 +192,9 @@ async def run_analysis(
     )
     scheme = result.scalar_one_or_none()
     if not scheme:
-        raise HTTPException(status_code=404, detail="鏂规涓嶅瓨鍦?)
+        raise HTTPException(status_code=404, detail="方案不存在")
 
-    # 鑾峰彇 K 绾?
+    # 获取 K 线
     from app.core.network import net_manager
     interval = "1h"
     try:
@@ -211,7 +211,7 @@ async def run_analysis(
                 params={"symbol": symbol.upper(), "interval": interval, "limit": 200},
             )
             if resp.status_code != 200:
-                raise HTTPException(status_code=502, detail="鑾峰彇 K 绾垮け璐?)
+                raise HTTPException(status_code=502, detail="获取 K 线失败")
 
             raw = resp.json()
             klines = [{
@@ -225,14 +225,14 @@ async def run_analysis(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"鑾峰彇琛屾儏澶辫触: {e}")
+        raise HTTPException(status_code=502, detail=f"获取行情失败: {e}")
 
-    # 鎵ц鍒嗘瀽
+    # 执行分析
     analyzer = TrendAnalyzer()
     config = analyzer.parse_yaml(scheme.config_yaml)
     trend_result = analyzer.analyze(config, klines, symbol=symbol.upper())
 
-    # 淇濆瓨缁撴灉
+    # 保存结果
     scheme.last_result = trend_result.to_dict()
     scheme.last_run_at = datetime.utcnow()
 
@@ -265,7 +265,7 @@ async def list_snapshots(
     limit: int = 20,
     db: AsyncSession = Depends(get_db),
 ):
-    """鏌ョ湅瓒嬪娍鍒嗘瀽鍘嗗彶蹇収"""
+    """查看趋势分析历史快照"""
     query = select(TrendSnapshot).where(
         TrendSnapshot.user_id == current_user.id,
     )
@@ -303,8 +303,8 @@ async def init_presets(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    """鍒濆鍖栭缃柟妗?(鐢ㄦ埛棣栨浣跨敤鏃惰皟鐢?"""
-    # 妫€鏌ユ槸鍚﹀凡鏈夐缃柟妗?
+    """初始化预置方案 (用户首次使用时调用)"""
+    # 检查是否已有预置方案
     existing = await db.execute(
         select(TrendScheme).where(
             TrendScheme.user_id == current_user.id,
@@ -312,7 +312,7 @@ async def init_presets(
         )
     )
     if existing.scalars().first():
-        return {"message": "棰勭疆鏂规宸插瓨鍦?}
+        return {"message": "预置方案已存在"}
 
     created = []
     for key, preset in PRESET_SCHEMES.items():
@@ -320,11 +320,11 @@ async def init_presets(
             user_id=current_user.id,
             name=preset["name"],
             config_yaml=preset["yaml"],
-            is_active=(key == "standard"),  # 鍙縺娲绘爣鍑嗘柟妗?
+            is_active=(key == "standard"),  # 只激活标准方案
             is_preset=True,
         )
         db.add(scheme)
         created.append(preset["name"])
 
     await db.commit()
-    return {"message": f"宸插垱寤?{len(created)} 涓缃柟妗?, "schemes": created}
+    return {"message": f"已创建 {len(created)} 个预置方案", "schemes": created}

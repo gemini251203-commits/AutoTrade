@@ -1,14 +1,14 @@
 """
 Grid Trading API
 =================
-缃戞牸浜ゆ槗绔偣
+网格交易端点
 
-绔偣:
-    GET  /api/grid/            - 鑾峰彇鐢ㄦ埛缃戞牸鏈哄櫒浜哄垪琛?
-    POST /api/grid/            - 鍒涘缓缃戞牸鏈哄櫒浜?
-    POST /api/grid/{id}/start  - 鍚姩缃戞牸
-    POST /api/grid/{id}/stop   - 鍋滄缃戞牸
-    GET  /api/grid/{id}        - 鑾峰彇缃戞牸璇︽儏
+端点:
+    GET  /api/grid/            - 获取用户网格机器人列表
+    POST /api/grid/            - 创建网格机器人
+    POST /api/grid/{id}/start  - 启动网格
+    POST /api/grid/{id}/stop   - 停止网格
+    GET  /api/grid/{id}        - 获取网格详情
 """
 
 from decimal import Decimal
@@ -29,8 +29,8 @@ router = APIRouter(tags=["Grid"])
 # ==================== Schemas ====================
 
 class GridCreateRequest(BaseModel):
-    """鍒涘缓缃戞牸璇锋眰"""
-    name: str = Field(..., min_length=1, max_length=100, example="BTC 缃戞牸 #1")
+    """创建网格请求"""
+    name: str = Field(..., min_length=1, max_length=100, example="BTC 网格 #1")
     symbol: str = Field(..., example="BTCUSDT")
     lower_price: Decimal = Field(..., gt=0, example=70000)
     upper_price: Decimal = Field(..., gt=0, example=90000)
@@ -44,12 +44,12 @@ class GridCreateRequest(BaseModel):
 
 
 class GridStartRequest(BaseModel):
-    """鍚姩缃戞牸璇锋眰"""
+    """启动网格请求"""
     current_price: Decimal = Field(..., gt=0, example=79000)
 
 
 class GridResponse(BaseModel):
-    """缃戞牸鍝嶅簲"""
+    """网格响应"""
     id: int
     name: str
     symbol: str
@@ -76,15 +76,15 @@ class GridResponse(BaseModel):
 
 
 class GridDetailResponse(GridResponse):
-    """缃戞牸璇︽儏鍝嶅簲 (鍚骇鍒暟鎹?"""
+    """网格详情响应 (含级别数据)"""
     grid_levels: Optional[List[dict]]
 
 
 # ==================== Helper ====================
 
 def bot_to_response(bot: GridBot) -> GridResponse:
-    """杞崲 GridBot 涓?API 鍝嶅簲"""
-    # 鏍煎紡鍖栧皬鏁颁綅: 浠锋牸2浣? 鏁伴噺5浣? 閲戦2浣?
+    """转换 GridBot 为 API 响应"""
+    # 格式化小数位: 价格2位, 数量5位, 金额2位
     def fmt_price(v: Decimal) -> str:
         return str(v.quantize(Decimal("0.01")))
     
@@ -126,7 +126,7 @@ async def list_grid_bots(
     db: DbSession,
     status_filter: Optional[GridStatus] = None,
 ):
-    """鑾峰彇鐢ㄦ埛缃戞牸鏈哄櫒浜哄垪琛?""
+    """获取用户网格机器人列表"""
     bots = await GridStrategy.get_user_grid_bots(db, current_user.id, status_filter)
     return [bot_to_response(bot) for bot in bots]
 
@@ -138,20 +138,20 @@ async def create_grid_bot(
     db: DbSession,
 ):
     """
-    鍒涘缓缃戞牸鏈哄櫒浜?
+    创建网格机器人
     
-    鍙傛暟:
-    - name: 鏈哄櫒浜哄悕绉?
-    - symbol: 浜ゆ槗瀵?(濡?BTCUSDT)
-    - lower_price / upper_price: 缃戞牸浠锋牸鍖洪棿
-    - grid_count: 缃戞牸鏁伴噺 (2-200)
-    - investment: 鎶曞叆閲戦 (USDT)
-    - leverage: 鏉犳潌鍊嶆暟
-    - grid_type: arithmetic (绛夊樊) 鎴?geometric (绛夋瘮)
-    - direction: long (鍋氬) 鎴?short (鍋氱┖) 鎴?neutral (涓€?
+    参数:
+    - name: 机器人名称
+    - symbol: 交易对 (如 BTCUSDT)
+    - lower_price / upper_price: 网格价格区间
+    - grid_count: 网格数量 (2-200)
+    - investment: 投入金额 (USDT)
+    - leverage: 杠杆倍数
+    - grid_type: arithmetic (等差) 或 geometric (等比)
+    - direction: long (做多) 或 short (做空) 或 neutral (中性)
     """
     try:
-        # 鐩存帴璋冪敤鏈嶅姟鏂规硶 (session 宸茬粡鍦ㄩ殣寮忎簨鍔′腑)
+        # 直接调用服务方法 (session 已经在隐式事务中)
         bot = await GridStrategy.create_grid_bot(
             db=db,
             user_id=current_user.id,
@@ -168,10 +168,10 @@ async def create_grid_bot(
             take_profit_price=request.take_profit_price,
         )
         
-        # 鎻愪氦浜嬪姟
+        # 提交事务
         await db.commit()
         
-        # 鍒锋柊瀹炰緥浠ヨ幏鍙栨渶鏂版暟鎹?
+        # 刷新实例以获取最新数据
         await db.refresh(bot)
         return bot_to_response(bot)
         
@@ -198,9 +198,9 @@ async def start_grid_bot(
     db: DbSession,
 ):
     """
-    鍚姩缃戞牸鏈哄櫒浜?
+    启动网格机器人
     
-    鏍规嵁褰撳墠浠锋牸鍦ㄧ綉鏍煎尯闂村唴鏀剧疆璁㈠崟
+    根据当前价格在网格区间内放置订单
     """
     try:
         bot = await GridStrategy.start_grid(
@@ -236,9 +236,9 @@ async def stop_grid_bot(
     cancel_orders: bool = True,
 ):
     """
-    鍋滄缃戞牸鏈哄櫒浜?
+    停止网格机器人
     
-    鍙栨秷鎵€鏈夋寕鍗曞苟閲婃斁璧勯噾
+    取消所有挂单并释放资金
     """
     try:
         bot = await GridStrategy.stop_grid(
@@ -272,7 +272,7 @@ async def get_grid_bot(
     current_user: CurrentUser,
     db: DbSession,
 ):
-    """鑾峰彇缃戞牸鏈哄櫒浜鸿鎯?""
+    """获取网格机器人详情"""
     result = await db.execute(
         select(GridBot).where(
             GridBot.id == bot_id,
@@ -301,9 +301,9 @@ async def delete_grid_bot(
     db: DbSession,
 ):
     """
-    鍒犻櫎缃戞牸鏈哄櫒浜?
+    删除网格机器人
     
-    鍙兘鍒犻櫎宸插仠姝㈢殑缃戞牸
+    只能删除已停止的网格
     """
     result = await db.execute(
         select(GridBot).where(
@@ -319,7 +319,7 @@ async def delete_grid_bot(
             detail="Grid bot not found",
         )
     
-    # 鍙兘鍒犻櫎宸插仠姝㈡垨宸插垱寤虹殑缃戞牸
+    # 只能删除已停止或已创建的网格
     if bot.status not in (GridStatus.STOPPED, GridStatus.CREATED, GridStatus.COMPLETED):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

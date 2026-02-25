@@ -1,22 +1,22 @@
 """
-Indicator Service - 閹垛偓閺堫垱瀵氶弽鍥吀缁犳婀囬崝?
+Indicator Service - 技术指标计算服务
 ======================================
-娑?AI 閹绘劒绶甸幎鈧張顖涘瘹閺嶅洦鏆熼幑?
+为 AI 提供技术指标数据
 
-閸旂喕鍏?
-1. 娴犲孩鏆熼幑顔肩氨鐠囪褰?K 缁炬寧鏆熼幑?
-2. 鐠侊紕鐣婚幎鈧張顖涘瘹閺?(RSI, MACD, MA, ATR)
-3. 缂傛挸鐡ㄩ崚?Redis 娓?AI 鐠嬪啰鏁?
-4. 閸欘垱澧跨仦鏇熺仸閺嬪嫸绱濇笟澶哥艾濞ｈ濮為弴鏉戭樋閹稿洦鐖?
+功能:
+1. 从数据库读取 K 线数据
+2. 计算技术指标 (RSI, MACD, MA, ATR)
+3. 缓存到 Redis 供 AI 调用
+4. 可扩展架构，便于添加更多指标
 
-閹稿洦鐖ｉ崚妤勩€?
-- RSI(14): 閻╃顕鍝勬€ラ幐鍥ㄦ殶
-- MACD(12,26,9): 鐡掑濞嶉幐鍥ㄧ垼
-- MA(7,25,99): 缁夎濮╅崸鍥╁殠
-- ATR(14): 閻喎鐤勫▔銏犵畽
-- Volume Change: 閹存劒姘﹂柌蹇撳綁閸栨牜宸?
+指标列表:
+- RSI(14): 相对强弱指数
+- MACD(12,26,9): 趋势指标
+- MA(7,25,99): 移动均线
+- ATR(14): 真实波幅
+- Volume Change: 成交量变化率
 
-閳跨媴绗?娓氭繆绂? pandas, numpy
+⚠️ 依赖: pandas, numpy
 """
 
 import asyncio
@@ -36,25 +36,25 @@ from app.models.market import Kline
 
 class IndicatorService:
     """
-    閹垛偓閺堫垱瀵氶弽鍥吀缁犳婀囬崝?
+    技术指标计算服务
     
-    鐠侊紕鐣婚獮鍓佺处鐎涙ɑ濡ч張顖涘瘹閺嶅浄绱濇笟?AI 閸掑棙鐎芥担璺ㄦ暏
+    计算并缓存技术指标，供 AI 分析使用
     """
     
-    # Redis Key 閸撳秶绱?
+    # Redis Key 前缀
     REDIS_KEY_PREFIX = "autotrade:indicators:"
     
-    # 閹稿洦鐖ｇ紓鎾崇摠閺冨爼妫?(缁?
-    CACHE_TTL = 300  # 5閸掑棝鎸?
+    # 指标缓存时间 (秒)
+    CACHE_TTL = 300  # 5分钟
     
-    # 姒涙顓婚崨銊︽埂
+    # 默认周期
     DEFAULT_INTERVAL = "1h"
     
     def __init__(self):
         self._redis: Optional[redis.Redis] = None
     
     async def _get_redis(self) -> redis.Redis:
-        """閼惧嘲褰?Redis 鏉╃偞甯?""
+        """获取 Redis 连接"""
         if self._redis is None:
             self._redis = redis.from_url(
                 settings.redis_url,
@@ -70,12 +70,12 @@ class IndicatorService:
         limit: int = 100
     ) -> List[Dict]:
         """
-        娴犲孩鏆熼幑顔肩氨閼惧嘲褰?K 缁炬寧鏆熼幑顕嗙礉閺佺増宓佹惔鎾茶礋缁岀儤妞?fallback 閸?Binance API
+        从数据库获取 K 线数据，数据库为空时 fallback 到 Binance API
         
         Returns:
             List of kline dicts with: open, high, low, close, volume
         """
-        # 1. 娴兼ê鍘涙禒搴㈡殶閹诡喖绨遍懢宄板絿
+        # 1. 优先从数据库获取
         async with AsyncSessionLocal() as db:
             result = await db.execute(
                 select(Kline)
@@ -99,7 +99,7 @@ class IndicatorService:
                     })
                 return data
         
-        # 2. 閺佺増宓佹惔鎾存￥閺佺増宓?閳?fallback 閸?Binance API
+        # 2. 数据库无数据 → fallback 到 Binance API
         try:
             from app.services.exchange import BinanceClient
             client = BinanceClient()
@@ -124,22 +124,22 @@ class IndicatorService:
     
     def calculate_rsi(self, closes: List[float], period: int = 14) -> Optional[float]:
         """
-        鐠侊紕鐣?RSI (閻╃顕鍝勬€ラ幐鍥ㄦ殶)
+        计算 RSI (相对强弱指数)
         
         RSI = 100 - (100 / (1 + RS))
-        RS = 楠炲啿娼庢稉濠冨畾 / 楠炲啿娼庢稉瀣┘
+        RS = 平均上涨 / 平均下跌
         """
         if len(closes) < period + 1:
             return None
         
-        # 鐠侊紕鐣绘禒閿嬬壐閸欐ê瀵?
+        # 计算价格变化
         changes = [closes[i] - closes[i-1] for i in range(1, len(closes))]
         
-        # 閸掑棛顬囨稉濠冨畾閸滃奔绗呯捄?
+        # 分离上涨和下跌
         gains = [c if c > 0 else 0 for c in changes]
         losses = [-c if c < 0 else 0 for c in changes]
         
-        # 鐠侊紕鐣婚獮鍐叉綆 (娴ｈ法鏁ら張鈧潻?period 娑?
+        # 计算平均 (使用最近 period 个)
         avg_gain = sum(gains[-period:]) / period
         avg_loss = sum(losses[-period:]) / period
         
@@ -159,7 +159,7 @@ class IndicatorService:
         signal: int = 9
     ) -> Optional[Dict]:
         """
-        鐠侊紕鐣?MACD
+        计算 MACD
         
         Returns:
             {"macd": float, "signal": float, "histogram": float}
@@ -168,21 +168,21 @@ class IndicatorService:
             return None
         
         def ema(data: List[float], period: int) -> float:
-            """閹稿洦鏆熺粔璇插З楠炲啿娼?""
+            """指数移动平均"""
             k = 2 / (period + 1)
             ema_val = data[0]
             for price in data[1:]:
                 ema_val = price * k + ema_val * (1 - k)
             return ema_val
         
-        # 鐠侊紕鐣昏箛顐ｅ弮 EMA
+        # 计算快慢 EMA
         ema_fast = ema(closes[-fast-signal:], fast)
         ema_slow = ema(closes[-slow-signal:], slow)
         
         macd_line = ema_fast - ema_slow
         
-        # 缁犫偓閸? 娴ｈ法鏁ら張鈧崥搴濈娑?MACD 閸婇棿缍旀稉杞颁繆閸欓鍤庢导鎵暬
-        signal_line = macd_line * 0.9  # 缁犫偓閸栨牕顦╅悶?
+        # 简化: 使用最后一个 MACD 值作为信号线估算
+        signal_line = macd_line * 0.9  # 简化处理
         histogram = macd_line - signal_line
         
         return {
@@ -193,7 +193,7 @@ class IndicatorService:
     
     def calculate_ma(self, closes: List[float], periods: List[int] = [7, 25, 99]) -> Dict[str, Optional[float]]:
         """
-        鐠侊紕鐣荤粔璇插З閸у洨鍤?
+        计算移动均线
         
         Returns:
             {"ma7": float, "ma25": float, "ma99": float}
@@ -209,9 +209,9 @@ class IndicatorService:
     
     def calculate_atr(self, klines: List[Dict], period: int = 14) -> Optional[float]:
         """
-        鐠侊紕鐣?ATR (楠炲啿娼庨惇鐔风杽濞夈垹绠?
+        计算 ATR (平均真实波幅)
         
-        閻劋绨銏″疮鐠佸墽鐤?
+        用于止损设置
         """
         if len(klines) < period + 1:
             return None
@@ -234,9 +234,9 @@ class IndicatorService:
     
     def calculate_volume_change(self, volumes: List[float], period: int = 5) -> Optional[float]:
         """
-        鐠侊紕鐣婚幋鎰唉闁插繐褰夐崠鏍芳 (闁插繑鐦?
+        计算成交量变化率 (量比)
         
-        瑜版挸澧犻幋鎰唉闁?/ 鏉╁洤骞?N 閺堢喎閽╅崸鍥ㄥ灇娴溿倝鍣?
+        当前成交量 / 过去 N 期平均成交量
         """
         if len(volumes) < period + 1:
             return None
@@ -256,7 +256,7 @@ class IndicatorService:
         interval: str = "1h"
     ) -> Dict[str, Any]:
         """
-        鐠侊紕鐣婚幍鈧張澶嬪Η閺堫垱瀵氶弽?
+        计算所有技术指标
         
         Returns:
             {
@@ -275,7 +275,7 @@ class IndicatorService:
                 "updated_at": "2026-02-02T11:30:00"
             }
         """
-        # 閼惧嘲褰?K 缁炬寧鏆熼幑?
+        # 获取 K 线数据
         klines = await self.get_klines(symbol, interval, limit=100)
         
         if not klines:
@@ -288,18 +288,18 @@ class IndicatorService:
                 "updated_at": datetime.utcnow().isoformat() + "Z",
             }
         
-        # 閹绘劕褰囬弨鍓佹磸娴犲嘲鎷伴幋鎰唉闁?
+        # 提取收盘价和成交量
         closes = [k["close"] for k in klines]
         volumes = [k["volume"] for k in klines]
         
-        # 鐠侊紕鐣婚崥鍕€嶉幐鍥ㄧ垼
+        # 计算各项指标
         rsi = self.calculate_rsi(closes)
         macd = self.calculate_macd(closes)
         ma = self.calculate_ma(closes)
         atr = self.calculate_atr(klines)
         volume_ratio = self.calculate_volume_change(volumes)
         
-        # 閸掋倖鏌囩搾瀣◢
+        # 判断趋势
         trend = "neutral"
         if rsi and ma.get("ma7") and ma.get("ma25"):
             current_price = closes[-1]
@@ -323,7 +323,7 @@ class IndicatorService:
             "updated_at": datetime.utcnow().isoformat() + "Z",
         }
         
-        # 缂傛挸鐡ㄩ崚?Redis
+        # 缓存到 Redis
         try:
             r = await self._get_redis()
             key = f"{self.REDIS_KEY_PREFIX}{symbol.upper()}:{interval}"
@@ -336,7 +336,7 @@ class IndicatorService:
     
     async def get_cached(self, symbol: str, interval: str = "1h") -> Optional[Dict]:
         """
-        閼惧嘲褰囩紓鎾崇摠閻ㄥ嫭瀵氶弽?(婵″倹鐏夌€涙ê婀?
+        获取缓存的指标 (如果存在)
         """
         try:
             r = await self._get_redis()
@@ -350,7 +350,7 @@ class IndicatorService:
     
     async def get_or_calculate(self, symbol: str, interval: str = "1h") -> Dict:
         """
-        閼惧嘲褰囬幐鍥ㄧ垼 (娴兼ê鍘涚紓鎾崇摠閿涘苯鎯侀崚娆掝吀缁?
+        获取指标 (优先缓存，否则计算)
         """
         cached = await self.get_cached(symbol, interval)
         if cached:
@@ -359,30 +359,30 @@ class IndicatorService:
     
     def format_for_ai(self, indicators: Dict) -> str:
         """
-        閺嶇厧绱￠崠鏍ㄥ瘹閺嶅洦鏆熼幑顔昏礋 AI 閸欘垵顕伴惃鍕瀮閺?
+        格式化指标数据为 AI 可读的文本
         """
         if not indicators.get("indicators"):
-            return f"閺嗗倹妫?{indicators.get('symbol', 'Unknown')} 閻ㄥ嫭濡ч張顖涘瘹閺嶅洦鏆熼幑顔衡偓?
+            return f"暂无 {indicators.get('symbol', 'Unknown')} 的技术指标数据。"
         
         ind = indicators["indicators"]
         trend = indicators.get("trend", "unknown")
         price = indicators.get("current_price", 0)
         
-        trend_cn = {"bullish": "閻瀹?, "bearish": "閻绌?, "neutral": "娑擃厽鈧?}.get(trend, "閺堫亞鐓?)
+        trend_cn = {"bullish": "看涨", "bearish": "看跌", "neutral": "中性"}.get(trend, "未知")
         
         text = f"""
-**{indicators['symbol']} 閹垛偓閺堫垰鍨庨弸?* (閸涖劍婀? {indicators['interval']})
+**{indicators['symbol']} 技术分析** (周期: {indicators['interval']})
 
-瑜版挸澧犳禒閿嬬壐: ${price:,.2f}
-鐡掑濞嶉崚銈嗘焽: {trend_cn}
+当前价格: ${price:,.2f}
+趋势判断: {trend_cn}
 
-閹稿洦鐖ｉ弫鐗堝祦:
-- RSI(14): {ind.get('rsi', 'N/A')} {'(鐡掑懍鎷?' if ind.get('rsi', 0) > 70 else '(鐡掑懎宕?' if ind.get('rsi', 0) < 30 else ''}
+指标数据:
+- RSI(14): {ind.get('rsi', 'N/A')} {'(超买)' if ind.get('rsi', 0) > 70 else '(超卖)' if ind.get('rsi', 0) < 30 else ''}
 - MA7: ${ind.get('ma7', 0):,.2f}
 - MA25: ${ind.get('ma25', 0):,.2f}
 - MA99: ${ind.get('ma99', 0):,.2f}
 - ATR(14): ${ind.get('atr', 0):,.4f}
-- 閹存劒姘﹂柌蹇旂槷: {ind.get('volume_ratio', 'N/A')}x
+- 成交量比: {ind.get('volume_ratio', 'N/A')}x
 """
         
         if ind.get("macd"):
@@ -392,5 +392,5 @@ class IndicatorService:
         return text.strip()
 
 
-# 閸忋劌鐪崡鏇氱伐
+# 全局单例
 indicator_service = IndicatorService()

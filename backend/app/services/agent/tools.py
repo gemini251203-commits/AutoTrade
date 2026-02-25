@@ -1,14 +1,14 @@
 """
 Agent Tools
 =============
-AI 娴溿倖妲楁禒锝囨倞閻ㄥ嫬浼愰崗鐑芥肠
+AI 交易代理的工具集
 
-濮ｅ繋閲滃銉ュ徔閺勵垯绔存稉?async 閸戣姤鏆熼敍宀冪殶閻劎骞囬張澶婃倵缁旑垱婀囬崝鈥崇暚閹存劕鐤勯梽鍛惙娴ｆ嚎鈧?
-瀹搞儱鍙块惃鍕翻閸忋儴绶崙娲厴閺勵垳鐣濋崡鏇犳畱 dict/str閿涘本鏌熸笟?AI 鐟欙絾鐎介妴?
+每个工具是一个 async 函数，调用现有后端服务完成实际操作。
+工具的输入输出都是简单的 dict/str，方便 AI 解析。
 
-閸涜棄鎮曠憴鍕瘱:
-- 瀹搞儱鍙块崥? snake_case (娑?prompts.py 娑擃厾娈戝銉ュ徔閸氬秳绔存稉鈧€电懓绨?
-- 閸欏倹鏆熼崥? snake_case (娑?API 鐏?DB 鐏炲倷绔撮懛?
+命名规范:
+- 工具名: snake_case (与 prompts.py 中的工具名一一对应)
+- 参数名: snake_case (与 API 层/DB 层一致)
 """
 
 import json
@@ -26,26 +26,26 @@ from app.models.wallet import Wallet
 from app.models.market import Kline
 from app.models.strategy import TradeMemory, Strategy
 
-# ==================== 閺夈儲绨稉濠佺瑓閺?====================
-# Autopilot 鐠嬪啰鏁ら崜宥堫啎缂冾喗顒濋崣姗€鍣洪敍瀹紀ols 閼奉亜濮╂担璺ㄦ暏濮濓絿鈥橀惃?note 閸撳秶绱?
+# ==================== 来源上下文 ====================
+# Autopilot 调用前设置此变量，tools 自动使用正确的 note 前缀
 agent_source_var = contextvars.ContextVar('agent_source', default='agent')
 
-# ==================== 瀹搞儱鍙垮▔銊ュ斀鐞?====================
+# ==================== 工具注册表 ====================
 
 TOOL_REGISTRY: Dict[str, Any] = {}
 
 
 def register_tool(func):
-    """濞夈劌鍞藉銉ュ徔閸掓澘鍙忕仦鈧▔銊ュ斀鐞?""
+    """注册工具到全局注册表"""
     TOOL_REGISTRY[func.__name__] = func
     return func
 
 
-# ==================== 鐞涘本鍎忓銉ュ徔 ====================
+# ==================== 行情工具 ====================
 
 @register_tool
 async def get_price(db: AsyncSession, user_id: int, symbol: str = "BTCUSDT") -> str:
-    """閺屻儴顕楃€圭偞妞傛禒閿嬬壐"""
+    """查询实时价格"""
     try:
         from app.services.exchange import BinanceClient
         client = BinanceClient()
@@ -62,7 +62,7 @@ async def get_price(db: AsyncSession, user_id: int, symbol: str = "BTCUSDT") -> 
     except Exception as e:
         logger.warning(f"[AgentTools] get_price failed: {e}")
 
-    # Fallback: 娴犲孩鏆熼幑顔肩氨閼惧嘲褰?
+    # Fallback: 从数据库获取
     result = await db.execute(
         select(Kline)
         .where(Kline.symbol == symbol.upper())
@@ -77,7 +77,7 @@ async def get_price(db: AsyncSession, user_id: int, symbol: str = "BTCUSDT") -> 
             "source": "database",
         }, ensure_ascii=False)
 
-    return json.dumps({"error": f"閺冪姵纭堕懢宄板絿 {symbol} 娴犻攱鐗?}, ensure_ascii=False)
+    return json.dumps({"error": f"无法获取 {symbol} 价格"}, ensure_ascii=False)
 
 
 @register_tool
@@ -87,20 +87,20 @@ async def get_funding_rate(
     symbol: str = "BTCUSDT",
 ) -> str:
     """
-    閺屻儴顕楃挧鍕櫨鐠愬湱宸?閳?娴溿倖妲楅幋鎰拱閸掑棙鐎?
+    查询资金费率 — 交易成本分析
 
-    閸欏倹鏆?
-        symbol: 娴溿倖妲楃€? 婵?BTCUSDT / ETHUSDT
+    参数:
+        symbol: 交易对, 如 BTCUSDT / ETHUSDT
 
-    鏉╂柨娲?
-        瑜版挸澧犵拹鍦芳閵嗕礁鍕鹃崠鏍ㄥ灇閺堫兙鈧椒绗呭▎锛勭波缁犳妞傞梻娣偓浣割樋缁岀儤鏌熼崥鎴炲絹缁€?
+    返回:
+        当前费率、年化成本、下次结算时间、多空方向提示
     """
     from app.services.funding_rate import funding_rate_service
     info = await funding_rate_service.get_funding_info(symbol.upper())
     if info:
         return json.dumps(info, ensure_ascii=False)
 
-    return json.dumps({"error": f"閺冪姵纭堕懢宄板絿 {symbol} 鐠у嫰鍣剧拹鍦芳"}, ensure_ascii=False)
+    return json.dumps({"error": f"无法获取 {symbol} 资金费率"}, ensure_ascii=False)
 
 @register_tool
 async def get_klines(
@@ -110,8 +110,8 @@ async def get_klines(
     interval: str = "1h",
     limit: int = 20,
 ) -> str:
-    """閼惧嘲褰?K 缁炬寧鏆熼幑?""
-    limit = min(int(limit), 50)  # 闂勬劕鍩楁潻鏂挎礀閺佷即鍣洪柆鍨帳 token 鏉╁洤顦?
+    """获取 K 线数据"""
+    limit = min(int(limit), 50)  # 限制返回数量避免 token 过多
     result = await db.execute(
         select(Kline)
         .where(Kline.symbol == symbol.upper(), Kline.interval == interval)
@@ -121,7 +121,7 @@ async def get_klines(
     klines = list(reversed(result.scalars().all()))
 
     if not klines:
-        return json.dumps({"error": f"閺?{symbol} {interval} K缁炬寧鏆熼幑?}, ensure_ascii=False)
+        return json.dumps({"error": f"无 {symbol} {interval} K线数据"}, ensure_ascii=False)
 
     data = [
         {
@@ -142,18 +142,18 @@ async def get_klines(
     }, ensure_ascii=False)
 
 
-# ==================== 鐠愶附鍩涘銉ュ徔 ====================
+# ==================== 账户工具 ====================
 
 @register_tool
 async def get_balance(db: AsyncSession, user_id: int) -> str:
-    """閺屻儴顕楃拹锔藉煕娴ｆ瑩顤?""
+    """查询账户余额"""
     result = await db.execute(
         select(Wallet).where(Wallet.user_id == user_id)
     )
     wallet = result.scalar_one_or_none()
 
     if not wallet:
-        return json.dumps({"error": "闁藉崬瀵橀張顏勫灥婵瀵?}, ensure_ascii=False)
+        return json.dumps({"error": "钱包未初始化"}, ensure_ascii=False)
 
     return json.dumps({
         "available": float(wallet.balance),
@@ -165,7 +165,7 @@ async def get_balance(db: AsyncSession, user_id: int) -> str:
 
 @register_tool
 async def get_positions(db: AsyncSession, user_id: int) -> str:
-    """閺屻儴顕楄ぐ鎾冲閹镐椒绮?""
+    """查询当前持仓"""
     result = await db.execute(
         select(Position).where(
             Position.user_id == user_id,
@@ -175,9 +175,9 @@ async def get_positions(db: AsyncSession, user_id: int) -> str:
     positions = result.scalars().all()
 
     if not positions:
-        return json.dumps({"positions": [], "message": "瑜版挸澧犻弮鐘冲瘮娴?}, ensure_ascii=False)
+        return json.dumps({"positions": [], "message": "当前无持仓"}, ensure_ascii=False)
 
-    # 閼惧嘲褰囩€圭偞妞傛禒閿嬬壐鐠侊紕鐣婚張顏勭杽閻滄壆娉╂禍?
+    # 获取实时价格计算未实现盈亏
     from app.services.exchange import BinanceClient
     client = BinanceClient()
 
@@ -209,7 +209,7 @@ async def get_positions(db: AsyncSession, user_id: int) -> str:
 
 @register_tool
 async def get_open_orders(db: AsyncSession, user_id: int) -> str:
-    """閺屻儴顕楅幐鍌氬礋"""
+    """查询挂单"""
     result = await db.execute(
         select(Order).where(
             Order.user_id == user_id,
@@ -219,7 +219,7 @@ async def get_open_orders(db: AsyncSession, user_id: int) -> str:
     orders = result.scalars().all()
 
     if not orders:
-        return json.dumps({"orders": [], "message": "瑜版挸澧犻弮鐘冲瘯閸?}, ensure_ascii=False)
+        return json.dumps({"orders": [], "message": "当前无挂单"}, ensure_ascii=False)
 
     data = [
         {
@@ -236,9 +236,9 @@ async def get_open_orders(db: AsyncSession, user_id: int) -> str:
     ]
     return json.dumps({"orders": data}, ensure_ascii=False)
 
-# ==================== 娴溿倖妲楀銉ュ徔 ====================
+# ==================== 交易工具 ====================
 
-# 缂佺喍绔撮崫浣侯潚缁狅紕鎮婇崳?(閺囧じ鍞弫锝堟儰閻?exchange_rules 鐎涙鍚€)
+# 统一品种管理器 (替代散落的 exchange_rules 字典)
 from app.models.security import security_manager
 
 
@@ -255,13 +255,13 @@ async def place_order(
     stop_loss: float = 0,
     take_profit: float = 0,
 ) -> str:
-    """娑撳宕?(閸?Binance 鐟欏嫬鍨０鍕梾妤?"""
+    """下单 (含 Binance 规则预检验)"""
     from app.services.trading import OrderExecutor, OrderError
 
     try:
         symbol = symbol.upper()
 
-        # ==================== 妫板嫭顥呮? Binance 娴溿倖妲楃憴鍕灟 ====================
+        # ==================== 预检验: Binance 交易规则 ====================
         from app.services.exchange import BinanceClient
         client = BinanceClient()
         try:
@@ -271,7 +271,7 @@ async def place_order(
             current_price = 0
 
         if current_price > 0:
-            # 娴ｈ法鏁ょ紒鐔剁閸濅胶顫掔粻锛勬倞閸ｃ劑鐛欑拠?
+            # 使用统一品种管理器验证
             validation = security_manager.validate_order(symbol, quantity, current_price, leverage)
             if not validation["valid"]:
                 return json.dumps({
@@ -280,7 +280,7 @@ async def place_order(
                     "suggestion": validation["suggestion"],
                 }, ensure_ascii=False)
 
-            # 濡偓閺屻儰绻氱拠渚€鍣鹃弰顖氭儊婢?
+            # 检查保证金是否够
             notional = quantity * current_price
             margin = notional / leverage if leverage > 0 else notional
             wallet_result = await db.execute(
@@ -289,17 +289,17 @@ async def place_order(
             wallet = wallet_result.scalar_one_or_none()
             if wallet and margin > float(wallet.balance):
                 available = float(wallet.balance)
-                # 鐠侊紕鐣诲楦款唴閻ㄥ嫪鎱ㄥ锝呭棘閺?
-                safe_margin = available * 0.3  # 娴ｈ法鏁?0%閸欘垳鏁ゆ担娆擃杺
+                # 计算建议的修正参数
+                safe_margin = available * 0.3  # 使用30%可用余额
                 safe_notional = safe_margin * leverage
                 safe_qty = safe_notional / current_price
-                # 閹稿顒為梹鍨絿閺?
+                # 按步长取整
                 safe_qty = float(security_manager.round_quantity_up(symbol, safe_qty))
                 return json.dumps({
                     "success": False, 
                     "error": (
-                        f"娣囨繆鐦夐柌鎴滅瑝鐡? 闂団偓鐟?${margin:,.2f} (閸氬秳绠?{notional:,.2f} / {leverage}x), "
-                        f"娴ｅ棗褰查悽銊ょ稇妫版繀绮?${available:,.2f}閵?
+                        f"保证金不足: 需要 ${margin:,.2f} (名义${notional:,.2f} / {leverage}x), "
+                        f"但可用余额仅 ${available:,.2f}。"
                     ),
                     "suggested_fix": {
                         "quantity": safe_qty,
@@ -307,27 +307,27 @@ async def place_order(
                         "margin": round(safe_margin, 2),
                         "notional": round(safe_notional, 2),
                     },
-                    "hint": f"瀵ら缚顔呮担璺ㄦ暏 quantity={safe_qty}, leverage={leverage} 闁插秷鐦稉瀣礋閵?,
+                    "hint": f"建议使用 quantity={safe_qty}, leverage={leverage} 重试下单。",
                 }, ensure_ascii=False)
 
-        # ==================== 闁俺绻冩０鍕梾妤? 閹笛嗩攽娑撳宕?====================
+        # ==================== 通过预检验, 执行下单 ====================
         order_side = OrderSide(side.lower())
         otype = OrderType(order_type.lower())
         order_price = Decimal(str(price)) if price and float(price) > 0 else None
 
-        # 濮濄垺宕銏㈡畅閸欏倹鏆?
+        # 止损止盈参数
         sl = Decimal(str(stop_loss)) if stop_loss and float(stop_loss) > 0 else None
         tp = Decimal(str(take_profit)) if take_profit and float(take_profit) > 0 else None
 
-        # 閺嶈宓侀弶銉︾爱娑撳﹣绗呴弬鍥┾€樼€?source
+        # 根据来源上下文确定 source
         source_label = agent_source_var.get('agent')
 
-        # ==================== 闁俺绻?Pipeline 缂佺喍绔存稉瀣礋 ====================
+        # ==================== 通过 Pipeline 统一下单 ====================
         from app.core.pipeline import get_pipeline
         
         pipeline = get_pipeline(user_id)
         
-        # 閼惧嘲褰囨担娆擃杺閸滃本瀵旀禒鎾蹭繆閹垳鏁ゆ禍搴棑閹?
+        # 获取余额和持仓信息用于风控
         wallet_result2 = await db.execute(
             select(Wallet).where(Wallet.user_id == user_id)
         )
@@ -357,14 +357,14 @@ async def place_order(
             stop_loss=sl,
             take_profit=tp,
             source=source_label,
-            note=f"[{source_label.title()}] 娑撳宕?,
+            note=f"[{source_label.title()}] 下单",
             available_balance=available_balance,
             total_equity=total_equity,
             open_positions=open_positions,
         )
         
         if result.get("success"):
-            result["message"] = "鐠併垹宕熷鏌モ偓姘崇箖 Pipeline 閹笛嗩攽"
+            result["message"] = "订单已通过 Pipeline 执行"
         
         return json.dumps(result, ensure_ascii=False)
 
@@ -372,7 +372,7 @@ async def place_order(
         return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
     except Exception as e:
         logger.error(f"[AgentTools] place_order failed: {e}")
-        return json.dumps({"success": False, "error": f"娑撳宕熸径杈Е: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"success": False, "error": f"下单失败: {str(e)}"}, ensure_ascii=False)
 
 
 @register_tool
@@ -382,13 +382,13 @@ async def close_position(
     position_id: int = 0,
     close_price: float = 0,
 ) -> str:
-    """楠炲厖绮?""
+    """平仓"""
     from app.services.trading import PositionManager, PositionError
 
     try:
-        # PositionManager.close_position 閺?@staticmethod
-        # 缁涙儳鎮? (db, position_id, close_price, close_quantity=None)
-        # 鏉╂柨娲? (position, realized_pnl)
+        # PositionManager.close_position 是 @staticmethod
+        # 签名: (db, position_id, close_price, close_quantity=None)
+        # 返回: (position, realized_pnl)
         position, realized_pnl = await PositionManager.close_position(
             db=db,
             position_id=int(position_id),
@@ -400,14 +400,14 @@ async def close_position(
             "position_id": position.id,
             "symbol": position.symbol,
             "realized_pnl": float(realized_pnl),
-            "message": f"娴犳挷缍?#{position.id} 瀹告彃閽╂禒鎿勭礉閻╁牅绨?{float(realized_pnl):+.2f} USDT",
+            "message": f"仓位 #{position.id} 已平仓，盈亏 {float(realized_pnl):+.2f} USDT",
         }, ensure_ascii=False)
 
     except PositionError as e:
         return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
     except Exception as e:
         logger.error(f"[AgentTools] close_position failed: {e}")
-        return json.dumps({"success": False, "error": f"楠炲厖绮ㄦ径杈Е: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"success": False, "error": f"平仓失败: {str(e)}"}, ensure_ascii=False)
 
 
 @register_tool
@@ -416,12 +416,12 @@ async def cancel_order(
     user_id: int,
     order_id: int = 0,
 ) -> str:
-    """閸欐牗绉风拋銏犲礋"""
+    """取消订单"""
     from app.services.trading import OrderExecutor, OrderError
 
     try:
-        # OrderExecutor.cancel_order 閺?@staticmethod
-        # 缁涙儳鎮? (db, order_id, user_id)
+        # OrderExecutor.cancel_order 是 @staticmethod
+        # 签名: (db, order_id, user_id)
         order = await OrderExecutor.cancel_order(
             db=db,
             order_id=int(order_id),
@@ -432,17 +432,17 @@ async def cancel_order(
             "success": True,
             "order_id": order.id,
             "symbol": order.symbol,
-            "message": f"鐠併垹宕?#{order.id} 瀹告彃褰囧☉?,
+            "message": f"订单 #{order.id} 已取消",
         }, ensure_ascii=False)
 
     except OrderError as e:
         return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
     except Exception as e:
         logger.error(f"[AgentTools] cancel_order failed: {e}")
-        return json.dumps({"success": False, "error": f"閸欐牗绉锋径杈Е: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"success": False, "error": f"取消失败: {str(e)}"}, ensure_ascii=False)
 
 
-# ==================== 閸掑棙鐎藉銉ュ徔 ====================
+# ==================== 分析工具 ====================
 
 @register_tool
 async def get_indicators(
@@ -451,7 +451,7 @@ async def get_indicators(
     symbol: str = "BTCUSDT",
     interval: str = "1h",
 ) -> str:
-    """閼惧嘲褰囬幎鈧張顖涘瘹閺?(婢х偛宸遍悧?閳?娴ｈ法鏁ょ€瑰本鏆ｉ幐鍥ㄧ垼鎼?"""
+    """获取技术指标 (增强版 — 使用完整指标库)"""
     from app.core.network import net_manager
     from app.services.quant.indicators import calculate_all_indicators
 
@@ -468,7 +468,7 @@ async def get_indicators(
             if resp.status_code == 200:
                 raw = resp.json()
                 if raw and len(raw) >= 50:
-                    # 鏉烆剚宕叉稉?indicators.py 鐟曚焦鐪伴惃?kline dict 閺嶇厧绱?
+                    # 转换为 indicators.py 要求的 kline dict 格式
                     klines = []
                     for k in raw:
                         klines.append({
@@ -482,10 +482,10 @@ async def get_indicators(
                             "quote_volume": float(k[7]),
                         })
 
-                    # 鐠嬪啰鏁ょ€瑰本鏆ｉ幐鍥ㄧ垼鐠侊紕鐣?
+                    # 调用完整指标计算
                     indicators = calculate_all_indicators(klines)
 
-                    # 閺嶇厧绱￠崠鏍翻閸?閳?閸欘亙绻氶悾娆忓彠闁款喗鏆熼幑顕嗙礉闁灝鍘ゆ潻鍥毐
+                    # 格式化输出 — 只保留关键数据，避免过长
                     result = {
                         "symbol": symbol.upper(),
                         "interval": interval,
@@ -504,7 +504,7 @@ async def get_indicators(
                         "patterns": {k: v for k, v in (indicators.get("patterns") or {}).items() if v},
                     }
 
-                    # 閸掋倖鏌囩搾瀣◢
+                    # 判断趋势
                     rsi = result.get("rsi")
                     ema = result.get("ema") or {}
                     price = result["current_price"]
@@ -524,7 +524,7 @@ async def get_indicators(
     except Exception as e:
         logger.warning(f"[AgentTools] get_indicators failed: {e}")
 
-    return json.dumps({"error": f"閺冪姵纭堕懢宄板絿 {symbol} {interval} 閹稿洦鐖?}, ensure_ascii=False)
+    return json.dumps({"error": f"无法获取 {symbol} {interval} 指标"}, ensure_ascii=False)
 
 
 @register_tool
@@ -533,7 +533,7 @@ async def analyze_market(
     user_id: int,
     symbol: str = "BTCUSDT",
 ) -> str:
-    """缂佺厧鎮庣敮鍌氭簚閸掑棙鐎?(鐠嬪啰鏁ゆ径姘閼虫垝缍?"""
+    """综合市场分析 (调用多智能体)"""
     try:
         from app.services.ai.brain import AIBrain
         brain = AIBrain()
@@ -545,7 +545,7 @@ async def analyze_market(
         }, ensure_ascii=False)
     except Exception as e:
         logger.warning(f"[AgentTools] analyze_market failed: {e}")
-        return json.dumps({"error": f"鐢倸婧€閸掑棙鐎芥径杈Е: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"市场分析失败: {str(e)}"}, ensure_ascii=False)
 
 
 @register_tool
@@ -554,7 +554,7 @@ async def query_memories(
     user_id: int,
     symbol: str = "BTCUSDT",
 ) -> str:
-    """閺屻儴顕楁禍銈嗘鐠佹澘绻?(閹碘偓閺堝娼靛┃? 閹靛濮?AI/娣団€冲娇/闁插繐瀵?"""
+    """查询交易记忆 (所有来源: 手动/AI/信号/量化)"""
     result = await db.execute(
         select(TradeMemory)
         .where(
@@ -569,18 +569,18 @@ async def query_memories(
     if not memories:
         return json.dumps({
             "memories": [],
-            "message": f"閺嗗倹妫?{symbol} 閻ㄥ嫪姘﹂弰鎾诡唶韫?,
+            "message": f"暂无 {symbol} 的交易记忆",
         }, ensure_ascii=False)
 
     source_labels = {
-        "manual": "閹靛濮?, "agent": "AI Agent",
-        "signal": "娣団€冲娇閸斺晜澧?, "quant": "闁插繐瀵茬粵鏍殣",
+        "manual": "手动", "agent": "AI Agent",
+        "signal": "信号助手", "quant": "量化策略",
     }
 
     data = [
         {
             "symbol": m.symbol,
-            "source": source_labels.get(m.source, m.source) if m.source else "閺堫亞鐓?,
+            "source": source_labels.get(m.source, m.source) if m.source else "未知",
             "side": m.side,
             "entry_price": m.entry_price,
             "exit_price": m.exit_price,
@@ -601,7 +601,7 @@ async def query_memories(
     return json.dumps({"memories": data, "total": len(data)}, ensure_ascii=False)
 
 
-# ==================== 缁涙牜鏆愮粻锛勬倞瀹搞儱鍙?====================
+# ==================== 策略管理工具 ====================
 
 
 @register_tool
@@ -609,10 +609,10 @@ async def list_strategies(
     db: AsyncSession,
     user_id: int,
 ) -> str:
-    """閸掓鍤幍鈧張澶婂讲閻劎鐡ラ悾?(閻劍鍩涢崚娑樼紦閻?+ 妫板嫯顔曞Ο鈩冩緲)"""
+    """列出所有可用策略 (用户创建的 + 预设模板)"""
     from app.services.quant.strategy import list_templates
 
-    # 1. 閻劍鍩涢懛顏勭箒閻ㄥ嫮鐡ラ悾?
+    # 1. 用户自己的策略
     result = await db.execute(
         select(Strategy)
         .where(Strategy.user_id == user_id)
@@ -635,7 +635,7 @@ async def list_strategies(
             "type": "user",
         })
 
-    # 2. 妫板嫯顔曞Ο鈩冩緲
+    # 2. 预设模板
     templates = list_templates()
     for t in templates:
         strategies.append({
@@ -659,12 +659,12 @@ async def get_strategy_detail(
     user_id: int,
     strategy_id: str = "",
 ) -> str:
-    """閺屻儳婀呯粵鏍殣鐠囷妇绮忛柊宥囩枂 (閺€顖涘瘮閻劍鍩涚粵鏍殣 ID 閹存牗膩閺?ID)"""
+    """查看策略详细配置 (支持用户策略 ID 或模板 ID)"""
     from app.services.quant.strategy import StrategyEngine, STRATEGY_TEMPLATES
 
     engine = StrategyEngine()
 
-    # 鐏忔繆鐦担婊€璐熼弫鐗堝祦鎼?ID 閺屻儴顕?
+    # 尝试作为数据库 ID 查询
     if str(strategy_id).isdigit():
         result = await db.execute(
             select(Strategy).where(
@@ -692,7 +692,7 @@ async def get_strategy_detail(
                 "type": "user",
             }, ensure_ascii=False, default=str)
 
-    # 鐏忔繆鐦担婊€璐熷Ο鈩冩緲 ID 閺屻儴顕?
+    # 尝试作为模板 ID 查询
     if strategy_id in STRATEGY_TEMPLATES:
         yaml_content = STRATEGY_TEMPLATES[strategy_id].strip()
         config = engine.parse_yaml(yaml_content)
@@ -706,12 +706,12 @@ async def get_strategy_detail(
             "type": "template",
         }, ensure_ascii=False, default=str)
 
-    return json.dumps({"error": f"閹靛彞绗夐崚鎵摜閻? {strategy_id}"}, ensure_ascii=False)
+    return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False)
 
 
 async def _fetch_klines_map(symbol: str, timeframes: list) -> dict:
     """
-    閼惧嘲褰囨径姘闂傚瓨顢嬮弸?K 缁炬寧鏆熼幑?
+    获取多时间框架 K 线数据
     
     Returns:
         {"1h": [klines...], "4h": [klines...], ...}
@@ -744,7 +744,7 @@ async def _fetch_klines_map(symbol: str, timeframes: list) -> dict:
                             "quote_volume": float(k[7]),
                         } for k in raw]
             except Exception as e:
-                logger.warning(f"[Tools] 閼惧嘲褰?{tf} K缁惧灝銇戠拹? {e}")
+                logger.warning(f"[Tools] 获取 {tf} K线失败: {e}")
     return klines_map
 
 
@@ -756,17 +756,17 @@ async def evaluate_strategy(
     symbol: str = "",
 ) -> str:
     """
-    鐠囧嫪鍙婄粵鏍殣閸︺劌缍嬮崜宥堫攽閹懍绗呴惃鍕繆閸?(娑撳秳绱版稉瀣礋)
+    评估策略在当前行情下的信号 (不会下单)
 
-    閸欏倹鏆?
-        strategy_id: 閻劍鍩涚粵鏍殣 ID (閺佹澘鐡? 閹存牗膩閺?ID (鐎涙顑佹稉?
-        symbol: 閸欘垶鈧? 鐟曞棛娲婄粵鏍殣姒涙顓婚惃鍕唉閺勬挸顕?
+    参数:
+        strategy_id: 用户策略 ID (数字) 或模板 ID (字符串)
+        symbol: 可选, 覆盖策略默认的交易对
     """
     from app.services.quant.strategy import StrategyEngine, STRATEGY_TEMPLATES
 
     engine = StrategyEngine()
 
-    # 閼惧嘲褰囩粵鏍殣闁板秶鐤?
+    # 获取策略配置
     config = None
     strategy_name = strategy_id
 
@@ -786,28 +786,28 @@ async def evaluate_strategy(
         strategy_name = config.get("name", strategy_id)
 
     if not config:
-        return json.dumps({"error": f"閹靛彞绗夐崚鎵摜閻? {strategy_id}"}, ensure_ascii=False)
+        return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False)
 
-    # 婵″倹鐏夐幐鍥х暰娴?symbol閿涘矁顩惄鏍摜閻ｃ儵绮拋銈囨畱
+    # 如果指定了 symbol，覆盖策略默认的
     target_symbol = (symbol or config.get("symbol", "BTCUSDT")).upper()
     config["symbol"] = target_symbol
 
-    # 閼惧嘲褰囨径姘闂傚瓨顢嬮弸?K 缁炬寧鏆熼幑?
+    # 获取多时间框架 K 线数据
     required_tfs = config.get("_required_timeframes", [config.get("interval", "1h")])
     
     try:
         klines_map = await _fetch_klines_map(target_symbol, required_tfs)
     except Exception as e:
-        return json.dumps({"error": f"閼惧嘲褰嘖缁惧灝绱撶敮? {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"获取K线异常: {str(e)}"}, ensure_ascii=False)
 
     if not klines_map:
-        return json.dumps({"error": "閺冪姵纭堕懢宄板絿娴犺缍嶉弮鍫曟？濡楀棙鐏﹂惃鍑ㄧ痪鎸庢殶閹?}, ensure_ascii=False)
+        return json.dumps({"error": "无法获取任何时间框架的K线数据"}, ensure_ascii=False)
 
-    # 閹笛嗩攽缁涙牜鏆愮拠鍕強
+    # 执行策略评估
     try:
         signal = engine.evaluate(config, klines_map=klines_map)
     except Exception as e:
-        return json.dumps({"error": f"缁涙牜鏆愮拠鍕強婢惰精瑙? {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"策略评估失败: {str(e)}"}, ensure_ascii=False)
 
     return json.dumps({
         "strategy_name": strategy_name,
@@ -832,9 +832,9 @@ async def run_strategy(
     symbol: str = "",
 ) -> str:
     """
-    鐎瑰本鏆ｉ幍褑顢戠粵鏍殣: 鐠囧嫪鍙?閳?妞嬪孩甯?閳?娑撳宕?
+    完整执行策略: 评估 → 风控 → 下单
 
-    閸欘亝婀佽ぐ鎾剁摜閻ｃ儰楠囬悽鐔峰弳閸﹁桨淇婇崣?AND 闁俺绻冩搴㈠付閺冭埖澧犳稉瀣礋閵?
+    只有当策略产生入场信号 AND 通过风控时才下单。
     """
     from app.services.quant.strategy import StrategyEngine, STRATEGY_TEMPLATES
     from app.services.risk.risk_model import RiskModel
@@ -844,7 +844,7 @@ async def run_strategy(
     engine = StrategyEngine()
     risk_guard = RiskModel()
 
-    # 閼惧嘲褰囩粵鏍殣闁板秶鐤?
+    # 获取策略配置
     config = None
     strategy_name = strategy_id
 
@@ -864,37 +864,37 @@ async def run_strategy(
         strategy_name = config.get("name", strategy_id)
 
     if not config:
-        return json.dumps({"error": f"閹靛彞绗夐崚鎵摜閻? {strategy_id}"}, ensure_ascii=False)
+        return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False)
 
     target_symbol = (symbol or config.get("symbol", "BTCUSDT")).upper()
     config["symbol"] = target_symbol
 
-    # 1. 閼惧嘲褰囨径姘闂傚瓨顢嬮弸?K 缁?
+    # 1. 获取多时间框架 K 线
     required_tfs = config.get("_required_timeframes", [config.get("interval", "1h")])
     try:
         klines_map = await _fetch_klines_map(target_symbol, required_tfs)
     except Exception as e:
-        return json.dumps({"error": f"閼惧嘲褰嘖缁惧灝绱撶敮? {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"获取K线异常: {str(e)}"}, ensure_ascii=False)
 
     if not klines_map:
-        return json.dumps({"error": "閺冪姵纭堕懢宄板絿K缁炬寧鏆熼幑?}, ensure_ascii=False)
+        return json.dumps({"error": "无法获取K线数据"}, ensure_ascii=False)
 
-    # 閸欐牔瀵岄弮鍫曟？濡楀棙鐏?K 缁?(閻劋绨禒閿嬬壐閸?ATR)
+    # 取主时间框架 K 线 (用于价格和 ATR)
     default_interval = config.get("interval", "1h")
     main_klines = klines_map.get(default_interval, list(klines_map.values())[0])
 
-    # 2. 缁涙牜鏆愮拠鍕強
+    # 2. 策略评估
     try:
         signal = engine.evaluate(config, klines_map=klines_map)
     except Exception as e:
-        return json.dumps({"error": f"缁涙牜鏆愮拠鍕強瀵倸鐖? {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"策略评估异常: {str(e)}"}, ensure_ascii=False)
 
     if not signal.has_signal:
         return json.dumps({
             "action": "no_signal",
             "strategy_name": strategy_name,
             "symbol": target_symbol,
-            "message": f"缁涙牜鏆?'{strategy_name}' 瑜版挸澧犻弮鐘辨唉閺勬挷淇婇崣?,
+            "message": f"策略 '{strategy_name}' 当前无交易信号",
             "conditions_met": [str(c) for c in signal.conditions_met],
             "conditions_failed": [str(c) for c in signal.conditions_failed],
         }, ensure_ascii=False, default=str)
@@ -904,12 +904,12 @@ async def run_strategy(
             "action": "exit_signal",
             "strategy_name": strategy_name,
             "symbol": target_symbol,
-            "message": f"缁涙牜鏆?'{strategy_name}' 瀵ら缚顔呴獮鍏呯波",
+            "message": f"策略 '{strategy_name}' 建议平仓",
             "side": signal.side.value if signal.side else None,
             "conditions_met": [str(c) for c in signal.conditions_met],
         }, ensure_ascii=False, default=str)
 
-    # 3. 閼惧嘲褰囬柦鍗炲瘶娴ｆ瑩顤傞崪灞惧瘮娴?(娓?Pipeline 妞嬪孩甯舵担璺ㄦ暏)
+    # 3. 获取钱包余额和持仓 (供 Pipeline 风控使用)
     wallet_result = await db.execute(
         select(Wallet).where(Wallet.user_id == user_id)
     )
@@ -917,7 +917,7 @@ async def run_strategy(
     wallet_balance = float(wallet.balance) if wallet else 0.0
 
     if wallet_balance <= 0:
-        return json.dumps({"error": "闁藉崬瀵樻担娆擃杺娑撳秷鍐?}, ensure_ascii=False)
+        return json.dumps({"error": "钱包余额不足"}, ensure_ascii=False)
 
     pos_result = await db.execute(
         select(Position).where(
@@ -930,13 +930,13 @@ async def run_strategy(
         for p in pos_result.scalars().all()
     ]
 
-    # 4. 鐠侊紕鐣绘稉瀣礋閸欏倹鏆?
+    # 4. 计算下单参数
     risk_config = signal.risk_config
     current_price = Decimal(str(main_klines[-1]["close"]))
     leverage = risk_config.get("leverage", 1)
     position_pct = risk_config.get("position_pct", 10)
 
-    # L4: 濞夈垹濮╅悳鍥殰闁倸绨叉禒鎾茬秴
+    # L4: 波动率自适应仓位
     if risk_config.get("volatility_adjust"):
         try:
             atr_val = get_indicator("atr", main_klines)
@@ -946,11 +946,11 @@ async def run_strategy(
                 original_pct = position_pct
                 position_pct = round(position_pct * vol_factor, 1)
                 logger.info(
-                    f"[Strategy] 濞夈垹濮╅悳鍥殶閺? ATR%={atr_pct:.2f}%, "
-                    f"娴犳挷缍?{original_pct}% 閳?{position_pct}%"
+                    f"[Strategy] 波动率调整: ATR%={atr_pct:.2f}%, "
+                    f"仓位 {original_pct}% → {position_pct}%"
                 )
         except Exception as e:
-            logger.warning(f"[Strategy] 濞夈垹濮╅悳鍥殶閺佹潙銇戠拹? {e}")
+            logger.warning(f"[Strategy] 波动率调整失败: {e}")
 
     trade_amount = wallet_balance * position_pct / 100
     quantity = Decimal(str(round(trade_amount / float(current_price), 4)))
@@ -958,7 +958,7 @@ async def run_strategy(
     side_map = {"buy": PositionSide.LONG, "sell": PositionSide.SHORT}
     position_side = side_map.get(signal.side.value, PositionSide.LONG) if signal.side else PositionSide.LONG
 
-    # 鐠侊紕鐣诲銏″疮濮濄垻娉?(L2: 閺€顖涘瘮閸斻劍鈧焦顒涢幑?
+    # 计算止损止盈 (L2: 支持动态止损)
     stop_type = risk_config.get("stop_type", "fixed")
     stop_loss_pct = risk_config.get("stop_loss_pct", 3)
     take_profit_pct = risk_config.get("take_profit_pct", 9)
@@ -993,7 +993,7 @@ async def run_strategy(
             current_price, position_side, stop_loss_pct, take_profit_pct
         )
 
-    # 5. 闁俺绻?Pipeline 缂佺喍绔存稉瀣礋 (Risk 閳?Execution)
+    # 5. 通过 Pipeline 统一下单 (Risk → Execution)
     try:
         from app.core.pipeline import get_pipeline
         
@@ -1033,18 +1033,18 @@ async def run_strategy(
                 "take_profit": str(take_profit) if take_profit else None,
                 "position_pct_actual": position_pct,
                 "order_id": result.get("order_id"),
-                "message": f"缁涙牜鏆?'{strategy_name}' 瀹告煡鈧俺绻?Pipeline 閹笛嗩攽",
+                "message": f"策略 '{strategy_name}' 已通过 Pipeline 执行",
             }, ensure_ascii=False, default=str)
         else:
             return json.dumps({
                 "action": "risk_blocked",
                 "strategy_name": strategy_name,
                 "symbol": target_symbol,
-                "message": result.get("error", "Pipeline 閹笛嗩攽婢惰精瑙?),
+                "message": result.get("error", "Pipeline 执行失败"),
                 "signal": signal.summary(),
             }, ensure_ascii=False, default=str)
     except Exception as e:
-        return json.dumps({"error": f"娑撳宕熸径杈Е: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"下单失败: {str(e)}"}, ensure_ascii=False)
 
 
 def _calc_fixed_stops(
@@ -1053,7 +1053,7 @@ def _calc_fixed_stops(
     stop_loss_pct: float,
     take_profit_pct: float,
 ) -> tuple:
-    """鐠侊紕鐣婚崶鍝勭暰閻ф儳鍨庡В鏃€顒涢幑鐔割剾閻?""
+    """计算固定百分比止损止盈"""
     if position_side.value == "long":
         stop_loss = current_price * (1 - Decimal(str(stop_loss_pct)) / 100) if stop_loss_pct else None
         take_profit = current_price * (1 + Decimal(str(take_profit_pct)) / 100) if take_profit_pct else None
@@ -1064,7 +1064,7 @@ def _calc_fixed_stops(
 
 
 def _build_validation_report(config: dict) -> dict:
-    """閻㈢喐鍨氱粵鏍殣妤犲矁鐦夐幎銉ユ啞 閳?鐠?AI 閸滃瞼鏁ら幋椋庘€樼拋銈囩摜閻ｃ儱鐤勯梽鍛瘶閸氼偂绮堟稊?""
+    """生成策略验证报告 — 让 AI 和用户确认策略实际包含什么"""
     is_pipeline = any(k in config for k in ("alphas", "portfolio", "execution"))
     
     if is_pipeline:
@@ -1075,7 +1075,7 @@ def _build_validation_report(config: dict) -> dict:
             "portfolio": config.get("portfolio", {}).get("type", "unknown"),
             "risk": config.get("risk", {}).get("type", "unknown"),
             "execution": config.get("execution", {}).get("type", "unknown"),
-            "features": ["Pipeline閺嬭埖鐎?]
+            "features": ["Pipeline架构"]
         }
 
     entry = config.get("entry", {})
@@ -1085,7 +1085,7 @@ def _build_validation_report(config: dict) -> dict:
     entry_conds = entry.get("conditions", [])
     exit_conds = exit_block.get("conditions", [])
 
-    # 閺€鍫曟肠娴ｈ法鏁ら惃鍕瘹閺?
+    # 收集使用的指标
     indicators_used = set()
     for cond in entry_conds + exit_conds:
         if "indicator" in cond:
@@ -1093,27 +1093,27 @@ def _build_validation_report(config: dict) -> dict:
         if "reference" in cond:
             indicators_used.add(cond["reference"])
 
-    # 閺€鍫曟肠娴ｈ法鏁ら惃鍕閼?
+    # 收集使用的功能
     features = []
     for cond in entry_conds + exit_conds:
         if "timeframe" in cond:
-            features.append("婢舵碍妞傞梻瀛橆攱閺?)
+            features.append("多时间框架")
         if "cross" in cond:
-            features.append("閺冭泛绨粚鑳Ш")
+            features.append("时序穿越")
         if "expression" in cond:
-            features.append("閼奉亜鐣炬稊澶庛€冩潏鎯х础")
+            features.append("自定义表达式")
         if "weight" in cond:
-            features.append("閺夊啴鍣哥拠鍕瀻")
+            features.append("权重评分")
     if config.get("scoring"):
-        features.append(f"鐠囧嫬鍨庨梼鍫濃偓?{config['scoring'].get('min_score', '?')}")
+        features.append(f"评分阈值={config['scoring'].get('min_score', '?')}")
     if config.get("stages"):
-        features.append(f"閸掑棙澹掑杞扮波({len(config['stages'])}闂冭埖顔?")
+        features.append(f"分批建仓({len(config['stages'])}阶段)")
     if config.get("time_filter"):
-        features.append("閺冨爼妫挎潻鍥ㄦ姢")
+        features.append("时间过滤")
     if risk.get("stop_type") and risk["stop_type"] != "fixed":
-        features.append(f"閸斻劍鈧焦顒涢幑?{risk['stop_type']})")
+        features.append(f"动态止损({risk['stop_type']})")
     if risk.get("volatility_adjust"):
-        features.append("濞夈垹濮╅悳鍥殰闁倸绨?)
+        features.append("波动率自适应")
 
     report = {
         "is_pipeline": False,
@@ -1123,25 +1123,25 @@ def _build_validation_report(config: dict) -> dict:
         "exit_operator": exit_block.get("operator", "OR"),
         "indicators_used": sorted(indicators_used),
         "risk_summary": {
-            "side": risk.get("side", "閺堫亣顔曠純?),
-            "leverage": risk.get("leverage", "閺堫亣顔曠純?),
-            "position_pct": risk.get("position_pct", "閺堫亣顔曠純?),
-            "stop_loss_pct": risk.get("stop_loss_pct", "閺堫亣顔曠純?),
-            "take_profit_pct": risk.get("take_profit_pct", "閺堫亣顔曠純?),
+            "side": risk.get("side", "未设置"),
+            "leverage": risk.get("leverage", "未设置"),
+            "position_pct": risk.get("position_pct", "未设置"),
+            "stop_loss_pct": risk.get("stop_loss_pct", "未设置"),
+            "take_profit_pct": risk.get("take_profit_pct", "未设置"),
             "stop_type": risk.get("stop_type", "fixed"),
         },
         "required_timeframes": config.get("_required_timeframes", []),
-        "features": sorted(set(features)) if features else ["閸╄櫣顢呯粵鏍殣"],
+        "features": sorted(set(features)) if features else ["基础策略"],
     }
 
-    # 鐠€锕€鎲?
+    # 警告
     warnings = []
     if len(entry_conds) == 0:
-        warnings.append("閳跨媴绗?濞屸剝婀侀崗銉ユ簚閺夆€叉")
+        warnings.append("⚠️ 没有入场条件")
     if len(exit_conds) == 0:
-        warnings.append("閳跨媴绗?濞屸剝婀侀崙鍝勬簚閺夆€叉")
+        warnings.append("⚠️ 没有出场条件")
     if not risk.get("side"):
-        warnings.append("閳跨媴绗?閺堫亣顔曠純?risk.side (buy/sell)")
+        warnings.append("⚠️ 未设置 risk.side (buy/sell)")
     if warnings:
         report["warnings"] = warnings
 
@@ -1158,35 +1158,35 @@ async def create_strategy(
     config_yaml: str = "",
 ) -> str:
     """
-    閸掓稑缂撻弬鎵摜閻ｃ儱鑻熸穱婵嗙摠閸掔増鏆熼幑顔肩氨
+    创建新策略并保存到数据库
 
-    閸欏倹鏆?
-        name: 缁涙牜鏆愰崥宥囆?
-        symbol: 娴溿倖妲楃€?
-        interval: K 缁惧灝鎳嗛張?
-        config_yaml: YAML 閺嶇厧绱￠惃鍕摜閻ｃ儵鍘ょ純?
+    参数:
+        name: 策略名称
+        symbol: 交易对
+        interval: K 线周期
+        config_yaml: YAML 格式的策略配置
     """
     from app.services.quant.strategy import StrategyEngine
 
     if not name or not config_yaml:
-        return json.dumps({"error": "缂傚搫鐨箛鍛邦洣閸欏倹鏆? name 閸?config_yaml"}, ensure_ascii=False)
+        return json.dumps({"error": "缺少必要参数: name 和 config_yaml"}, ensure_ascii=False)
 
     engine = StrategyEngine()
     try:
         config = engine.parse_yaml(config_yaml)
     except ValueError as e:
-        return json.dumps({"error": f"YAML 闁板秶鐤嗘宀冪槈婢惰精瑙? {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"YAML 配置验证失败: {str(e)}"}, ensure_ascii=False)
 
-    # 瀵儤鐗庢宀嬬窗閺勵垰鎯佺€涙ê婀稉宥嗘暜閹镐胶娈戦幐鍥ㄧ垼
+    # 强校验：是否存在不支持的指标
     report = _build_validation_report(config)
     if not report.get("is_valid", False):
         error_msgs = []
         if report.get("unknown_indicators"):
-            error_msgs.append(f"娴ｈ法鏁ゆ禍鍡欓兇缂佺喍绗夐弨顖涘瘮閻ㄥ嫭瀵氶弽? {', '.join(report['unknown_indicators'])}")
+            error_msgs.append(f"使用了系统不支持的指标: {', '.join(report['unknown_indicators'])}")
         if report.get("syntax_errors"):
             error_msgs.extend(report["syntax_errors"])
         if error_msgs:
-            return json.dumps({"error": f"缁涙牜鏆愰柊宥囩枂閺冪姵鏅? {'; '.join(error_msgs)}"}, ensure_ascii=False)
+            return json.dumps({"error": f"策略配置无效: {'; '.join(error_msgs)}"}, ensure_ascii=False)
 
     strategy = Strategy(
         user_id=user_id,
@@ -1206,7 +1206,7 @@ async def create_strategy(
         "name": strategy.name,
         "symbol": strategy.symbol,
         "interval": strategy.interval,
-        "message": f"缁涙牜鏆?'{name}' 瀹告彃鍨卞?(ID: {strategy.id})閿涘矂绮拋銈嗘弓閸氼垳鏁?,
+        "message": f"策略 '{name}' 已创建 (ID: {strategy.id})，默认未启用",
         "validation_report": report,
     }, ensure_ascii=False)
 
@@ -1218,23 +1218,23 @@ async def list_modules(
     layer: str = "",
 ) -> str:
     """
-    閺屻儴顕楅崣顖滄暏閻ㄥ嫮鐡ラ悾銉δ侀崸妤冩窗瑜?
+    查询可用的策略模块目录
 
-    閸欏倹鏆?
-        layer: 閹稿洤鐣剧仦?(alpha/portfolio/risk/execution)閿涘瞼鈹?閺勫墽銇氶崗銊╁劥
+    参数:
+        layer: 指定层 (alpha/portfolio/risk/execution)，空=显示全部
 
-    鏉╂柨娲?
-        閸氬嫬鐪伴崣顖滄暏濡€虫健濞撳懎宕熼敍灞芥儓閸欏倹鏆熺拠瀛樻
+    返回:
+        各层可用模块清单，含参数说明
     """
     from app.services.quant.module_registry import list_modules as _list, get_registry_summary
 
     if layer and layer not in ("alpha", "portfolio", "risk", "execution"):
-        return json.dumps({"error": f"閺堫亞鐓＄仦? {layer}閵嗗倸褰查柅? alpha/portfolio/risk/execution"}, ensure_ascii=False)
+        return json.dumps({"error": f"未知层: {layer}。可选: alpha/portfolio/risk/execution"}, ensure_ascii=False)
 
     modules = _list(layer or None)
 
     if not modules:
-        return json.dumps({"error": f"鐏?'{layer}' 濞屸剝婀侀崣顖滄暏濡€虫健"}, ensure_ascii=False)
+        return json.dumps({"error": f"层 '{layer}' 没有可用模块"}, ensure_ascii=False)
 
     result = []
     for m in modules:
@@ -1245,7 +1245,7 @@ async def list_modules(
     return json.dumps({
         "modules": result,
         "summary": summary,
-        "hint": "娴ｈ法鏁?create_pipeline_strategy 閺冭绱濇禒搴㈢槨鐏炲倿鈧瀚ㄦ稉鈧稉顏吥侀崸妤€鑻熼柊宥囩枂閸欏倹鏆?,
+        "hint": "使用 create_pipeline_strategy 时，从每层选择一个模块并配置参数",
     }, ensure_ascii=False, indent=2)
 
 
@@ -1259,24 +1259,24 @@ async def create_pipeline_strategy(
     config_yaml: str = "",
 ) -> str:
     """
-    閸掓稑缂撴径姘侀崸妤佺ウ濮樺鍤庣粵鏍殣楠炴湹绻氱€涙ê鍩岄弫鐗堝祦鎼?
+    创建多模块流水线策略并保存到数据库
 
-    閸欏倹鏆?
-        name: 缁涙牜鏆愰崥宥囆?
-        symbol: 娴溿倖妲楃€?
-        interval: K 缁惧灝鎳嗛張?
-        config_yaml: YAML 閺嶇厧绱￠惃?pipeline 缁涙牜鏆愰柊宥囩枂
+    参数:
+        name: 策略名称
+        symbol: 交易对
+        interval: K 线周期
+        config_yaml: YAML 格式的 pipeline 策略配置
     """
     from app.services.quant.strategy import StrategyEngine
 
     if not name or not config_yaml:
-        return json.dumps({"error": "缂傚搫鐨箛鍛邦洣閸欏倹鏆? name 閸?config_yaml"}, ensure_ascii=False)
+        return json.dumps({"error": "缺少必要参数: name 和 config_yaml"}, ensure_ascii=False)
 
     engine = StrategyEngine()
     try:
         config = engine.parse_yaml(config_yaml)
     except ValueError as e:
-        return json.dumps({"error": f"YAML 闁板秶鐤嗘宀冪槈婢惰精瑙? {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"YAML 配置验证失败: {str(e)}"}, ensure_ascii=False)
 
     report = _build_validation_report(config)
 
@@ -1299,7 +1299,7 @@ async def create_pipeline_strategy(
         "name": strategy.name,
         "symbol": strategy.symbol,
         "interval": strategy.interval,
-        "message": f"濞翠焦鎸夌痪璺ㄧ摜閻?'{name}' 瀹告彃鍨卞?(ID: {strategy.id})閿涘矂绮拋銈嗘弓閸氼垳鏁?,
+        "message": f"流水线策略 '{name}' 已创建 (ID: {strategy.id})，默认未启用",
         "validation_report": report,
     }, ensure_ascii=False)
 
@@ -1315,16 +1315,16 @@ async def update_strategy(
     config_yaml: str = "",
 ) -> str:
     """
-    娣囶喗鏁煎鍙夋箒缁涙牜鏆愰柊宥囩枂
+    修改已有策略配置
 
-    閸欏倹鏆?
-        strategy_id: 缁涙牜鏆?ID (閺佹澘鐡?
-        name/symbol/interval/config_yaml: 鐟曚焦娲块弬鎵畱鐎涙顔?(缁屽搫鐡х粭锔胯鐞涖劎銇氭稉宥勬叏閺€?
+    参数:
+        strategy_id: 策略 ID (数字)
+        name/symbol/interval/config_yaml: 要更新的字段 (空字符串表示不修改)
     """
     from app.services.quant.strategy import StrategyEngine
 
     if not str(strategy_id).isdigit():
-        return json.dumps({"error": f"閺冪姵鏅ラ惃鍕摜閻?ID: {strategy_id}"}, ensure_ascii=False)
+        return json.dumps({"error": f"无效的策略 ID: {strategy_id}"}, ensure_ascii=False)
 
     result = await db.execute(
         select(Strategy).where(
@@ -1334,27 +1334,27 @@ async def update_strategy(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        return json.dumps({"error": f"閹靛彞绗夐崚鎵摜閻?ID: {strategy_id}"}, ensure_ascii=False)
+        return json.dumps({"error": f"找不到策略 ID: {strategy_id}"}, ensure_ascii=False)
 
-    # 妤犲矁鐦夐弬鎵畱 YAML (婵″倹鐏夐幓鎰返娴?
+    # 验证新的 YAML (如果提供了)
     report = {}
     if config_yaml:
         engine = StrategyEngine()
         try:
             config = engine.parse_yaml(config_yaml)
         except ValueError as e:
-            return json.dumps({"error": f"YAML 闁板秶鐤嗙憴锝嗙€芥径杈Е: {str(e)}"}, ensure_ascii=False)
+            return json.dumps({"error": f"YAML 配置解析失败: {str(e)}"}, ensure_ascii=False)
         
-        # 瀵儤鐗庢灞炬煀閻?YAML
+        # 强校验新的 YAML
         report = _build_validation_report(config)
         if not report.get("is_valid", False):
             error_msgs = []
             if report.get("unknown_indicators"):
-                error_msgs.append(f"娴ｈ法鏁ゆ禍鍡欓兇缂佺喍绗夐弨顖涘瘮閻ㄥ嫭瀵氶弽? {', '.join(report['unknown_indicators'])}")
+                error_msgs.append(f"使用了系统不支持的指标: {', '.join(report['unknown_indicators'])}")
             if report.get("syntax_errors"):
                 error_msgs.extend(report["syntax_errors"])
             if error_msgs:
-                return json.dumps({"error": f"缁涙牜鏆愰柊宥囩枂閺冪姵鏅ラ弮鐘崇《閺囧瓨鏌? {'; '.join(error_msgs)}"}, ensure_ascii=False)
+                return json.dumps({"error": f"策略配置无效无法更新: {'; '.join(error_msgs)}"}, ensure_ascii=False)
                 
         strategy.config_yaml = config_yaml
 
@@ -1369,7 +1369,7 @@ async def update_strategy(
 
     await db.commit()
 
-    # 婵″倹鐏夊▽鈩冨絹娓氭稒鏌婇惃?YAML閿涘瞼鏁撻幋鎰＋ YAML 閻ㄥ嫰鐛欑拠浣瑰Г閸?
+    # 如果没提供新的 YAML，生成旧 YAML 的验证报告
     if not config_yaml:
         try:
             engine = StrategyEngine()
@@ -1384,7 +1384,7 @@ async def update_strategy(
         "name": strategy.name,
         "symbol": strategy.symbol,
         "interval": strategy.interval,
-        "message": f"缁涙牜鏆?'{strategy.name}' (ID: {strategy.id}) 瀹稿弶娲块弬?,
+        "message": f"策略 '{strategy.name}' (ID: {strategy.id}) 已更新",
     }
     if report:
         result["validation_report"] = report
@@ -1398,9 +1398,9 @@ async def analyze_trend(
     symbol: str = "BTCUSDT",
 ) -> str:
     """
-    婢舵艾鎳嗛張鐔荤Ъ閸斿灝鍨庨弸?閳?閸掑棗鍩嗛崷?15m/1h/4h/1d 閸ユ稐閲滈崨銊︽埂閸掋倖鏌囩搾瀣◢
+    多周期趋势分析 — 分别在 15m/1h/4h/1d 四个周期判断趋势
 
-    楠炶埖甯归懡鎰扳偓鍌氭値瑜版挸澧犵搾瀣◢閻ㄥ嫮鐡ラ悾銉ц閸?
+    并推荐适合当前趋势的策略类型
     """
     from app.core.network import net_manager
     from app.services.quant.indicators import (
@@ -1431,7 +1431,7 @@ async def analyze_trend(
             continue
 
         if not raw or len(raw) < 30:
-            trends[tf] = {"trend": "unknown", "error": "閺佺増宓佹稉宥堝喕"}
+            trends[tf] = {"trend": "unknown", "error": "数据不足"}
             continue
 
         closes = [float(k[4]) for k in raw]
@@ -1448,7 +1448,7 @@ async def analyze_trend(
         atr = calculate_atr(klines_data)
         price = closes[-1]
 
-        # 閸掋倖鏌囩搾瀣◢
+        # 判断趋势
         trend = "neutral"
         signals = []
 
@@ -1495,7 +1495,7 @@ async def analyze_trend(
             "atr": round(atr, 2) if atr else None,
         }
 
-    # 缂佺厧鎮庨崚銈嗘焽
+    # 综合判断
     macro_trends = [trends.get(tf, {}).get("trend", "unknown") for tf in ["4h", "1d"]]
     micro_trends = [trends.get(tf, {}).get("trend", "unknown") for tf in ["15m", "1h"]]
 
@@ -1504,18 +1504,18 @@ async def analyze_trend(
     micro = "bullish" if micro_trends.count("bullish") >= 1 else \
             "bearish" if micro_trends.count("bearish") >= 1 else "neutral"
 
-    # 缁涙牜鏆愰幒銊ㄥ礃
+    # 策略推荐
     recommendations = []
     if macro == "bullish" and micro == "bullish":
-        recommendations = ["鐡掑濞嶇捄鐔婚嚋缁涙牜鏆?(妞ゅ搫濞嶉崑姘樋)", "閸у洨鍤庨柌鎴濆级缁涙牜鏆?, "RSI 閸ョ偠鐨熸稊鏉垮弳"]
+        recommendations = ["趋势跟踪策略 (顺势做多)", "均线金叉策略", "RSI 回调买入"]
     elif macro == "bearish" and micro == "bearish":
-        recommendations = ["鐡掑濞嶇捄鐔婚嚋缁涙牜鏆?(妞ゅ搫濞嶉崑姘扁敄)", "RSI 鐡掑懍鎷遍崑姘扁敄", "閸у洨鍤庡璇插级缁涙牜鏆?]
+        recommendations = ["趋势跟踪策略 (顺势做空)", "RSI 超买做空", "均线死叉策略"]
     elif macro == "bullish" and micro in ["neutral", "bearish"]:
-        recommendations = ["闁澀缍嗘稊鏉垮弳缁涙牜鏆?, "RSI 鐡掑懎宕犻崣宥呰剨 (婢堆嗙Ъ閸旇法婀呭☉顭掔礉閻厽婀￠崶鐐剁殶)", "閺€顖涙嫼娴ｅ秴寮藉?]
+        recommendations = ["逢低买入策略", "RSI 超卖反弹 (大趋势看涨，短期回调)", "支撑位反弹"]
     elif macro == "bearish" and micro in ["neutral", "bullish"]:
-        recommendations = ["闁垽鐝崑姘扁敄缁涙牜鏆?, "闂冭濮忔担宥呭冀瀵懓浠涚粚?(婢堆嗙Ъ閸旇法婀呯捄宀嬬礉閻厽婀￠崣宥呰剨)"]
+        recommendations = ["逢高做空策略", "阻力位反弹做空 (大趋势看跌，短期反弹)"]
     else:
-        recommendations = ["閸栨椽妫块棁鍥幢缁涙牜鏆?, "鐢啯鐏勭敮锔剧崐閻?, "缁涘绶熺搾瀣◢閺勫海鈥橀崘宥呭弳閸?]
+        recommendations = ["区间震荡策略", "布林带突破", "等待趋势明确再入场"]
 
     return json.dumps({
         "symbol": symbol.upper(),
@@ -1526,7 +1526,7 @@ async def analyze_trend(
     }, ensure_ascii=False, default=str)
 
 
-# ==================== 娴溿倗顓告稉顓炵妇瀹搞儱鍙?====================
+# ==================== 交管中心工具 ====================
 
 @register_tool
 async def manage_autopilot(
@@ -1537,14 +1537,14 @@ async def manage_autopilot(
     interval: str = "15m",
 ) -> str:
     """
-    缁狅紕鎮婇懛顏勫З娴溿倖妲?(AutoPilot)
+    管理自动交易 (AutoPilot)
     
-    action 閸欘垶鈧?
-    - status: 閺屻儴顕楄ぐ鎾冲閻樿埖鈧?
-    - start: 閸氼垰濮╅懛顏勫З娴溿倖妲?
-    - stop: 閸嬫粍顒涢懛顏勫З娴溿倖妲?
-    - run_once: 閹靛濮╃憴锕€褰傛稉鈧▎鈥冲枀缁?
-    - logs: 閺屻儳婀呴張鈧潻鎴炴）韫?
+    action 可选:
+    - status: 查询当前状态
+    - start: 启动自动交易
+    - stop: 停止自动交易
+    - run_once: 手动触发一次决策
+    - logs: 查看最近日志
     """
     from app.services.agent.autopilot import autopilot
     
@@ -1579,7 +1579,7 @@ async def manage_autopilot(
             await autopilot.stop(user_id)
             return json.dumps({
                 "action": "stopped",
-                "message": "AutoPilot 瀹告彃浠犲?,
+                "message": "AutoPilot 已停止",
             }, ensure_ascii=False)
         
         elif action == "run_once":
@@ -1601,7 +1601,7 @@ async def manage_autopilot(
         
         else:
             return json.dumps({
-                "error": f"閺堫亞鐓￠幙宥勭稊: {action}",
+                "error": f"未知操作: {action}",
                 "valid_actions": ["status", "start", "stop", "run_once", "logs"],
             }, ensure_ascii=False)
     
@@ -1624,13 +1624,13 @@ async def manage_grid(
     grid_id: int = 0,
 ) -> str:
     """
-    缁狅紕鎮婄純鎴炵壐娴溿倖妲?
+    管理网格交易
     
-    action 閸欘垶鈧?
-    - list: 閺屻儳婀呴幍鈧張澶岀秹閺嶅吋婧€閸ｃ劋姹?
-    - start: 閸掓稑缂撻獮璺烘儙閸斻劎缍夐弽?(闂団偓鐟?symbol/upper_price/lower_price/grid_count/investment)
-    - stop: 閸嬫粍顒涚純鎴炵壐 (闂団偓鐟?grid_id)
-    - delete: 閸掔娀娅庣純鎴炵壐 (闂団偓鐟?grid_id)
+    action 可选:
+    - list: 查看所有网格机器人
+    - start: 创建并启动网格 (需要 symbol/upper_price/lower_price/grid_count/investment)
+    - stop: 停止网格 (需要 grid_id)
+    - delete: 删除网格 (需要 grid_id)
     """
     from app.services.grid import GridStrategy
     
@@ -1662,9 +1662,9 @@ async def manage_grid(
         
         elif action == "start":
             if upper_price <= 0 or lower_price <= 0:
-                return json.dumps({"error": "韫囧懘銆忛幓鎰返 upper_price 閸?lower_price"}, ensure_ascii=False)
+                return json.dumps({"error": "必须提供 upper_price 和 lower_price"}, ensure_ascii=False)
             
-            # 閼惧嘲褰囪ぐ鎾冲娴犻攱鐗?
+            # 获取当前价格
             from app.services.exchange import BinanceClient
             client = BinanceClient()
             ticker = await client.get_ticker(symbol.upper())
@@ -1691,12 +1691,12 @@ async def manage_grid(
                 "lower_price": str(bot.lower_price),
                 "grid_count": bot.grid_count,
                 "investment": str(bot.investment),
-                "message": f"缂冩垶鐗?{bot.name} 瀹告彃鎯庨崝?,
+                "message": f"网格 {bot.name} 已启动",
             }, ensure_ascii=False, default=str)
         
         elif action == "stop":
             if grid_id <= 0:
-                return json.dumps({"error": "韫囧懘銆忛幓鎰返 grid_id"}, ensure_ascii=False)
+                return json.dumps({"error": "必须提供 grid_id"}, ensure_ascii=False)
             
             bot = await GridStrategy.stop_grid(db=db, grid_id=grid_id, user_id=user_id)
             await db.commit()
@@ -1704,31 +1704,31 @@ async def manage_grid(
             return json.dumps({
                 "action": "stopped",
                 "grid_id": bot.id,
-                "message": f"缂冩垶鐗?{bot.name} 瀹告彃浠犲?,
+                "message": f"网格 {bot.name} 已停止",
             }, ensure_ascii=False, default=str)
         
         elif action == "delete":
             if grid_id <= 0:
-                return json.dumps({"error": "韫囧懘銆忛幓鎰返 grid_id"}, ensure_ascii=False)
+                return json.dumps({"error": "必须提供 grid_id"}, ensure_ascii=False)
             
             from app.models.grid_bot import GridBot, GridStatus
             bot = await db.get(GridBot, grid_id)
             if not bot or bot.user_id != user_id:
-                return json.dumps({"error": "缂冩垶鐗告稉宥呯摠閸?}, ensure_ascii=False)
+                return json.dumps({"error": "网格不存在"}, ensure_ascii=False)
             if bot.status not in (GridStatus.STOPPED, GridStatus.CREATED, GridStatus.COMPLETED):
-                return json.dumps({"error": "閸欘亣鍏橀崚鐘绘珟瀹告彃浠犲銏㈡畱缂冩垶鐗?}, ensure_ascii=False)
+                return json.dumps({"error": "只能删除已停止的网格"}, ensure_ascii=False)
             
             await db.delete(bot)
             await db.commit()
             return json.dumps({
                 "action": "deleted",
                 "grid_id": grid_id,
-                "message": "缂冩垶鐗稿鎻掑灩闂?,
+                "message": "网格已删除",
             }, ensure_ascii=False)
         
         else:
             return json.dumps({
-                "error": f"閺堫亞鐓￠幙宥勭稊: {action}",
+                "error": f"未知操作: {action}",
                 "valid_actions": ["list", "start", "stop", "delete"],
             }, ensure_ascii=False)
     
@@ -1746,12 +1746,12 @@ async def get_trade_journal(
     limit: int = 20,
 ) -> str:
     """
-    閺屻儴顕楁禍銈嗘閺冦儴顔?
+    查询交易日记
     
-    閸欘垶鈧绻冨?
-    - source: agent / autopilot / quant / grid / manual (缁?閸忋劑鍎?
-    - result_filter: win / loss (缁?閸忋劑鍎?
-    - limit: 鏉╂柨娲栭弶鈩冩殶 (姒涙顓?0)
+    可选过滤:
+    - source: agent / autopilot / quant / grid / manual (空=全部)
+    - result_filter: win / loss (空=全部)
+    - limit: 返回条数 (默认20)
     """
     from app.models.strategy import TradeMemory
     from sqlalchemy import desc
@@ -1831,7 +1831,7 @@ async def get_trade_journal(
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
-# ==================== 閼奉亜濮╂禍銈嗘缁狅紕鎮婂銉ュ徔 ====================
+# ==================== 自动交易管理工具 ====================
 
 
 @register_tool
@@ -1841,21 +1841,21 @@ async def start_autopilot(
     strategy_id: str = "",
 ):
     """
-    閸氼垰濮╃粵鏍殣閼奉亜濮╂禍銈嗘
+    启动策略自动交易
 
-    閸欏倹鏆?
-        strategy_id: 缁涙牜鏆?ID (閺佹澘鐡?閵嗗倸顩ч弸婊€璐熺粚鍝勫灟閸氼垰濮╅幍鈧張澶嬫た鐠哄啰鐡ラ悾?
+    参数:
+        strategy_id: 策略 ID (数字)。如果为空则启动所有活跃策略
 
-    鐠囧瓨妲?
-        閸氼垰濮╅崥?autopilot 鐠嬪啫瀹抽崳銊ょ窗閼奉亜濮╅幐澶岀摜閻ｃ儴顔曠€规氨娈戦崨銊︽埂鏉╂劘顢戠拠鍕強:
-        閼惧嘲褰囩悰灞惧剰 閳?鐠囧嫪鍙婄粵鏍殣娣団€冲娇 閳?AI 鐎光剝鐗?閳?Pipeline 妞嬪孩甯?閳?閹笛嗩攽
-        濮ｅ繑顐奸崨銊︽埂閻ㄥ嫬鍠呯粵鏍箖缁嬪绱扮€瑰本鏆ｇ拋鏉跨秿閸掓澘鍠呯粵鏍ㄦ）韫囨ぞ鑵戦妴?
+    说明:
+        启动后 autopilot 调度器会自动按策略设定的周期运行评估:
+        获取行情 → 评估策略信号 → AI 审核 → Pipeline 风控 → 执行
+        每次周期的决策过程会完整记录到决策日志中。
     """
     from app.services.agent.autopilot import autopilot
 
     try:
         if strategy_id:
-            # 閸氼垰濮╅幐鍥х暰缁涙牜鏆?
+            # 启动指定策略
             sid = int(strategy_id)
             result = await db.execute(
                 select(Strategy).where(
@@ -1865,12 +1865,12 @@ async def start_autopilot(
             )
             strategy = result.scalar_one_or_none()
             if not strategy:
-                return json.dumps({"error": f"缁涙牜鏆?ID {sid} 娑撳秴鐡ㄩ崷?}, ensure_ascii=False)
+                return json.dumps({"error": f"策略 ID {sid} 不存在"}, ensure_ascii=False)
 
             strategy.is_active = True
             await db.commit()
 
-            # 婵″倹鐏?autopilot 閺堫亣绻嶇悰宀嬬礉缁斿宓嗛崥顖氬З
+            # 如果 autopilot 未运行，立即启动
             if not autopilot.is_running(user_id):
                 config = {
                     "symbols": [strategy.symbol],
@@ -1886,11 +1886,11 @@ async def start_autopilot(
                 "strategy_name": strategy.name,
                 "symbol": strategy.symbol,
                 "interval": strategy.interval,
-                "message": f"缁涙牜鏆?'{strategy.name}' 閼奉亜濮╂禍銈嗘瀹告彃鎯庨崝?,
+                "message": f"策略 '{strategy.name}' 自动交易已启动",
             }, ensure_ascii=False)
 
         else:
-            # 閸氼垰濮╅幍鈧張澶嬫た鐠哄啰鐡ラ悾?
+            # 启动所有活跃策略
             result = await db.execute(
                 select(Strategy).where(
                     Strategy.user_id == user_id,
@@ -1899,7 +1899,7 @@ async def start_autopilot(
             )
             active = result.scalars().all()
             if not active:
-                return json.dumps({"error": "濞屸剝婀佸ú鏄忕┈閻ㄥ嫮鐡ラ悾銉礉鐠囧嘲鍘涢崥顖氬З娑撯偓娑擃亞鐡ラ悾?}, ensure_ascii=False)
+                return json.dumps({"error": "没有活跃的策略，请先启动一个策略"}, ensure_ascii=False)
 
             if not autopilot.is_running(user_id):
                 symbols = list(set(s.symbol for s in active))
@@ -1915,7 +1915,7 @@ async def start_autopilot(
             return json.dumps({
                 "action": "started",
                 "strategies": [{"id": s.id, "name": s.name} for s in active],
-                "message": f"瀹告彃鎯庨崝?{len(active)} 娑擃亞鐡ラ悾銉ф畱閼奉亜濮╂禍銈嗘",
+                "message": f"已启动 {len(active)} 个策略的自动交易",
             }, ensure_ascii=False)
 
     except Exception as e:
@@ -1929,10 +1929,10 @@ async def stop_autopilot(
     strategy_id: str = "",
 ):
     """
-    閸嬫粍顒涢懛顏勫З娴溿倖妲?
+    停止自动交易
 
-    閸欏倹鏆?
-        strategy_id: 缁涙牜鏆?ID (閸欘垶鈧?閵嗗倸顩ч弸婊€璐熺粚鍝勫灟閸嬫粍顒涢幍鈧張澶庡殰閸斻劋姘﹂弰?
+    参数:
+        strategy_id: 策略 ID (可选)。如果为空则停止所有自动交易
     """
     from app.services.agent.autopilot import autopilot
 
@@ -1952,12 +1952,12 @@ async def stop_autopilot(
                 return json.dumps({
                     "action": "stopped",
                     "strategy_id": sid,
-                    "message": f"缁涙牜鏆?'{strategy.name}' 瀹告彃浠犲?,
+                    "message": f"策略 '{strategy.name}' 已停止",
                 }, ensure_ascii=False)
-            return json.dumps({"error": f"缁涙牜鏆?ID {sid} 娑撳秴鐡ㄩ崷?}, ensure_ascii=False)
+            return json.dumps({"error": f"策略 ID {sid} 不存在"}, ensure_ascii=False)
         else:
             await autopilot.stop(user_id)
-            # 閺嶅洩顔囬幍鈧張澶岀摜閻ｃ儰璐熼棃鐐存た鐠?
+            # 标记所有策略为非活跃
             result = await db.execute(
                 select(Strategy).where(
                     Strategy.user_id == user_id,
@@ -1969,7 +1969,7 @@ async def stop_autopilot(
             await db.commit()
             return json.dumps({
                 "action": "stopped",
-                "message": "閹碘偓閺堝鍤滈崝銊ゆ唉閺勬挸鍑￠崑婊勵剾",
+                "message": "所有自动交易已停止",
             }, ensure_ascii=False)
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
@@ -1981,16 +1981,16 @@ async def get_autopilot_status(
     user_id: int,
 ):
     """
-    閺屻儴顕楅懛顏勫З娴溿倖妲楁潻鎰攽閻樿埖鈧?
+    查询自动交易运行状态
 
-    鏉╂柨娲?
-        鏉╂劘顢戦悩鑸碘偓浣碘偓浣烘磧閹貉傛唉閺勬挸顕妴浣界箥鐞涘本妞傞梹瑁も偓浣告噯閺堢喐顐奸弫鑸偓浣瑰⒔鐞涘本鎼锋担婊勬殶
+    返回:
+        运行状态、监控交易对、运行时长、周期次数、执行操作数
     """
     from app.services.agent.autopilot import autopilot
 
     status = autopilot.get_status(user_id)
 
-    # 閼惧嘲褰囧ú鏄忕┈缁涙牜鏆愰崚妤勩€?
+    # 获取活跃策略列表
     result = await db.execute(
         select(Strategy).where(
             Strategy.user_id == user_id,
@@ -2014,14 +2014,14 @@ async def get_trading_logs(
     limit: int = 10,
 ):
     """
-    閺屻儳婀呴張鈧潻鎴犳畱閼奉亜濮╂禍銈嗘閸愬磭鐡ラ弮銉ョ箶
+    查看最近的自动交易决策日志
 
-    閸欏倹鏆?
-        symbol: 閸欘垶鈧绱濇潻鍥ㄦ姢娴溿倖妲楃€?
-        limit: 鏉╂柨娲栭弶鈩冩殶 (姒涙顓?10)
+    参数:
+        symbol: 可选，过滤交易对
+        limit: 返回条数 (默认 10)
 
-    鏉╂柨娲?
-        濮ｅ繑娼弮銉ョ箶閸栧懎鎯? 閺冨爼妫块妴浣锋唉閺勬挸顕妴浣虹摜閻ｃ儱鎮曢妴浣稿枀缁涙牓鈧竸I閹繆鈧啯鎲崇憰浣碘偓浣规Ц閸氾附澧界悰?
+    返回:
+        每条日志包含: 时间、交易对、策略名、决策、AI思考摘要、是否执行
     """
     from app.models.autopilot_log import AutopilotLog
 
@@ -2059,7 +2059,7 @@ async def get_trading_logs(
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
-# ==================== 鐡掑濞嶉崚鍡樼€藉銉ュ徔 ====================
+# ==================== 趋势分析工具 ====================
 
 
 @register_tool
@@ -2069,19 +2069,19 @@ async def analyze_trend_now(
     symbol: str = "BTCUSDT",
 ):
     """
-    閻劍妞跨捄鍐Ъ閸旀寧鏌熷鍫濆瀻閺嬫劕缍嬮崜宥呯閸﹂缚绉奸崝?
+    用活跃趋势方案分析当前市场趋势
 
-    閸欏倹鏆?
-        symbol: 娴溿倖妲楃€?(姒涙顓?BTCUSDT)
+    参数:
+        symbol: 交易对 (默认 BTCUSDT)
 
-    鏉╂柨娲?
-        鐡掑濞嶉弬鐟版倻閵嗕礁宸辨惔锔衡偓浣瑰皾閸斻劎宸奸妴浣稿З闁插繈鈧礁绔堕崷杞扮秼閸掕翰鈧線鈧倸鎮庨惃鍕摜閻ｃ儳琚崹?
+    返回:
+        趋势方向、强度、波动率、动量、市场体制、适合的策略类型
     """
     from app.models.trend_scheme import TrendScheme
     from app.services.quant.trend_analyzer import TrendAnalyzer
 
     try:
-        # 閼惧嘲褰囧ú鏄忕┈閺傝顢?
+        # 获取活跃方案
         result = await db.execute(
             select(TrendScheme).where(
                 TrendScheme.user_id == user_id,
@@ -2091,9 +2091,9 @@ async def analyze_trend_now(
         scheme = result.scalar_one_or_none()
 
         if not scheme:
-            return json.dumps({"error": "濞屸剝婀佸ú鏄忕┈閻ㄥ嫯绉奸崝鍨瀻閺嬫劖鏌熷鍫礉鐠囧嘲鍘涢崚娑樼紦閹存牕鍨垫慨瀣妫板嫮鐤嗛弬瑙勵攳"}, ensure_ascii=False)
+            return json.dumps({"error": "没有活跃的趋势分析方案，请先创建或初始化预置方案"}, ensure_ascii=False)
 
-        # 閼惧嘲褰?K 缁?
+        # 获取 K 线
         from app.core.network import net_manager
         analyzer = TrendAnalyzer()
         config = analyzer.parse_yaml(scheme.config_yaml)
@@ -2105,7 +2105,7 @@ async def analyze_trend_now(
                 params={"symbol": symbol.upper(), "interval": interval, "limit": 200},
             )
             if resp.status_code != 200:
-                return json.dumps({"error": "閼惧嘲褰囩悰灞惧剰婢惰精瑙?}, ensure_ascii=False)
+                return json.dumps({"error": "获取行情失败"}, ensure_ascii=False)
 
             raw = resp.json()
             klines = [{
@@ -2117,10 +2117,10 @@ async def analyze_trend_now(
                 "volume": float(k[5]),
             } for k in raw]
 
-        # 閸掑棙鐎?
+        # 分析
         trend_result = analyzer.analyze(config, klines, symbol=symbol.upper())
 
-        # 缂傛挸鐡ㄧ紒鎾寸亯
+        # 缓存结果
         from datetime import datetime
         scheme.last_result = trend_result.to_dict()
         scheme.last_run_at = datetime.utcnow()
@@ -2152,13 +2152,13 @@ async def get_trend_result(
     symbol: str = "",
 ):
     """
-    閼惧嘲褰囬張鈧潻鎴犳畱鐡掑濞嶉崚鍡樼€界紒鎾寸亯 (娑撳秹鍣搁弬鏉垮瀻閺嬫劧绱濈拠璇插絿缂傛挸鐡?
+    获取最近的趋势分析结果 (不重新分析，读取缓存)
 
-    閸欏倹鏆?
-        symbol: 閸欘垶鈧绱濇潻鍥ㄦ姢娴溿倖妲楃€?
+    参数:
+        symbol: 可选，过滤交易对
 
-    鏉╂柨娲?
-        閹碘偓閺堝妞跨捄鍐╂煙濡楀牏娈戦張鈧潻鎴濆瀻閺嬫劗绮ㄩ弸?
+    返回:
+        所有活跃方案的最近分析结果
     """
     from app.models.trend_scheme import TrendScheme
 
@@ -2172,7 +2172,7 @@ async def get_trend_result(
         schemes = result.scalars().all()
 
         if not schemes:
-            return json.dumps({"error": "濞屸剝婀佸ú鏄忕┈閻ㄥ嫯绉奸崝鍨瀻閺嬫劖鏌熷?}, ensure_ascii=False)
+            return json.dumps({"error": "没有活跃的趋势分析方案"}, ensure_ascii=False)
 
         results = []
         for s in schemes:
@@ -2206,7 +2206,7 @@ async def get_trend_result(
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
-# ==================== 閺備即妞堝銉ュ徔 ====================
+# ==================== 新闻工具 ====================
 
 
 @register_tool
@@ -2217,14 +2217,14 @@ async def get_news(
     limit: int = 10,
 ) -> str:
     """
-    閺屻儴顕楅張鈧弬鏉垮鐎靛棜鎻ｇ敮浣规煀闂?
+    查询最新加密货币新闻
 
-    閸欏倹鏆?
-        currency: 鐢胶顫掓潻鍥ㄦ姢, 婵?BTC / ETH / SOL (缁?閸忋劑鍎?
-        limit: 鏉╂柨娲栭弶鈩冩殶 (姒涙顓?0, 閺堚偓婢?0)
+    参数:
+        currency: 币种过滤, 如 BTC / ETH / SOL (空=全部)
+        limit: 返回条数 (默认10, 最大50)
 
-    鏉╂柨娲?
-        閺備即妞堥崚妤勩€?(閺嶅洭顣介妴浣疯厬閺傚洦鐖ｆ０妯糕偓浣瑰剰缂侇亗鈧線鍣哥憰浣光偓褋鈧焦娼靛┃鎰┾偓浣规闂?
+    返回:
+        新闻列表 (标题、中文标题、情绪、重要性、来源、时间)
     """
     from app.services.news.service import get_latest_news
 
@@ -2236,7 +2236,7 @@ async def get_news(
         )
 
         if not articles:
-            return json.dumps({"message": f"閺嗗倹妫?{currency} 閻╃鍙ч弬浼存"}, ensure_ascii=False)
+            return json.dumps({"message": f"暂无 {currency} 相关新闻"}, ensure_ascii=False)
 
         result = []
         for a in articles[:limit]:
@@ -2267,13 +2267,13 @@ async def get_market_sentiment(
     currency: str = "BTC",
 ) -> str:
     """
-    閺屻儴顕楃敮鍌氭簚閹懐鍗?(閸╄桨绨弬浼存閹懏鍔呴崚鍡樼€?
+    查询市场情绪 (基于新闻情感分析)
 
-    閸欏倹鏆?
-        currency: 鐢胶顫? 婵?BTC / ETH (缁?閸忋劑鍎?
+    参数:
+        currency: 币种, 如 BTC / ETH (空=全部)
 
-    鏉╂柨娲?
-        閺佺繝缍嬮幆鍛崕(閻顦?閻鈹?娑擃厽鈧?閵嗕焦鍎忕紒顏勫瀻閺佽埇鈧焦顒滈棃?鐠愮喖娼?娑擃厽鈧勬煀闂傜粯鏆熼柌?
+    返回:
+        整体情绪(看多/看空/中性)、情绪分数、正面/负面/中性新闻数量
     """
     from app.services.news.service import get_market_sentiment as _get_sentiment
 
@@ -2285,7 +2285,7 @@ async def get_market_sentiment(
         )
 
         overall = sentiment.get("overall", "neutral")
-        overall_zh = {"positive": "閻顦?, "negative": "閻鈹?, "neutral": "娑擃厽鈧?}.get(overall, overall)
+        overall_zh = {"positive": "看多", "negative": "看空", "neutral": "中性"}.get(overall, overall)
 
         return json.dumps({
             "currency": currency,
@@ -2302,7 +2302,7 @@ async def get_market_sentiment(
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
-# ==================== 閺備即妞堥惄鎴炲付鐟欏嫬鍨銉ュ徔 ====================
+# ==================== 新闻监控规则工具 ====================
 
 
 @register_tool
@@ -2311,10 +2311,10 @@ async def list_alerts(
     user_id: int,
 ) -> str:
     """
-    閺屻儳婀呴幍鈧張澶嬫煀闂傝崵娲冮幒褑顫夐崚?
+    查看所有新闻监控规则
 
-    鏉╂柨娲?
-        閻╂垶甯剁憴鍕灟閸掓銆?(閸氬秶袨閵嗕礁鍙ч柨顔跨槤閵嗕浇袝閸欐垶顐奸弫鑸偓浣藉劏閻滃洢鈧焦鈧崵娉╂禍?
+    返回:
+        监控规则列表 (名称、关键词、触发次数、胜率、总盈亏)
     """
     from app.services.news.service import get_user_alerts, _alert_to_dict
 
@@ -2322,7 +2322,7 @@ async def list_alerts(
         alerts = await get_user_alerts(db, user_id=user_id)
 
         if not alerts:
-            return json.dumps({"message": "閺嗗倹妫ら惄鎴炲付鐟欏嫬鍨敍灞藉讲娴ｈ法鏁?create_alert 閸掓稑缂?}, ensure_ascii=False)
+            return json.dumps({"message": "暂无监控规则，可使用 create_alert 创建"}, ensure_ascii=False)
 
         result = []
         for a in alerts:
@@ -2368,47 +2368,47 @@ async def create_alert(
     sentiment_filter: str = "any",
 ) -> str:
     """
-    閸掓稑缂撻弬浼存閻╂垶甯剁憴鍕灟
+    创建新闻监控规则
 
-    閸欏倹鏆?
-        name: 鐟欏嫬鍨崥宥囆? 婵?"ETF閸掆晛銈介崑姘樋"
-        keywords: 閸忔娊鏁拠宥呭灙鐞? 闁褰块崚鍡涙, 婵?"ETF,BlackRock,闂勫秵浼?
-        action: 閸斻劋缍旂猾璇茬€? notify=娴犲懘鈧氨鐓? trade=閼奉亜濮╂禍銈嗘
-        trade_symbol: 娴溿倖妲楃€?(action=trade閺冨墎鏁撻弫?
-        trade_side: 娴溿倖妲楅弬鐟版倻, buy/sell/auto (auto=閺嶈宓侀弬浼存閹懏鍔呴懛顏勫З閸掋倖鏌?
-        trade_position_pct: 娴犳挷缍呭В鏂剧伐% (1-15)
-        trade_leverage: 閺夌姵娼岄崐宥嗘殶 (1-20)
-        trade_stop_loss_pct: 濮濄垺宕惂鎯у瀻濮?
-        trade_take_profit_pct: 濮濄垻娉╅惂鎯у瀻濮?
-        news_categories: 閸欘垶鈧? 閸掑棛琚潻鍥ㄦ姢, 闁褰块崚鍡涙 (macro/etf/regulation/exchange/whale/project)
-        currencies: 閸欘垶鈧? 鐢胶顫掓潻鍥ㄦ姢, 闁褰块崚鍡涙 (BTC/ETH/SOL)
-        sentiment_filter: 閹懏鍔呮潻鍥ㄦ姢, any/positive/negative
+    参数:
+        name: 规则名称, 如 "ETF利好做多"
+        keywords: 关键词列表, 逗号分隔, 如 "ETF,BlackRock,降息"
+        action: 动作类型, notify=仅通知, trade=自动交易
+        trade_symbol: 交易对 (action=trade时生效)
+        trade_side: 交易方向, buy/sell/auto (auto=根据新闻情感自动判断)
+        trade_position_pct: 仓位比例% (1-15)
+        trade_leverage: 杠杆倍数 (1-20)
+        trade_stop_loss_pct: 止损百分比
+        trade_take_profit_pct: 止盈百分比
+        news_categories: 可选, 分类过滤, 逗号分隔 (macro/etf/regulation/exchange/whale/project)
+        currencies: 可选, 币种过滤, 逗号分隔 (BTC/ETH/SOL)
+        sentiment_filter: 情感过滤, any/positive/negative
 
-    鏉╂柨娲?
-        閸掓稑缂撻幋鎰閻ㄥ嫯顫夐崚娆掝嚊閹?
+    返回:
+        创建成功的规则详情
     """
     from app.models.news import NewsAlert
     from app.services.news.service import get_user_alerts, _alert_to_dict
 
     try:
         if not name:
-            return json.dumps({"error": "鐠囬攱褰佹笟娑滎潐閸掓瑥鎮曠粔?(name)"}, ensure_ascii=False)
+            return json.dumps({"error": "请提供规则名称 (name)"}, ensure_ascii=False)
         if not keywords:
-            return json.dumps({"error": "鐠囬攱褰佹笟娑樺彠闁款喛鐦?(keywords), 闁褰块崚鍡涙"}, ensure_ascii=False)
+            return json.dumps({"error": "请提供关键词 (keywords), 逗号分隔"}, ensure_ascii=False)
 
-        # 濡偓閺屻儴顫夐崚娆愭殶闁插繘妾洪崚?
+        # 检查规则数量限制
         existing = await get_user_alerts(db, user_id=user_id)
         if len(existing) >= 20:
-            return json.dumps({"error": "閻╂垶甯剁憴鍕灟瀹歌尪鎻稉濠囨 (20閺?"}, ensure_ascii=False)
+            return json.dumps({"error": "监控规则已达上限 (20条)"}, ensure_ascii=False)
 
-        # 鐟欙絾鐎介柅妤€褰块崚鍡涙閻ㄥ嫬鍨悰?
+        # 解析逗号分隔的列表
         kw_list = [k.strip() for k in keywords.split(",") if k.strip()]
         cat_list = [c.strip() for c in news_categories.split(",") if c.strip()] if news_categories else None
         cur_list = [c.strip().upper() for c in currencies.split(",") if c.strip()] if currencies else None
 
-        # 妤犲矁鐦?trade 濡€崇础閸欏倹鏆?
+        # 验证 trade 模式参数
         if action == "trade" and not trade_symbol:
-            return json.dumps({"error": "娴溿倖妲楀Ο鈥崇础闂団偓鐟曚焦瀵氱€?trade_symbol"}, ensure_ascii=False)
+            return json.dumps({"error": "交易模式需要指定 trade_symbol"}, ensure_ascii=False)
 
         alert = NewsAlert(
             user_id=user_id,
@@ -2431,7 +2431,7 @@ async def create_alert(
 
         result = _alert_to_dict(alert)
         return json.dumps({
-            "message": f"閻╂垶甯剁憴鍕灟 '{name}' 閸掓稑缂撻幋鎰",
+            "message": f"监控规则 '{name}' 创建成功",
             "alert": result,
         }, ensure_ascii=False, default=str)
 
@@ -2456,27 +2456,27 @@ async def update_alert(
     trade_take_profit_pct: float = 0,
 ) -> str:
     """
-    娣囶喗鏁?閸氼垰浠?閸掔娀娅庨弬浼存閻╂垶甯剁憴鍕灟
+    修改/启停/删除新闻监控规则
 
-    閸欏倹鏆?
-        alert_id: 鐟欏嫬鍨?ID (韫囧懎锝?
-        action: 閹垮秳缍旂猾璇茬€?
-            - update: 娣囶喗鏁肩憴鍕灟 (姒涙顓?
-            - activate: 閸氼垳鏁ょ憴鍕灟
-            - deactivate: 閺嗗倸浠犵憴鍕灟
-            - delete: 閸掔娀娅庣憴鍕灟
-        name: 閺傛澘鎮曠粔?(缁?娑撳秳鎱ㄩ弨?
-        keywords: 閺傛澘鍙ч柨顔跨槤, 闁褰块崚鍡涙 (缁?娑撳秳鎱ㄩ弨?
-        is_active: "true"/"false" (缁?娑撳秳鎱ㄩ弨?
-        trade_side: buy/sell/auto (缁?娑撳秳鎱ㄩ弨?
-        trade_symbol: 娴溿倖妲楃€?(缁?娑撳秳鎱ㄩ弨?
-        trade_position_pct: 娴犳挷缍呭В鏂剧伐% (0=娑撳秳鎱ㄩ弨?
-        trade_leverage: 閺夌姵娼岄崐宥嗘殶 (0=娑撳秳鎱ㄩ弨?
-        trade_stop_loss_pct: 濮濄垺宕? (0=娑撳秳鎱ㄩ弨?
-        trade_take_profit_pct: 濮濄垻娉? (0=娑撳秳鎱ㄩ弨?
+    参数:
+        alert_id: 规则 ID (必填)
+        action: 操作类型
+            - update: 修改规则 (默认)
+            - activate: 启用规则
+            - deactivate: 暂停规则
+            - delete: 删除规则
+        name: 新名称 (空=不修改)
+        keywords: 新关键词, 逗号分隔 (空=不修改)
+        is_active: "true"/"false" (空=不修改)
+        trade_side: buy/sell/auto (空=不修改)
+        trade_symbol: 交易对 (空=不修改)
+        trade_position_pct: 仓位比例% (0=不修改)
+        trade_leverage: 杠杆倍数 (0=不修改)
+        trade_stop_loss_pct: 止损% (0=不修改)
+        trade_take_profit_pct: 止盈% (0=不修改)
 
-    鏉╂柨娲?
-        閺囧瓨鏌婇崥搴ｆ畱鐟欏嫬鍨拠锔藉剰
+    返回:
+        更新后的规则详情
     """
     from sqlalchemy import select as sa_select
     from app.models.news import NewsAlert
@@ -2484,7 +2484,7 @@ async def update_alert(
 
     try:
         if alert_id <= 0:
-            return json.dumps({"error": "鐠囬攱褰佹笟娑滎潐閸?ID (alert_id)"}, ensure_ascii=False)
+            return json.dumps({"error": "请提供规则 ID (alert_id)"}, ensure_ascii=False)
 
         result = await db.execute(
             sa_select(NewsAlert).where(
@@ -2494,26 +2494,26 @@ async def update_alert(
         )
         alert = result.scalar_one_or_none()
         if not alert:
-            return json.dumps({"error": f"鐟欏嫬鍨?#{alert_id} 娑撳秴鐡ㄩ崷?}, ensure_ascii=False)
+            return json.dumps({"error": f"规则 #{alert_id} 不存在"}, ensure_ascii=False)
 
-        # 閸掔娀娅庨幙宥勭稊
+        # 删除操作
         if action == "delete":
             alert_name = alert.name
             await db.delete(alert)
             await db.commit()
-            return json.dumps({"message": f"鐟欏嫬鍨?'{alert_name}' 瀹告彃鍨归梽?}, ensure_ascii=False)
+            return json.dumps({"message": f"规则 '{alert_name}' 已删除"}, ensure_ascii=False)
 
-        # 韫囶偅宓庨崥顖氫粻
+        # 快捷启停
         if action == "activate":
             alert.is_active = True
             await db.commit()
-            return json.dumps({"message": f"鐟欏嫬鍨?'{alert.name}' 瀹告彃鎯庨悽?}, ensure_ascii=False)
+            return json.dumps({"message": f"规则 '{alert.name}' 已启用"}, ensure_ascii=False)
         if action == "deactivate":
             alert.is_active = False
             await db.commit()
-            return json.dumps({"message": f"鐟欏嫬鍨?'{alert.name}' 瀹稿弶娈忛崑?}, ensure_ascii=False)
+            return json.dumps({"message": f"规则 '{alert.name}' 已暂停"}, ensure_ascii=False)
 
-        # 闁劕鐡у▓鍨纯閺?
+        # 逐字段更新
         if name:
             alert.name = name
         if keywords:
@@ -2537,7 +2537,7 @@ async def update_alert(
         await db.refresh(alert)
 
         return json.dumps({
-            "message": f"鐟欏嫬鍨?'{alert.name}' 瀹稿弶娲块弬?,
+            "message": f"规则 '{alert.name}' 已更新",
             "alert": _alert_to_dict(alert),
         }, ensure_ascii=False, default=str)
 
@@ -2545,7 +2545,7 @@ async def update_alert(
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
-# ==================== 閺備即妞?鐢倸婧€閸忓疇浠堥崚鍡樼€藉銉ュ徔 ====================
+# ==================== 新闻-市场关联分析工具 ====================
 
 
 @register_tool
@@ -2557,18 +2557,18 @@ async def analyze_news_impact(
     window_hours: str = "1,4,24",
 ) -> str:
     """
-    閸掑棙鐎介弬浼存鐎电懓绔堕崷铏规畱瑜板崬鎼?閳?閸欐垹骞囬弬浼存-娴犻攱鐗搁崗瀹犱粓鐟欏嫬绶?
+    分析新闻对市场的影响 — 发现新闻-价格关联规律
 
-    鐎电绻冮崢绫掓径鈺冩畱閺備即妞堥敍宀冾吀缁犳鏌婇梻璇插絺鐢啫鎮楅惃鍕幆閺嶇厧褰夐崠鏍电礉閹稿鍨庣猾?閹懏鍔呴崚鍡欑矋缂佺喕顓搁敍?
-    閹垫儳鍤?閸濐亞琚弬浼存閸欐垹鏁撻崥搴＄閸﹀搫顩ф担鏇炲冀鎼?閻ㄥ嫯顫夊瀣ㄢ偓?
+    对过去N天的新闻，计算新闻发布后的价格变化，按分类/情感分组统计，
+    找出"哪类新闻发生后市场如何反应"的规律。
 
-    閸欏倹鏆?
-        symbol: 娴溿倖妲楃€?(姒涙顓?BTCUSDT)
-        days: 閸ョ偟婀呮径鈺傛殶 (姒涙顓?0, 閺堚偓婢?0)
-        window_hours: 鐟欏倸鐧傜粣妤€褰? 闁褰块崚鍡涙 (姒涙顓?"1,4,24" 鐞涖劎銇?h/4h/24h閸氬海娈戝☉銊ㄧ┘)
+    参数:
+        symbol: 交易对 (默认 BTCUSDT)
+        days: 回看天数 (默认30, 最大90)
+        window_hours: 观察窗口, 逗号分隔 (默认 "1,4,24" 表示1h/4h/24h后的涨跌)
 
-    鏉╂柨娲?
-        閸氬嫬鍨庣猾?閹懏鍔呯紒鍕値娑撳娈戦獮鍐叉綆濞戙劏绌奸獮鍛偓浣藉劏閻滃洢鈧焦鐗遍張顒佹殶, 娴犮儱寮烽崣鎴犲箛閻ㄥ嫯顫夊瀣偓鑽ょ波
+    返回:
+        各分类/情感组合下的平均涨跌幅、胜率、样本数, 以及发现的规律总结
     """
     from sqlalchemy import select as sa_select, and_
     from app.models.news import NewsArticle
@@ -2583,7 +2583,7 @@ async def analyze_news_impact(
 
         cutoff = datetime.utcnow() - timedelta(days=days)
 
-        # 1. 閺屻儴顕楅張?currency 閺嶅洨顒烽惃鍕煀闂?
+        # 1. 查询有 currency 标签的新闻
         news_result = await db.execute(
             sa_select(NewsArticle).where(
                 NewsArticle.published_at >= cutoff,
@@ -2593,17 +2593,17 @@ async def analyze_news_impact(
 
         if not articles:
             return json.dumps({
-                "message": f"鏉╁洤骞?{days} 婢垛晜鐥呴張澶嬫煀闂傜粯鏆熼幑顕嗙礉閺冪姵纭堕崚鍡樼€?,
+                "message": f"过去 {days} 天没有新闻数据，无法分析",
             }, ensure_ascii=False)
 
-        # 2. 鐎佃鐦￠弶鈩冩煀闂備紮绱濋懢宄板絿閸欐垵绔烽弮?+ 閸氬嫮鐛ラ崣锝呮倵閻ㄥ嫪鐜弽?
+        # 2. 对每条新闻，获取发布时 + 各窗口后的价格
         base_symbol = symbol.upper()
         impact_records = []
 
         for article in articles:
             pub_ts = int(article.published_at.timestamp() * 1000)
 
-            # 閼惧嘲褰囬弬浼存閸欐垵绔烽弮鍓佹畱1h K缁?(娴ｆ粈璐熼崺鍝勫櫙娴?
+            # 获取新闻发布时的1h K线 (作为基准价)
             base_kline = await db.execute(
                 sa_select(Kline).where(
                     and_(
@@ -2621,7 +2621,7 @@ async def analyze_news_impact(
             if base_price <= 0:
                 continue
 
-            # 閸氬嫮鐛ラ崣锝呮倵閻ㄥ嫪鐜弽鐓庡綁閸?
+            # 各窗口后的价格变化
             changes = {}
             for w in windows:
                 target_ts = pub_ts + w * 3600 * 1000
@@ -2655,17 +2655,17 @@ async def analyze_news_impact(
 
         if not impact_records:
             return json.dumps({
-                "message": f"閺?{len(articles)} 閺夆剝鏌婇梻璁崇稻閺冪姵纭堕崠褰掑帳閸?{base_symbol} K缁炬寧鏆熼幑?,
+                "message": f"有 {len(articles)} 条新闻但无法匹配到 {base_symbol} K线数据",
             }, ensure_ascii=False)
 
-        # 3. 閹?(category, sentiment) 閸掑棛绮嶇紒鐔活吀
+        # 3. 按 (category, sentiment) 分组统计
         from collections import defaultdict
         groups = defaultdict(list)
         for rec in impact_records:
             key = f"{rec['category']}|{rec['sentiment']}"
             groups[key].append(rec)
 
-        # 4. 鐠侊紕鐣荤紒鐔活吀閹稿洦鐖?
+        # 4. 计算统计指标
         group_stats = []
         for key, records in groups.items():
             category, sentiment = key.split("|")
@@ -2699,11 +2699,11 @@ async def analyze_news_impact(
 
             group_stats.append(stats_entry)
 
-        # 閹?4h 楠炲啿娼庡☉銊ョ畽閹烘帒绨?
+        # 按 4h 平均涨幅排序
         sort_key = "4h_avg_change" if "4h" in windows else f"{windows[0]}h_avg_change"
         group_stats.sort(key=lambda x: abs(x.get(sort_key, 0)), reverse=True)
 
-        # 5. 閸欐垹骞囩憴鍕伐 (閺勬崘鎲插Ο鈥崇础)
+        # 5. 发现规律 (显著模式)
         patterns = []
         for s in group_stats:
             for w in windows:
@@ -2716,24 +2716,24 @@ async def analyze_news_impact(
 
                 if avg > 0.5 and wr >= 60:
                     patterns.append({
-                        "rule": f"{s['category']}缁?+ {s['sentiment']}閹懏鍔?閳?{w}h閸氬骸閽╅崸鍥ㄥ畾{avg:.2f}%",
-                        "direction": "閸嬫艾顦?,
+                        "rule": f"{s['category']}类 + {s['sentiment']}情感 → {w}h后平均涨{avg:.2f}%",
+                        "direction": "做多",
                         "avg_change": avg,
                         "win_rate": wr,
-                        "confidence": "妤? if (samples >= 5 and wr >= 70) else "娑?,
+                        "confidence": "高" if (samples >= 5 and wr >= 70) else "中",
                         "category": s["category"],
                         "sentiment": s["sentiment"],
                         "window": w,
                         "samples": samples,
                     })
                 elif avg < -0.5 and wr <= 40:
-                    real_wr = 100 - wr  # 閸嬫氨鈹栭懗婊呭芳
+                    real_wr = 100 - wr  # 做空胜率
                     patterns.append({
-                        "rule": f"{s['category']}缁?+ {s['sentiment']}閹懏鍔?閳?{w}h閸氬骸閽╅崸鍥┘{abs(avg):.2f}%",
-                        "direction": "閸嬫氨鈹?,
+                        "rule": f"{s['category']}类 + {s['sentiment']}情感 → {w}h后平均跌{abs(avg):.2f}%",
+                        "direction": "做空",
                         "avg_change": avg,
                         "win_rate": real_wr,
-                        "confidence": "妤? if (samples >= 5 and real_wr >= 70) else "娑?,
+                        "confidence": "高" if (samples >= 5 and real_wr >= 70) else "中",
                         "category": s["category"],
                         "sentiment": s["sentiment"],
                         "window": w,
@@ -2744,13 +2744,13 @@ async def analyze_news_impact(
 
         return json.dumps({
             "symbol": base_symbol,
-            "analysis_period": f"鏉╁洤骞搟days}婢?,
+            "analysis_period": f"过去{days}天",
             "total_news": len(articles),
             "matched_news": len(impact_records),
             "windows": [f"{w}h" for w in windows],
             "group_stats": group_stats[:15],
             "discovered_patterns": patterns[:10],
-            "hint": "娴ｈ法鏁?auto_generate_alerts 閸欘垰鐨㈤崣鎴犲箛閻ㄥ嫯顫夊瀣殰閸斻劌鍨卞杞拌礋閻╂垶甯剁憴鍕灟",
+            "hint": "使用 auto_generate_alerts 可将发现的规律自动创建为监控规则",
         }, ensure_ascii=False, default=str)
 
     except Exception as e:
@@ -2772,29 +2772,29 @@ async def auto_generate_alerts(
     trade_take_profit_pct: float = 4.0,
 ) -> str:
     """
-    閺嶈宓侀崢鍡楀蕉閺備即妞?鐢倸婧€閸忓疇浠堥崚鍡樼€? 閼奉亜濮╅悽鐔稿灇閻╂垶甯剁憴鍕灟
+    根据历史新闻-市场关联分析, 自动生成监控规则
 
-    閸忓牐绻嶇悰?analyze_news_impact 閸欐垹骞囩憴鍕伐, 閻掕泛鎮楃€电鍎ㄩ悳鍥Т鏉╁洭妲囬崐鑲╂畱濡€崇础閼奉亜濮╅崚娑樼紦 Alert閵?
+    先运行 analyze_news_impact 发现规律, 然后对胜率超过阈值的模式自动创建 Alert。
 
-    閸欏倹鏆?
-        symbol: 娴溿倖妲楃€?(姒涙顓?BTCUSDT)
-        days: 閸掑棙鐎介崶鐐垫箙婢垛晜鏆?(姒涙顓?0)
-        min_win_rate: 閺堚偓娴ｅ氦鍎ㄩ悳鍥閸? (姒涙顓?0, 娴ｅ簼绨銈呪偓闂寸瑝閸掓稑缂?
-        min_samples: 閺堚偓鐏忔垶鐗遍張顒佹殶 (姒涙顓?)
-        action: 鐟欏嫬鍨崝銊ょ稊, notify=娴犲懘鈧氨鐓? trade=閼奉亜濮╂禍銈嗘
-        trade_position_pct: 娴犳挷缍? (action=trade閺?
-        trade_leverage: 閺夌姵娼?(action=trade閺?
-        trade_stop_loss_pct: 濮濄垺宕? (action=trade閺?
-        trade_take_profit_pct: 濮濄垻娉? (action=trade閺?
+    参数:
+        symbol: 交易对 (默认 BTCUSDT)
+        days: 分析回看天数 (默认30)
+        min_win_rate: 最低胜率阈值% (默认60, 低于此值不创建)
+        min_samples: 最少样本数 (默认3)
+        action: 规则动作, notify=仅通知, trade=自动交易
+        trade_position_pct: 仓位% (action=trade时)
+        trade_leverage: 杠杆 (action=trade时)
+        trade_stop_loss_pct: 止损% (action=trade时)
+        trade_take_profit_pct: 止盈% (action=trade时)
 
-    鏉╂柨娲?
-        閼奉亜濮╅崚娑樼紦閻ㄥ嫯顫夐崚娆忓灙鐞?
+    返回:
+        自动创建的规则列表
     """
     from app.models.news import NewsAlert
     from app.services.news.service import get_user_alerts
 
     try:
-        # 1. 閸忓牐绻嶇悰灞藉瀻閺?
+        # 1. 先运行分析
         analysis_result = await analyze_news_impact(
             db=db,
             user_id=user_id,
@@ -2810,24 +2810,24 @@ async def auto_generate_alerts(
         patterns = analysis.get("discovered_patterns", [])
         if not patterns:
             return json.dumps({
-                "message": f"鏉╁洤骞搟days}婢垛晜婀崣鎴犲箛閺勬崘鎲查惃鍕煀闂?鐢倸婧€閸忓疇浠堢憴鍕伐 (闂団偓鐟曚焦娲挎径姘殶閹?",
+                "message": f"过去{days}天未发现显著的新闻-市场关联规律 (需要更多数据)",
                 "total_news_analyzed": analysis.get("total_news", 0),
             }, ensure_ascii=False)
 
-        # 2. 濡偓閺屻儱鍑￠張澶庮潐閸掓瑦鏆熼柌?
+        # 2. 检查已有规则数量
         existing = await get_user_alerts(db, user_id=user_id)
         remaining_slots = 20 - len(existing)
         if remaining_slots <= 0:
-            return json.dumps({"error": "閻╂垶甯剁憴鍕灟瀹歌尪鎻稉濠囨(20閺?, 鐠囧嘲鍘涢崚鐘绘珟閺冄嗩潐閸?}, ensure_ascii=False)
+            return json.dumps({"error": "监控规则已达上限(20条), 请先删除旧规则"}, ensure_ascii=False)
 
-        # 3. 閹稿顫夐崚娆戞晸閹?Alert
-        # 閸掑棛琚崚鏉垮彠闁款喛鐦濋惃鍕Ё鐏?
+        # 3. 按规则生成 Alert
+        # 分类到关键词的映射
         category_keywords = {
-            "macro": ["fed", "rate cut", "rate hike", "inflation", "CPI", "GDP", "FOMC", "閼辨柨鍋?, "闂勫秵浼?, "閸旂姵浼?],
+            "macro": ["fed", "rate cut", "rate hike", "inflation", "CPI", "GDP", "FOMC", "联储", "降息", "加息"],
             "etf": ["ETF", "BlackRock", "Grayscale", "Fidelity", "inflow", "outflow", "spot ETF"],
-            "regulation": ["SEC", "regulation", "lawsuit", "compliance", "ban", "license", "閻╂垹顓?],
-            "exchange": ["Binance", "Coinbase", "listing", "delist", "exchange", "娑撳﹤绔?],
-            "whale": ["whale", "transfer", "wallet", "dormant", "accumulation", "瀹搞劑鍝?],
+            "regulation": ["SEC", "regulation", "lawsuit", "compliance", "ban", "license", "监管"],
+            "exchange": ["Binance", "Coinbase", "listing", "delist", "exchange", "上币"],
+            "whale": ["whale", "transfer", "wallet", "dormant", "accumulation", "巨鲸"],
             "project": ["upgrade", "fork", "mainnet", "partnership", "hack", "exploit", "airdrop"],
         }
 
@@ -2848,24 +2848,24 @@ async def auto_generate_alerts(
             avg_change = pattern["avg_change"]
             window = pattern.get("window", 4)
 
-            # 閻㈢喐鍨氱憴鍕灟閸?
+            # 生成规则名
             cat_zh = {
-                "macro": "鐎瑰繗顫?, "etf": "ETF", "regulation": "閻╂垹顓?,
-                "exchange": "娴溿倖妲楅幍鈧?, "whale": "瀹搞劑鍝?, "project": "妞ゅ湱娲?,
+                "macro": "宏观", "etf": "ETF", "regulation": "监管",
+                "exchange": "交易所", "whale": "巨鲸", "project": "项目",
             }.get(category, category)
-            sent_zh = {"positive": "閸掆晛銈?, "negative": "閸掆晝鈹?, "neutral": "娑擃厽鈧?}.get(sentiment, sentiment)
+            sent_zh = {"positive": "利好", "negative": "利空", "neutral": "中性"}.get(sentiment, sentiment)
 
-            name = f"[AI閸欐垹骞嘳 {cat_zh}{sent_zh}閳姾direction} ({win_rate:.0f}%閼虫粎宸?"
+            name = f"[AI发现] {cat_zh}{sent_zh}→{direction} ({win_rate:.0f}%胜率)"
 
-            # 濡偓閺屻儲妲搁崥锕€鍑＄€涙ê婀崥灞芥倳鐟欏嫬鍨?
+            # 检查是否已存在同名规则
             if any(e.get("name") == name for e in existing):
                 continue
 
-            # 閼惧嘲褰囬崗鎶芥暛鐠?
+            # 获取关键词
             keywords = category_keywords.get(category, [category])
 
-            # 閺嶈宓侀弬鐟版倻鐠佸墽鐤嗘禍銈嗘閺傜懓鎮?
-            trade_side = "buy" if direction == "閸嬫艾顦? else "sell"
+            # 根据方向设置交易方向
+            trade_side = "buy" if direction == "做多" else "sell"
             sentiment_filter = sentiment if sentiment != "neutral" else "any"
 
             alert = NewsAlert(
@@ -2903,7 +2903,7 @@ async def auto_generate_alerts(
             await db.commit()
 
         return json.dumps({
-            "message": f"閸╄桨绨潻鍥у箵{days}婢垛晛鍨庨弸? 閼奉亜濮╅崚娑樼紦娴?{len(created_alerts)} 閺夛紕娲冮幒褑顫夐崚?,
+            "message": f"基于过去{days}天分析, 自动创建了 {len(created_alerts)} 条监控规则",
             "analysis_summary": {
                 "total_news": analysis.get("total_news", 0),
                 "matched_news": analysis.get("matched_news", 0),
@@ -2911,7 +2911,7 @@ async def auto_generate_alerts(
                 "rules_created": len(created_alerts),
             },
             "created_alerts": created_alerts,
-            "skipped_reason": f"鐠哄疇绻冮懗婊呭芳<{min_win_rate}%閹存牗鐗遍張?{min_samples}閻ㄥ嫭膩瀵? if len(patterns) > len(created_alerts) else None,
+            "skipped_reason": f"跳过胜率<{min_win_rate}%或样本<{min_samples}的模式" if len(patterns) > len(created_alerts) else None,
         }, ensure_ascii=False, default=str)
 
     except Exception as e:

@@ -1,20 +1,20 @@
 """
-FundingRateService 閳?鐠у嫰鍣剧拹鍦芳閺嶇绺鹃張宥呭
+FundingRateService — 资金费率核心服务
 =======================================
-娑撱儲鐗哥€佃鐖ｇ敮浣哥暔 U 閺堫兛缍呭鍝ョ敾閸氬牏瀹崇挧鍕櫨鐠愬湱宸奸張鍝勫煑
+严格对标币安 U 本位永续合约资金费率机制
 
-閼卞矁鐭?
-1. 鐎规碍妞傞柌鍥肠閹碘偓閺堝姘﹂弰鎾愁嚠閻ㄥ嫯绁柌鎴ｅ瀭閻?(premiumIndex)
-2. 閸愬懎鐡ㄧ紓鎾崇摠瑜版挸澧犵拹鍦芳 (娓氭稑鎮囧Ο鈥虫健鐎圭偞妞傜拠璇插絿)
-3. 閹恒劑鈧礁鍩?Redis (娓氭稑澧犵粩顖涚叀閻?
-4. 濮?8h 缂佹挾鐣? 閹殿偅寮块幍鈧張澶嬪瘮娴?閳?鐠侊紕鐣荤拹鍦暏 閳?閹碉綀鍨?閸忋儴澶?
+职责:
+1. 定时采集所有交易对的资金费率 (premiumIndex)
+2. 内存缓存当前费率 (供各模块实时读取)
+3. 推送到 Redis (供前端查看)
+4. 每 8h 结算: 扫描所有持仓 → 计算费用 → 扣费/入账
 
-鐢礁鐣ㄧ憴鍕灟:
-- 缂佹挾鐣婚崨銊︽埂: 濮?8h (00:00, 08:00, 16:00 UTC)
-- 鐠愬湱鏁?= 娴犳挷缍呴崥宥勭疅娴犲嘲鈧?鑴?鐠у嫰鍣剧拹鍦芳
-- 閸氬秳绠熸禒宄扳偓?= 閹镐椒绮ㄩ弫浼村櫤 鑴?閺嶅洩顔囨禒閿嬬壐
-- 濮濓綀鍨傞悳? 婢舵艾銇旀禒妯尖敄婢? 鐠愮喕鍨傞悳? 缁屽搫銇旀禒妯侯樋婢?
-- 娴犲懎顕紒鎾剁暬閺冭泛鍩㈤幐浣规箒娴犳挷缍呴惃鍕暏閹撮攱鏁归崣?
+币安规则:
+- 结算周期: 每 8h (00:00, 08:00, 16:00 UTC)
+- 费用 = 仓位名义价值 × 资金费率
+- 名义价值 = 持仓数量 × 标记价格
+- 正费率: 多头付空头; 负费率: 空头付多头
+- 仅对结算时刻持有仓位的用户收取
 """
 
 import asyncio
@@ -33,7 +33,7 @@ from app.services.exchange import BinanceClient
 
 
 # ============================================================
-# 閸愬懎鐡ㄧ紓鎾崇摠
+# 内存缓存
 # ============================================================
 
 # {symbol: {markPrice, lastFundingRate, nextFundingTime, updated_at}}
@@ -43,7 +43,7 @@ REDIS_FUNDING_PREFIX = "autotrade:funding:"
 
 
 class FundingRateService:
-    """鐠у嫰鍣剧拹鍦芳闁插洭娉?+ 缂佹挾鐣婚張宥呭"""
+    """资金费率采集 + 结算服务"""
 
     def __init__(self):
         self._client = BinanceClient()
@@ -52,16 +52,16 @@ class FundingRateService:
         self._task: Optional[asyncio.Task] = None
 
     # ----------------------------------------------------------
-    # 閸氼垰濮?/ 閸嬫粍顒?
+    # 启动 / 停止
     # ----------------------------------------------------------
 
     async def start(self):
-        """閸氼垰濮╃拹鍦芳闁插洭娉﹀顏嗗箚"""
+        """启动费率采集循环"""
         if self._running:
             return
         self._running = True
         self._task = asyncio.create_task(self._loop())
-        logger.info("[FundingRate] 鐠愬湱宸奸柌鍥肠閺堝秴濮熷鎻掓儙閸?)
+        logger.info("[FundingRate] 费率采集服务已启动")
 
     async def stop(self):
         self._running = False
@@ -74,7 +74,7 @@ class FundingRateService:
         if self._redis:
             await self._redis.close()
             self._redis = None
-        logger.info("[FundingRate] 鐠愬湱宸奸柌鍥肠閺堝秴濮熷鎻掍粻濮?)
+        logger.info("[FundingRate] 费率采集服务已停止")
 
     async def _get_redis(self) -> aioredis.Redis:
         if self._redis is None:
@@ -84,14 +84,14 @@ class FundingRateService:
         return self._redis
 
     # ----------------------------------------------------------
-    # 闁插洭娉﹀顏嗗箚
+    # 采集循环
     # ----------------------------------------------------------
 
     async def _loop(self):
         """
-        娑撹鎯婇悳?
-        - 濮?60s 闁插洭娉︽稉鈧▎鈩冨閺堝绔电粔宥堝瀭閻?
-        - 濮ｅ繑顐煎Λ鈧弻銉︽Ц閸氾箑鍩屾禍?8h 缂佹挾鐣荤粣妤€褰?
+        主循环:
+        - 每 60s 采集一次所有币种费率
+        - 每次检查是否到了 8h 结算窗口
         """
         last_settle_hour: Optional[int] = None
 
@@ -99,11 +99,11 @@ class FundingRateService:
             try:
                 await self.fetch_all_rates()
 
-                # 濡偓閺屻儲妲搁崥?8h 缂佹挾鐣婚弮鍫曟？ (00, 08, 16 UTC)
+                # 检查是否 8h 结算时间 (00, 08, 16 UTC)
                 now_utc = datetime.utcnow()
                 current_hour = now_utc.hour
                 if current_hour in (0, 8, 16) and current_hour != last_settle_hour:
-                    # 閸︺劎绮ㄧ粻妤€鐨弮鍓佹畱閸?5 閸掑棝鎸撻崘鍛靶曢崣?
+                    # 在结算小时的前 5 分钟内触发
                     if now_utc.minute < 5:
                         await self._settle_all_users()
                         last_settle_hour = current_hour
@@ -112,17 +112,17 @@ class FundingRateService:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"[FundingRate] 瀵邦亞骞嗗鍌氱埗: {e}")
+                logger.error(f"[FundingRate] 循环异常: {e}")
                 await asyncio.sleep(10)
 
     # ----------------------------------------------------------
-    # 闁插洭娉? 閼惧嘲褰囬幍鈧張澶夋唉閺勬挸顕拹鍦芳
+    # 采集: 获取所有交易对费率
     # ----------------------------------------------------------
 
     async def fetch_all_rates(self):
         """
-        娴犲骸绔电€瑰澹掗柌蹇氬箯閸欐牗澧嶉張澶夋唉閺勬挸顕拹鍦芳楠炲墎绱︾€?
-        娴ｈ法鏁?MarketCollector.SYMBOLS 閸斻劍鈧浇骞忛崣鏍兇缂佺喎鍞寸敮浣侯潚
+        从币安批量获取所有交易对费率并缓存
+        使用 MarketCollector.SYMBOLS 动态获取系统内币种
         """
         from app.services.market_collector import MarketCollector
 
@@ -130,7 +130,7 @@ class FundingRateService:
         if not all_rates:
             return
 
-        # 缁崵绮洪崘鍛畱鐢胶顫掗梿鍡楁値
+        # 系统内的币种集合
         system_symbols = set(MarketCollector.SYMBOLS)
 
         now_iso = datetime.utcnow().isoformat() + "Z"
@@ -148,7 +148,7 @@ class FundingRateService:
                 "updated_at": now_iso,
             }
 
-        # 閹恒劑鈧礁鍩?Redis
+        # 推送到 Redis
         try:
             r = await self._get_redis()
             for symbol, data in _rate_cache.items():
@@ -162,26 +162,26 @@ class FundingRateService:
                 })
                 await r.expire(key, 300)
         except Exception as e:
-            logger.warning(f"[FundingRate] Redis 閹恒劑鈧礁銇戠拹? {e}")
+            logger.warning(f"[FundingRate] Redis 推送失败: {e}")
 
         logger.debug(
-            f"[FundingRate] 瀹稿弶娲块弬?{len(_rate_cache)} 娑擃亙姘﹂弰鎾愁嚠鐠愬湱宸?
+            f"[FundingRate] 已更新 {len(_rate_cache)} 个交易对费率"
         )
 
     # ----------------------------------------------------------
-    # 缂佹挾鐣? 閹殿偅寮块幍鈧張澶屾暏閹磋渹绮ㄦ担宥呰嫙閹碉綀鍨?
+    # 结算: 扫描所有用户仓位并扣费
     # ----------------------------------------------------------
 
     async def _settle_all_users(self):
         """
-        8 鐏忓繑妞傜紒鎾剁暬 閳?閹殿偅寮块幍鈧張澶嬪瘮娴犳挾鏁ら幋宄拌嫙閹笛嗩攽鐠у嫰鍣剧拹鍦芳閹碉綀鍨?
+        8 小时结算 — 扫描所有持仓用户并执行资金费率扣费
 
-        鐢礁鐣ㄧ憴鍕灟:
-        - 鐠愬湱鏁?= 閹镐椒绮ㄩ弫浼村櫤 鑴?閺嶅洩顔囨禒?鑴?鐠у嫰鍣剧拹鍦芳
-        - 濮濓綀鍨傞悳? 婢舵艾銇旈幍锝堝瀭(-), 缁屽搫銇旈崗銉ㄥ(+)
-        - 鐠愮喕鍨傞悳? 婢舵艾銇旈崗銉ㄥ(+), 缁屽搫銇旈幍锝堝瀭(-)
+        币安规则:
+        - 费用 = 持仓数量 × 标记价 × 资金费率
+        - 正费率: 多头扣费(-), 空头入账(+)
+        - 负费率: 多头入账(+), 空头扣费(-)
         """
-        logger.info("[FundingRate] 閳?瀵偓婵?8h 鐠у嫰鍣剧拹鍦芳缂佹挾鐣?..")
+        logger.info("[FundingRate] ⏰ 开始 8h 资金费率结算...")
 
         async with AsyncSessionLocal() as db:
             try:
@@ -189,14 +189,14 @@ class FundingRateService:
                 from app.models.wallet import Wallet
                 from app.models.wallet_transaction import WalletTransaction, TransactionType
 
-                # 閺屻儴顕楅幍鈧張澶嬪ⅵ瀵偓閻ㄥ嫪绮ㄦ担?
+                # 查询所有打开的仓位
                 result = await db.execute(
                     select(Position).where(Position.status == PositionStatus.OPEN)
                 )
                 open_positions = result.scalars().all()
 
                 if not open_positions:
-                    logger.info("[FundingRate] 閺冪姵瀵旀禒? 鐠哄疇绻冪紒鎾剁暬")
+                    logger.info("[FundingRate] 无持仓, 跳过结算")
                     return
 
                 total_settled = 0
@@ -214,38 +214,38 @@ class FundingRateService:
                     if funding_rate == 0:
                         continue
 
-                    # 閸氬秳绠熸禒宄扳偓?= 閺佷即鍣?鑴?閺嶅洩顔囨禒?
+                    # 名义价值 = 数量 × 标记价
                     notional = pos.size * mark_price
 
-                    # 鐠у嫰鍣剧拹鍦暏 (缂佹繂顕崐?
+                    # 资金费用 (绝对值)
                     fee_amount = notional * funding_rate
 
-                    # 閺傜懓鎮滈柅鏄忕帆:
-                    # 濮濓綀鍨傞悳?閳?婢舵艾銇旀禒?(fee_amount 娑撶儤顒? 婢舵艾銇旈幍?, 缁屽搫銇旈弨?
-                    # 鐠愮喕鍨傞悳?閳?缁屽搫銇旀禒? 婢舵艾銇旈弨?(fee_amount 娑撻缚绀?
+                    # 方向逻辑:
+                    # 正费率 → 多头付 (fee_amount 为正, 多头扣), 空头收
+                    # 负费率 → 空头付, 多头收 (fee_amount 为负)
                     if pos.side == PositionSide.LONG:
-                        # 婢舵艾銇? 濮濓綀鍨傞悳鍥ㄦ閹碉綁鎸? 鐠愮喕鍨傞悳鍥ㄦ閺€鍫曟尪
-                        wallet_delta = -fee_amount  # 濮濓綀鍨傞悳?閳?-濮?= 閹? 鐠愮喕鍨傞悳?閳?-鐠?= 閸?
+                        # 多头: 正费率时扣钱, 负费率时收钱
+                        wallet_delta = -fee_amount  # 正费率 → -正 = 扣; 负费率 → -负 = 加
                     else:
-                        # 缁屽搫銇? 濮濓綀鍨傞悳鍥ㄦ閺€鍫曟尪, 鐠愮喕鍨傞悳鍥ㄦ閹碉綁鎸?
+                        # 空头: 正费率时收钱, 负费率时扣钱
                         wallet_delta = fee_amount
 
-                    # 閺囧瓨鏌婇柦鍗炲瘶
+                    # 更新钱包
                     wallet = await db.get(Wallet, pos.user_id)
                     if not wallet:
                         continue
 
                     wallet.balance += wallet_delta
 
-                    # 闂冨弶顒涙担娆擃杺娑撻缚绀?(閺嬩胶顏幆鍛枌)
+                    # 防止余额为负 (极端情况)
                     if wallet.balance < 0:
-                        wallet_delta -= wallet.balance  # 鐠嬪啯鏆?
+                        wallet_delta -= wallet.balance  # 调整
                         wallet.balance = Decimal("0")
 
-                    # 閺囧瓨鏌婃禒鎾茬秴缁鳖垵顓哥挧鍕櫨鐠愬湱鏁?(濮?瀹歌弓绮? 鐠?瀹稿弶鏁?
+                    # 更新仓位累计资金费用 (正=已付, 负=已收)
                     pos.total_funding_fee += (-wallet_delta)
 
-                    # 閸愭瑥鍙嗗ù浣规寜
+                    # 写入流水
                     tx = WalletTransaction(
                         user_id=pos.user_id,
                         type=TransactionType.FUNDING.value,
@@ -253,10 +253,10 @@ class FundingRateService:
                         balance_after=wallet.balance,
                         related_position_id=pos.id,
                         note=(
-                            f"鐠у嫰鍣剧拹鍦芳缂佹挾鐣? {pos.symbol} "
-                            f"{'婢? if pos.side == PositionSide.LONG else '缁?} "
-                            f"鐠愬湱宸?{float(funding_rate):.6f} "
-                            f"閸氬秳绠?{float(notional):.2f}"
+                            f"资金费率结算: {pos.symbol} "
+                            f"{'多' if pos.side == PositionSide.LONG else '空'} "
+                            f"费率={float(funding_rate):.6f} "
+                            f"名义={float(notional):.2f}"
                         ),
                     )
                     db.add(tx)
@@ -264,35 +264,35 @@ class FundingRateService:
 
                 await db.commit()
                 logger.info(
-                    f"[FundingRate] 閴?缂佹挾鐣荤€瑰本鍨? {total_settled} 缁楁柧绮ㄦ担?
+                    f"[FundingRate] ✅ 结算完成: {total_settled} 笔仓位"
                 )
 
             except Exception as e:
                 await db.rollback()
-                logger.error(f"[FundingRate] 閴?缂佹挾鐣诲鍌氱埗: {e}")
+                logger.error(f"[FundingRate] ❌ 结算异常: {e}")
 
     # ----------------------------------------------------------
-    # 閸忣剙绱?API: 鐠囪褰囩紓鎾崇摠
+    # 公开 API: 读取缓存
     # ----------------------------------------------------------
 
     @staticmethod
     def get_cached_rate(symbol: str) -> Optional[dict]:
-        """閼惧嘲褰囬弻鎰唉閺勬挸顕惃鍕敶鐎涙绱︾€涙鍨傞悳?""
+        """获取某交易对的内存缓存费率"""
         return _rate_cache.get(symbol)
 
     @staticmethod
     def get_all_cached_rates() -> Dict[str, dict]:
-        """閼惧嘲褰囬幍鈧張澶岀处鐎涙鍨傞悳?""
+        """获取所有缓存费率"""
         return dict(_rate_cache)
 
     async def get_funding_info(self, symbol: str) -> Optional[dict]:
-        """閼惧嘲褰囬崡鏇氶嚋娴溿倖妲楃€靛湱娈戠€瑰本鏆ｇ拹鍦芳娣団剝浼?(閸氼偄鍕鹃崠?"""
+        """获取单个交易对的完整费率信息 (含年化)"""
         data = await self._client.get_funding_rate(symbol)
         if not data:
             return None
 
         rate = float(data.get("lastFundingRate", 0))
-        # 楠炴潙瀵?= 鐠愬湱宸?鑴?3 (濮ｅ繐銇? 鑴?365
+        # 年化 = 费率 × 3 (每天) × 365
         annualized = rate * 3 * 365 * 100
 
         next_time = data.get("nextFundingTime", 0)
@@ -310,9 +310,9 @@ class FundingRateService:
             "annualizedPct": f"{annualized:.2f}%",
             "nextFundingTime": next_time,
             "remainingMinutes": remaining_min,
-            "direction": "婢舵艾銇旀禒妯垮瀭" if rate > 0 else "缁屽搫銇旀禒妯垮瀭" if rate < 0 else "闂嗘儼鍨傞悳?,
+            "direction": "多头付费" if rate > 0 else "空头付费" if rate < 0 else "零费率",
         }
 
 
-# 閸忋劌鐪崡鏇氱伐
+# 全局单例
 funding_rate_service = FundingRateService()

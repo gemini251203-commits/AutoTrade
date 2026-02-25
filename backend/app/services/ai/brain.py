@@ -3,8 +3,8 @@ AIBrain - AI 核心服务
 ======================
 负责:
 1. 解析用户喊单文本
-2. 构建上下文数�?
-3. 调用 AI 生成结构化任�?
+2. 构建上下文数据
+3. 调用 AI 生成结构化任务
 """
 
 import json
@@ -29,7 +29,7 @@ from .providers import BaseProvider, DeepSeekProvider, OllamaProvider, ChatMessa
 
 @dataclass
 class MarketContext:
-    """市场上下�?""
+    """市场上下文"""
     symbol: str
     current_price: float
     price_change_24h: float = 0.0
@@ -40,7 +40,7 @@ class MarketContext:
 
 @dataclass
 class WalletContext:
-    """钱包上下�?""
+    """钱包上下文"""
     balance: float
     available: float
     frozen: float
@@ -49,7 +49,7 @@ class WalletContext:
 
 @dataclass
 class PositionContext:
-    """持仓上下�?""
+    """持仓上下文"""
     symbol: str
     side: str
     size: float
@@ -60,13 +60,13 @@ class PositionContext:
 
 @dataclass
 class AIContext:
-    """AI 完整上下�?""
+    """AI 完整上下文"""
     market: Optional[MarketContext] = None
     wallet: Optional[WalletContext] = None
     positions: List[PositionContext] = field(default_factory=list)
     pending_orders: int = 0
     running_grids: int = 0
-    indicators: Optional[Dict[str, Any]] = None  # 技术指�?
+    indicators: Optional[Dict[str, Any]] = None  # 技术指标
     timestamp: str = ""
 
 
@@ -78,7 +78,7 @@ class ParsedSignal:
     side: str = ""  # long/short
     trade_style: str = ""  # left_side/right_side/market
     
-    # 交易模式 (映射�?TradingMode)
+    # 交易模式 (映射到 TradingMode)
     trading_mode: str = "market" 
     
     # 左侧交易: 入场价格
@@ -124,69 +124,69 @@ class ParsedSignal:
 
 
 # 信号解析 Prompt
-SIGNAL_PARSE_PROMPT = """你是一个专业的加密货币交易信号解析器。请分析用户输入的喊单信息，提取交易参数�?
+SIGNAL_PARSE_PROMPT = """你是一个专业的加密货币交易信号解析器。请分析用户输入的喊单信息，提取交易参数。
 
 # ⚠️ 重要约束 (必须遵守!)
-1. 下方"当前市场上下�?中的价格�?*实时数据**，你必须使用这些数据进行分析�?
+1. 下方"当前市场上下文"中的价格是**实时数据**，你必须使用这些数据进行分析。
 2. **禁止使用你训练数据中的历史价格！禁止做任何价格估算！**
-3. 如果用户提到的币种与上下文中�?symbol 不同，请�?warnings 中提�?无法获取该币种实时价�?�?
-4. 分析入场价格时，必须与上下文中的 current_price 对比，不要使用任何估算值�?
+3. 如果用户提到的币种与上下文中的 symbol 不同，请在 warnings 中提示"无法获取该币种实时价格"。
+4. 分析入场价格时，必须与上下文中的 current_price 对比，不要使用任何估算值。
 
 # 系统交易规则 (重要!)
 1. **净仓位模式**: 系统使用净仓位模式
-   - 反向开�?= 减仓/平仓 (不会报错)
-   - �? 持多0.5 BTC �?开�?.2 BTC = 平掉0.2多，�?.3�?
-   - �? 持多0.5 BTC �?开�?.8 BTC = 平掉多仓，反开0.3�?
+   - 反向开仓 = 减仓/平仓 (不会报错)
+   - 例: 持多0.5 BTC → 开空0.2 BTC = 平掉0.2多，剩0.3多
+   - 例: 持多0.5 BTC → 开空0.8 BTC = 平掉多仓，反开0.3空
 2. **加仓**: 同向开仓会合并仓位，使用加权平均价
 3. **订单撮合**: 限价单满足条件时立即成交 (价格优于市价)
 
-# 当前市场上下�?
+# 当前市场上下文
 {context}
 
 # 用户输入
 {user_input}
 
 # 任务
-请将用户的喊单信息解析为结构化的交易参数。必须返回有效的 JSON 格式�?
+请将用户的喊单信息解析为结构化的交易参数。必须返回有效的 JSON 格式。
 
 # 交易模式识别规则
 1. **左侧交易 (Left Side)**:
-   - 关键�? "挂单", "接多", "接空", "回踩", "反弹�?, "limit"
-   - 特征: 入场价优于当前价 (做多时入场价 < 当前价，做空时入场价 > 当前�?
-   - 设置: trading_mode="left_side", entry_price=挂单�?
+   - 关键词: "挂单", "接多", "接空", "回踩", "反弹空", "limit"
+   - 特征: 入场价优于当前价 (做多时入场价 < 当前价，做空时入场价 > 当前价)
+   - 设置: trading_mode="left_side", entry_price=挂单价
 
 2. **右侧交易 (Right Side)**:
-   - 关键�? "突破", "breakout", "站稳", "确认", "追多", "追空"
-   - 特征: 等待价格突破关键�?
+   - 关键词: "突破", "breakout", "站稳", "确认", "追多", "追空"
+   - 特征: 等待价格突破关键位
    - 设置: 
      - trading_mode="right_side"
-     - trigger_price=突破�?压力�?
+     - trigger_price=突破价/压力位
      - confirm_interval="15m" (默认)
      - max_deviation_pct=0.5 (默认)
 
 3. **市价交易 (Market)**:
-   - 关键�? "现价", "立即", "market", "now"
+   - 关键词: "现价", "立即", "market", "now"
    - 特征: 立即入场
    - 设置: trading_mode="market"
 
 # ⚠️ 网格交易识别规则 (重要!)
 如果用户输入包含以下关键词，必须设置 is_grid=true:
 - "高抛低吸" / "低吸高抛" / "区间操作" / "震荡"
-- "盘整" / "盘整区间" / "区间�?
+- "盘整" / "盘整区间" / "区间内"
 - "网格" / "grid"
-- 给出明确的上下限价格区间且建议反复操�?
+- 给出明确的上下限价格区间且建议反复操作
 
-�?is_grid=true �?
+当 is_grid=true 时:
 - grid_lower = 区间下限
 - grid_upper = 区间上限  
 - grid_direction = "neutral" (高抛低吸双向)
-- side 可以忽略或设�?"long"
-- grid_count = 建议 10-20 �?
+- side 可以忽略或设为 "long"
+- grid_count = 建议 10-20 格
 
 # 输出格式 (JSON)
 {{
   "symbol": "BTCUSDT",
-  "side": "long �?short",
+  "side": "long 或 short",
   "trading_mode": "left_side / right_side / market",
   
   // 左侧参数
@@ -211,19 +211,19 @@ SIGNAL_PARSE_PROMPT = """你是一个专业的加密货币交易信号解析器�
   "ladder_prices": [每批入场价],
   
   "is_grid": 是否网格交易(true/false),
-  "grid_lower": 网格下限�?
-  "grid_upper": 网格上限�?
+  "grid_lower": 网格下限价,
+  "grid_upper": 网格上限价,
   "grid_count": 网格数量(推荐10-20),
-  "grid_type": "arithmetic"(等差)�?geometric"(等比),
+  "grid_type": "arithmetic"(等差)或"geometric"(等比),
   "grid_direction": "long"/"short"/"neutral",
-  "grid_investment": 网格投资�?
+  "grid_investment": 网格投资额,
   
   "confidence": 0-1之间的置信度,
   "reasoning": "你的分析推理过程",
-  "warnings": ["可能的风险提�?]
+  "warnings": ["可能的风险提示"]
 }}
 
-只返�?JSON，不要其他内容�?""
+只返回 JSON，不要其他内容。"""
 
 
 class AIBrain:
@@ -232,17 +232,17 @@ class AIBrain:
     
     核心功能:
     1. 根据用户配置获取 AI Provider
-    2. 构建完整上下�?
+    2. 构建完整上下文
     3. 解析喊单信号
     """
     
     @staticmethod
     async def get_provider(db: AsyncSession, user_id: int) -> BaseProvider:
         """
-        获取用户配置�?AI Provider
+        获取用户配置的 AI Provider
         
         Args:
-            db: 数据库会�?
+            db: 数据库会话
             user_id: 用户 ID
             
         Returns:
@@ -288,7 +288,7 @@ class AIBrain:
         symbol: str = "BTCUSDT",
     ) -> AIContext:
         """
-        构建 AI 上下�?
+        构建 AI 上下文
         
         收集用户的钱包、持仓、订单等信息
         """
@@ -310,7 +310,7 @@ class AIBrain:
                 )
         except Exception as e:
             logger.warning(f"[AIBrain] Failed to get market data: {e}")
-            # 使用默认�?
+            # 使用默认值
             context.market = MarketContext(symbol=symbol, current_price=0)
         
         # 2. 获取钱包数据
@@ -338,7 +338,7 @@ class AIBrain:
                 )
             )
             positions = result.scalars().all()
-            # 使用市场价格计算未实现盈�?(Position ORM �?unrealized_pnl �?
+            # 使用市场价格计算未实现盈亏 (Position ORM 无 unrealized_pnl 列)
             market_price = Decimal(str(context.market.current_price)) if context.market and context.market.current_price > 0 else None
             context.positions = [
                 PositionContext(
@@ -380,7 +380,7 @@ class AIBrain:
         except Exception as e:
             logger.warning(f"[AIBrain] Failed to get grids: {e}")
         
-        # 6. 获取技术指�?(直接�?Binance API 获取 K 线计�?
+        # 6. 获取技术指标 (直接从 Binance API 获取 K 线计算)
         try:
             from app.core.network import net_manager
             async with net_manager.get_client(timeout=15.0) as http_client:
@@ -425,19 +425,19 @@ class AIBrain:
     
     @staticmethod
     def _format_context(context: AIContext) -> str:
-        """格式化上下文为文�?""
+        """格式化上下文为文本"""
         lines = []
         
         if context.market:
             lines.append(f"## 市场数据 ({context.market.symbol})")
             lines.append(f"- 当前价格: ${context.market.current_price:,.2f}")
             lines.append(f"- 24h涨跌: {context.market.price_change_24h:+.2f}%")
-            lines.append(f"- 24h�?�? ${context.market.high_24h:,.2f} / ${context.market.low_24h:,.2f}")
+            lines.append(f"- 24h高/低: ${context.market.high_24h:,.2f} / ${context.market.low_24h:,.2f}")
             lines.append("")
         
         if context.wallet:
             lines.append("## 账户资产")
-            lines.append(f"- 总余�? ${context.wallet.balance:,.2f}")
+            lines.append(f"- 总余额: ${context.wallet.balance:,.2f}")
             lines.append(f"- 可用: ${context.wallet.available:,.2f}")
             lines.append(f"- 冻结: ${context.wallet.frozen:,.2f}")
             lines.append("")
@@ -448,18 +448,18 @@ class AIBrain:
                 lines.append(f"- {p.symbol} {p.side.upper()} | 数量:{p.size} | 入场:{p.entry_price} | 杠杆:{p.leverage}x | 盈亏:{p.unrealized_pnl:+.2f}")
             lines.append("")
         else:
-            lines.append("## 当前持仓: �?)
+            lines.append("## 当前持仓: 无")
             lines.append("")
         
-        lines.append(f"## 其他状�?)
+        lines.append(f"## 其他状态")
         lines.append(f"- 挂单数量: {context.pending_orders}")
-        lines.append(f"- 运行中网�? {context.running_grids}")
+        lines.append(f"- 运行中网格: {context.running_grids}")
         
-        # 技术指�?
+        # 技术指标
         if context.indicators and context.indicators.get("indicators"):
             ind = context.indicators["indicators"]
             lines.append("")
-            lines.append("## 技术指�?)
+            lines.append("## 技术指标")
             if ind.get("rsi"):
                 rsi = ind["rsi"]
                 status = "(超买)" if rsi > 70 else "(超卖)" if rsi < 30 else ""
@@ -471,7 +471,7 @@ class AIBrain:
             if ind.get("atr"):
                 lines.append(f"- ATR(14): ${ind['atr']:,.4f}")
             if context.indicators.get("trend"):
-                trend_cn = {"bullish": "看涨", "bearish": "看跌", "neutral": "中�?}
+                trend_cn = {"bullish": "看涨", "bearish": "看跌", "neutral": "中性"}
                 lines.append(f"- 趋势判断: {trend_cn.get(context.indicators['trend'], '未知')}")
         
         return "\n".join(lines)
@@ -487,13 +487,13 @@ class AIBrain:
         解析喊单信号
         
         Args:
-            db: 数据库会�?
+            db: 数据库会话
             user_id: 用户 ID
-            text: 用户输入的喊单文�?
-            symbol: 可选指定币�?
+            text: 用户输入的喊单文本
+            symbol: 可选指定币种
             
         Returns:
-            解析后的结构化信�?
+            解析后的结构化信号
         """
         # 1. 获取 AI Provider
         provider = await AIBrain.get_provider(db, user_id)
@@ -501,7 +501,7 @@ class AIBrain:
         # 2. 尝试从文本中提取币种
         detected_symbol = symbol
         if not detected_symbol:
-            # 简单匹配常见币�?
+            # 简单匹配常见币种
             text_upper = text.upper()
             for s in ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT"]:
                 if s.replace("USDT", "") in text_upper:
@@ -510,7 +510,7 @@ class AIBrain:
             if not detected_symbol:
                 detected_symbol = "BTCUSDT"
         
-        # 3. 构建上下�?
+        # 3. 构建上下文
         context = await AIBrain.build_context(db, user_id, detected_symbol)
         context_text = AIBrain._format_context(context)
         
@@ -539,7 +539,7 @@ class AIBrain:
             content = response.content
             
             # 7. 解析 JSON
-            # 提取 JSON 部分 (处理可能�?markdown 代码�?
+            # 提取 JSON 部分 (处理可能的 markdown 代码块)
             json_match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
             if json_match:
                 json_str = json_match.group(1)
@@ -593,7 +593,7 @@ class AIBrain:
                 warnings=data.get("warnings", []),
             )
             
-            # 9. 后处理验�?
+            # 9. 后处理验证
             signal = AIBrain._post_process_signal(signal, context)
             
             logger.info(f"[AIBrain] Parsed signal: {signal.symbol} {signal.side} @ {signal.entry_price}")
@@ -610,9 +610,9 @@ class AIBrain:
     @staticmethod
     def _post_process_signal(signal: ParsedSignal, context: AIContext) -> ParsedSignal:
         """
-        后处理信�?
+        后处理信号
         
-        验证和修�?AI 输出
+        验证和修正 AI 输出
         """
         # 确保币种格式正确
         if signal.symbol and not signal.symbol.endswith("USDT"):
@@ -628,14 +628,14 @@ class AIBrain:
                 else:
                     signal.entry_price = current_price
             
-            # 验证止损合理�?
+            # 验证止损合理性
             if signal.stop_loss:
                 if signal.side == "long" and signal.stop_loss >= current_price:
-                    signal.warnings.append("止损价高于当前价，多单止损应低于入场�?)
+                    signal.warnings.append("止损价高于当前价，多单止损应低于入场价")
                 elif signal.side == "short" and signal.stop_loss <= current_price:
-                    signal.warnings.append("止损价低于当前价，空单止损应高于入场�?)
+                    signal.warnings.append("止损价低于当前价，空单止损应高于入场价")
         
-        # 确保杠杆在合理范�?
+        # 确保杠杆在合理范围
         if signal.leverage < 1:
             signal.leverage = 1
         if signal.leverage > 125:
@@ -658,7 +658,7 @@ class AIBrain:
         """
         多智能体分析
         
-        调用多个AI分析师从不同角度分析，最终由决策者汇总�?
+        调用多个AI分析师从不同角度分析，最终由决策者汇总。
         """
         from app.core.config import settings as app_settings
         

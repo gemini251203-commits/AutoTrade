@@ -1,18 +1,18 @@
 """
 Strategy API
 ==============
-绛栫暐绠＄悊绔偣
+策略管理端点
 
-绔偣:
-    GET    /api/strategy/              - 绛栫暐鍒楄〃
-    POST   /api/strategy/              - 鍒涘缓绛栫暐
-    PUT    /api/strategy/{id}          - 鏇存柊绛栫暐
-    DELETE /api/strategy/{id}          - 鍒犻櫎绛栫暐
-    POST   /api/strategy/{id}/start    - 鍚姩鑷姩浜ゆ槗
-    POST   /api/strategy/{id}/stop     - 鍋滄鑷姩浜ゆ槗
-    GET    /api/strategy/{id}/logs     - 鎵ц鏃ュ織
-    GET    /api/strategy/templates     - 棰勮绛栫暐妯℃澘
-    GET    /api/strategy/{id}/memories - 浜ゆ槗璁板繂
+端点:
+    GET    /api/strategy/              - 策略列表
+    POST   /api/strategy/              - 创建策略
+    PUT    /api/strategy/{id}          - 更新策略
+    DELETE /api/strategy/{id}          - 删除策略
+    POST   /api/strategy/{id}/start    - 启动自动交易
+    POST   /api/strategy/{id}/stop     - 停止自动交易
+    GET    /api/strategy/{id}/logs     - 执行日志
+    GET    /api/strategy/templates     - 预设策略模板
+    GET    /api/strategy/{id}/memories - 交易记忆
 """
 
 from typing import Optional, List
@@ -33,8 +33,8 @@ router = APIRouter(tags=["Strategy"])
 # ==================== Schemas ====================
 
 class StrategyCreateRequest(BaseModel):
-    """鍒涘缓绛栫暐璇锋眰"""
-    name: str = Field(..., example="BTC RSI 瓒呭崠鍙嶅脊")
+    """创建策略请求"""
+    name: str = Field(..., example="BTC RSI 超卖反弹")
     symbol: str = Field(..., example="BTCUSDT")
     interval: str = Field(default="1h", example="1h")
     config_yaml: str = Field(..., example="name: test\nsymbol: BTCUSDT\n...")
@@ -42,7 +42,7 @@ class StrategyCreateRequest(BaseModel):
 
 
 class StrategyUpdateRequest(BaseModel):
-    """鏇存柊绛栫暐璇锋眰"""
+    """更新策略请求"""
     name: Optional[str] = None
     symbol: Optional[str] = None
     interval: Optional[str] = None
@@ -51,7 +51,7 @@ class StrategyUpdateRequest(BaseModel):
 
 
 class StrategyResponse(BaseModel):
-    """绛栫暐鍝嶅簲"""
+    """策略响应"""
     id: int
     user_id: int
     name: str
@@ -74,7 +74,7 @@ class StrategyResponse(BaseModel):
 
 
 class StrategyLogResponse(BaseModel):
-    """鎵ц鏃ュ織鍝嶅簲"""
+    """执行日志响应"""
     id: int
     strategy_id: int
     signal_type: str
@@ -94,7 +94,7 @@ class StrategyLogResponse(BaseModel):
 
 
 class TemplateResponse(BaseModel):
-    """绛栫暐妯℃澘鍝嶅簲"""
+    """策略模板响应"""
     id: str
     name: str
     symbol: str
@@ -105,7 +105,7 @@ class TemplateResponse(BaseModel):
 
 
 class MemoryResponse(BaseModel):
-    """浜ゆ槗璁板繂鍝嶅簲"""
+    """交易记忆响应"""
     id: int
     symbol: str
     source: Optional[str] = None
@@ -126,7 +126,7 @@ class MemoryResponse(BaseModel):
 # ==================== Helper ====================
 
 def _strategy_to_response(s: Strategy) -> dict:
-    """灏?ORM 妯″瀷杞负鍝嶅簲瀛楀吀"""
+    """将 ORM 模型转为响应字典"""
     return {
         "id": s.id,
         "user_id": s.user_id,
@@ -154,7 +154,7 @@ async def list_strategies(
     current_user: CurrentUser,
     db: DbSession,
 ):
-    """鑾峰彇鐢ㄦ埛鐨勭瓥鐣ュ垪琛?""
+    """获取用户的策略列表"""
     result = await db.execute(
         select(Strategy)
         .where(Strategy.user_id == current_user.id)
@@ -171,18 +171,18 @@ async def create_strategy(
     db: DbSession,
 ):
     """
-    鍒涘缓绛栫暐
+    创建策略
     
-    浼氶獙璇?YAML 閰嶇疆鐨勫悎娉曟€э紙鎸囨爣鍚嶇О銆佹瘮杈冭繍绠楃绛夛級
+    会验证 YAML 配置的合法性（指标名称、比较运算符等）
     """
-    # 楠岃瘉 YAML
+    # 验证 YAML
     engine = StrategyEngine()
     try:
         engine.parse_yaml(request.config_yaml)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"YAML 閰嶇疆鏃犳晥: {str(e)}",
+            detail=f"YAML 配置无效: {str(e)}",
         )
     
     strategy = Strategy(
@@ -206,7 +206,7 @@ async def update_strategy(
     current_user: CurrentUser,
     db: DbSession,
 ):
-    """鏇存柊绛栫暐閰嶇疆"""
+    """更新策略配置"""
     result = await db.execute(
         select(Strategy).where(
             Strategy.id == strategy_id,
@@ -215,9 +215,9 @@ async def update_strategy(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        raise HTTPException(status_code=404, detail="绛栫暐涓嶅瓨鍦?)
+        raise HTTPException(status_code=404, detail="策略不存在")
     
-    # decision_interval 鍙互鍦ㄨ繍琛屼腑淇敼锛屽叾浠栧瓧娈甸渶鍋滄鍚庝慨鏀?
+    # decision_interval 可以在运行中修改，其他字段需停止后修改
     only_decision_interval = (
         request.decision_interval is not None
         and request.name is None
@@ -229,16 +229,16 @@ async def update_strategy(
     if strategy.is_active and not only_decision_interval:
         raise HTTPException(
             status_code=400,
-            detail="绛栫暐杩愯涓紝璇峰厛鍋滄鍐嶄慨鏀癸紙鍐崇瓥闂撮殧鍙洿鎺ヤ慨鏀癸級",
+            detail="策略运行中，请先停止再修改（决策间隔可直接修改）",
         )
     
-    # 濡傛灉鏇存柊浜?YAML锛岄獙璇佸悎娉曟€?
+    # 如果更新了 YAML，验证合法性
     if request.config_yaml:
         engine = StrategyEngine()
         try:
             engine.parse_yaml(request.config_yaml)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=f"YAML 鏃犳晥: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"YAML 无效: {str(e)}")
         strategy.config_yaml = request.config_yaml
     
     if request.name is not None:
@@ -261,7 +261,7 @@ async def delete_strategy(
     current_user: CurrentUser,
     db: DbSession,
 ):
-    """鍒犻櫎绛栫暐"""
+    """删除策略"""
     result = await db.execute(
         select(Strategy).where(
             Strategy.id == strategy_id,
@@ -270,14 +270,14 @@ async def delete_strategy(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        raise HTTPException(status_code=404, detail="绛栫暐涓嶅瓨鍦?)
+        raise HTTPException(status_code=404, detail="策略不存在")
     
     if strategy.is_active:
-        raise HTTPException(status_code=400, detail="绛栫暐杩愯涓紝璇峰厛鍋滄鍐嶅垹闄?)
+        raise HTTPException(status_code=400, detail="策略运行中，请先停止再删除")
     
     await db.delete(strategy)
     await db.commit()
-    return {"message": f"绛栫暐 '{strategy.name}' 宸插垹闄?}
+    return {"message": f"策略 '{strategy.name}' 已删除"}
 
 
 @router.post("/{strategy_id}/start")
@@ -286,7 +286,7 @@ async def start_strategy(
     current_user: CurrentUser,
     db: DbSession,
 ):
-    """鍚姩绛栫暐鑷姩浜ゆ槗"""
+    """启动策略自动交易"""
     result = await db.execute(
         select(Strategy).where(
             Strategy.id == strategy_id,
@@ -295,22 +295,22 @@ async def start_strategy(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        raise HTTPException(status_code=404, detail="绛栫暐涓嶅瓨鍦?)
+        raise HTTPException(status_code=404, detail="策略不存在")
     
     if strategy.is_active:
-        raise HTTPException(status_code=400, detail="绛栫暐宸插湪杩愯涓?)
+        raise HTTPException(status_code=400, detail="策略已在运行中")
     
-    # 鍐嶆楠岃瘉 YAML
+    # 再次验证 YAML
     engine = StrategyEngine()
     try:
         engine.parse_yaml(strategy.config_yaml)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"绛栫暐閰嶇疆鏃犳晥: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"策略配置无效: {str(e)}")
     
     strategy.is_active = True
     await db.commit()
     
-    return {"message": f"绛栫暐 '{strategy.name}' 宸插惎鍔?, "is_active": True}
+    return {"message": f"策略 '{strategy.name}' 已启动", "is_active": True}
 
 
 @router.post("/{strategy_id}/stop")
@@ -319,7 +319,7 @@ async def stop_strategy(
     current_user: CurrentUser,
     db: DbSession,
 ):
-    """鍋滄绛栫暐鑷姩浜ゆ槗"""
+    """停止策略自动交易"""
     result = await db.execute(
         select(Strategy).where(
             Strategy.id == strategy_id,
@@ -328,12 +328,12 @@ async def stop_strategy(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        raise HTTPException(status_code=404, detail="绛栫暐涓嶅瓨鍦?)
+        raise HTTPException(status_code=404, detail="策略不存在")
     
     strategy.is_active = False
     await db.commit()
     
-    return {"message": f"绛栫暐 '{strategy.name}' 宸插仠姝?, "is_active": False}
+    return {"message": f"策略 '{strategy.name}' 已停止", "is_active": False}
 
 
 @router.post("/{strategy_id}/run-once")
@@ -342,7 +342,7 @@ async def run_strategy_once(
     current_user: CurrentUser,
     db: DbSession,
 ):
-    """鎵嬪姩瑙﹀彂涓€娆＄瓥鐣ュ喅绛?""
+    """手动触发一次策略决策"""
     result = await db.execute(
         select(Strategy).where(
             Strategy.id == strategy_id,
@@ -351,7 +351,7 @@ async def run_strategy_once(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        raise HTTPException(status_code=404, detail="绛栫暐涓嶅瓨鍦?)
+        raise HTTPException(status_code=404, detail="策略不存在")
     
     from app.services.agent.autopilot import autopilot
     try:
@@ -363,11 +363,11 @@ async def run_strategy_once(
             strategy_id=strategy.id,
         )
         return {
-            "message": f"绛栫暐 '{strategy.name}' 宸叉墽琛屼竴娆″喅绛?,
+            "message": f"策略 '{strategy.name}' 已执行一次决策",
             "reply": reply,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"鍐崇瓥鎵ц澶辫触: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"决策执行失败: {str(e)}")
 
 
 @router.get("/{strategy_id}/logs", response_model=List[StrategyLogResponse])
@@ -377,8 +377,8 @@ async def get_strategy_logs(
     db: DbSession,
     limit: int = Query(default=50, le=200),
 ):
-    """鑾峰彇绛栫暐鎵ц鏃ュ織"""
-    # 纭绛栫暐灞炰簬褰撳墠鐢ㄦ埛
+    """获取策略执行日志"""
+    # 确认策略属于当前用户
     result = await db.execute(
         select(Strategy).where(
             Strategy.id == strategy_id,
@@ -386,7 +386,7 @@ async def get_strategy_logs(
         )
     )
     if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="绛栫暐涓嶅瓨鍦?)
+        raise HTTPException(status_code=404, detail="策略不存在")
     
     result = await db.execute(
         select(StrategyLog)
@@ -418,7 +418,7 @@ async def get_strategy_logs(
 
 @router.get("/templates", response_model=List[TemplateResponse])
 async def get_templates():
-    """鑾峰彇棰勮绛栫暐妯℃澘鍒楄〃"""
+    """获取预设策略模板列表"""
     templates = list_templates()
     result = []
     for t in templates:
@@ -442,8 +442,8 @@ async def get_memories(
     db: DbSession,
     limit: int = Query(default=20, le=100),
 ):
-    """鑾峰彇绛栫暐鐩稿叧鐨勪氦鏄撹蹇嗭紙浠呴噺鍖栫瓥鐣ユ潵婧愶級"""
-    # 鍏堣幏鍙栫瓥鐣ョ殑 symbol
+    """获取策略相关的交易记忆（仅量化策略来源）"""
+    # 先获取策略的 symbol
     result = await db.execute(
         select(Strategy).where(
             Strategy.id == strategy_id,
@@ -452,9 +452,9 @@ async def get_memories(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        raise HTTPException(status_code=404, detail="绛栫暐涓嶅瓨鍦?)
+        raise HTTPException(status_code=404, detail="策略不存在")
     
-    # 鑾峰彇璇ヤ氦鏄撳 + 閲忓寲鏉ユ簮鐨勮蹇嗭紙涓嶅啀娣峰叆鎵嬪姩浜ゆ槗锛?
+    # 获取该交易对 + 量化来源的记忆（不再混入手动交易）
     result = await db.execute(
         select(TradeMemory)
         .where(

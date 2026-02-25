@@ -1,24 +1,24 @@
 """
 WebSocket Price Push API
 =========================
-鐎圭偞妞傛禒閿嬬壐閹恒劑鈧胶顏悙?
+实时价格推送端点
 
-閸旂喕鍏?
-1. 閸撳秶顏柅姘崇箖 WebSocket 鏉╃偞甯撮懢宄板絿鐎圭偞妞傛禒閿嬬壐
-2. 娴?price_stream 閺堝秴濮熼懢宄板絿瀹歌尙绱︾€涙娈戞禒閿嬬壐
-3. 閺€顖涘瘮婢舵矮姘﹂弰鎾愁嚠鐠併垽妲?
-4. 韫囧啳鐑﹀Λ鈧ù瀣╃箽閹镐浇绻涢幒?
+功能:
+1. 前端通过 WebSocket 连接获取实时价格
+2. 从 price_stream 服务获取已缓存的价格
+3. 支持多交易对订阅
+4. 心跳检测保持连接
 
-閸撳秶顏潻鐐村复:
+前端连接:
     const ws = new WebSocket('ws://localhost:8000/api/ws/prices')
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data)
         // data = { type: "price_update", prices: { BTCUSDT: "78000.5", ... } }
     }
 
-濞戝牊浼呴弽鐓庣础:
-    閸欐垿鈧? { "type": "subscribe", "symbols": ["BTCUSDT", "ETHUSDT"] }
-    閹恒儲鏁? { "type": "price_update", "prices": { "BTCUSDT": "78000.5", ... }, "timestamp": "..." }
+消息格式:
+    发送: { "type": "subscribe", "symbols": ["BTCUSDT", "ETHUSDT"] }
+    接收: { "type": "price_update", "prices": { "BTCUSDT": "78000.5", ... }, "timestamp": "..." }
 """
 
 import asyncio
@@ -36,7 +36,7 @@ router = APIRouter()
 
 
 class ConnectionManager:
-    """WebSocket 鏉╃偞甯寸粻锛勬倞閸?""
+    """WebSocket 连接管理器"""
     
     def __init__(self):
         self.active_connections: list[WebSocket] = []
@@ -56,7 +56,7 @@ class ConnectionManager:
         logger.info(f"[WS] Client disconnected, total={len(self.active_connections)}")
     
     async def broadcast(self, message: dict):
-        """楠炴寧鎸卞☉鍫熶紖缂佹瑦澧嶉張澶庣箾閹?""
+        """广播消息给所有连接"""
         data = json.dumps(message)
         disconnected = []
         
@@ -66,28 +66,28 @@ class ConnectionManager:
             except Exception:
                 disconnected.append(ws)
         
-        # 濞撳懐鎮婇弬顓炵磻閻ㄥ嫯绻涢幒?
+        # 清理断开的连接
         for ws in disconnected:
             self.disconnect(ws)
 
 
-# 閸忋劌鐪潻鐐村复缁狅紕鎮婇崳?
+# 全局连接管理器
 manager = ConnectionManager()
 
 
 @router.websocket("/prices")
 async def websocket_prices(websocket: WebSocket):
     """
-    鐎圭偞妞傛禒閿嬬壐閹恒劑鈧?
+    实时价格推送
     
-    濮ｅ繒顫楅幒銊┾偓浣瑰閺堝姘﹂弰鎾愁嚠閻ㄥ嫭娓堕弬棰佺幆閺嶇》绱?
-    閺佺増宓侀弶銉︾爱: price_stream 閺堝秴濮熺紓鎾崇摠閻ㄥ嫪鐜弽绗衡偓?
+    每秒推送所有交易对的最新价格，
+    数据来源: price_stream 服务缓存的价格。
     """
     await manager.connect(websocket)
     
     try:
         while True:
-            # 閺€鍫曟肠閹碘偓閺堝姘﹂弰鎾愁嚠閻ㄥ嫭娓堕弬棰佺幆閺?
+            # 收集所有交易对的最新价格
             prices = {}
             for symbol in [
                 "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT",
@@ -97,7 +97,7 @@ async def websocket_prices(websocket: WebSocket):
                 if price is not None:
                     prices[symbol] = str(price)
             
-            # 閹恒劑鈧椒鐜弽鍏兼纯閺?
+            # 推送价格更新
             if prices:
                 await websocket.send_json({
                     "type": "price_update",
@@ -105,7 +105,7 @@ async def websocket_prices(websocket: WebSocket):
                     "timestamp": datetime.utcnow().isoformat() + "Z",
                 })
             
-            # 濮ｅ繒顫楅幒銊┾偓浣风濞?
+            # 每秒推送一次
             await asyncio.sleep(1)
             
     except WebSocketDisconnect:

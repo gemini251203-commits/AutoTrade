@@ -1,12 +1,12 @@
 """
 Pipeline API
 ==============
-鍥涘眰娴佹按绾跨鐞嗙鐐?
+四层流水线管理端点
 
-绔偣:
-    GET  /api/pipeline/status   - 鑾峰彇 Pipeline 瀹炴椂鐘舵€?
-    GET  /api/pipeline/config   - 鑾峰彇褰撳墠閰嶇疆
-    POST /api/pipeline/circuit-breaker - 鐔旀柇鎺у埗
+端点:
+    GET  /api/pipeline/status   - 获取 Pipeline 实时状态
+    GET  /api/pipeline/config   - 获取当前配置
+    POST /api/pipeline/circuit-breaker - 熔断控制
 """
 
 from typing import Dict, List, Optional
@@ -23,29 +23,29 @@ router = APIRouter(tags=["Pipeline"])
 # ==================== Schemas ====================
 
 class LayerStatus(BaseModel):
-    """鍗曞眰鐘舵€?""
+    """单层状态"""
     name: str
     status: str        # "active" | "idle" | "error" | "disabled"
     detail: str = ""
-    count: int = 0     # 澶勭悊娆℃暟
+    count: int = 0     # 处理次数
 
 
 class PipelineStatusResponse(BaseModel):
-    """Pipeline 鏁翠綋鐘舵€?""
+    """Pipeline 整体状态"""
     is_active: bool
-    circuit_breaker: bool           # 鏄惁鐔旀柇
-    risk_bypass: bool = False       # 椋庢帶鏄惁宸插叧闂?
+    circuit_breaker: bool           # 是否熔断
+    risk_bypass: bool = False       # 风控是否已关闭
     uptime_seconds: float
-    layers: List[LayerStatus]       # 鍥涘眰鐘舵€?
-    stats: Dict                     # 娴佹按绾跨粺璁?
-    recent_insights: List[Dict]     # 鏈€杩戜俊鍙?
-    recent_verdicts: List[Dict]     # 鏈€杩戦鎺у喅绛?
+    layers: List[LayerStatus]       # 四层状态
+    stats: Dict                     # 流水线统计
+    recent_insights: List[Dict]     # 最近信号
+    recent_verdicts: List[Dict]     # 最近风控决策
 
 
 class PipelineConfigResponse(BaseModel):
-    """Pipeline 閰嶇疆"""
+    """Pipeline 配置"""
     portfolio_model: str            # "fixed_percent" | "kelly"
-    risk_percent: float             # 浠撲綅鐧惧垎姣?
+    risk_percent: float             # 仓位百分比
     default_leverage: int
     max_positions: int
     max_leverage: int
@@ -55,7 +55,7 @@ class PipelineConfigResponse(BaseModel):
 
 
 class PipelineConfigUpdate(BaseModel):
-    """鏇存柊 Pipeline 閰嶇疆"""
+    """更新 Pipeline 配置"""
     portfolio_model: Optional[str] = None
     risk_percent: Optional[float] = None
     default_leverage: Optional[int] = None
@@ -67,7 +67,7 @@ class PipelineConfigUpdate(BaseModel):
 
 
 class CircuitBreakerRequest(BaseModel):
-    """鐔旀柇鎺у埗"""
+    """熔断控制"""
     action: str                     # "trigger" | "reset"
     reason: str = ""
 
@@ -78,8 +78,8 @@ class CircuitBreakerResponse(BaseModel):
 
 
 class RiskBypassRequest(BaseModel):
-    """椋庢帶寮€鍏?""
-    enabled: bool                   # True=鍏抽棴椋庢帶, False=鎭㈠椋庢帶
+    """风控开关"""
+    enabled: bool                   # True=关闭风控, False=恢复风控
 
 
 class RiskBypassResponse(BaseModel):
@@ -87,7 +87,7 @@ class RiskBypassResponse(BaseModel):
     message: str
 
 
-# ==================== Helper: 鑾峰彇鐪熷疄 Pipeline 瀹炰緥 ====================
+# ==================== Helper: 获取真实 Pipeline 实例 ====================
 
 _startup_time = datetime.utcnow()
 _recent_insights: list = []
@@ -95,7 +95,7 @@ _recent_verdicts: list = []
 
 
 def _get_pipeline():
-    """鑾峰彇鍏ㄥ眬 TradingPipeline 瀹炰緥 (鏉ヨ嚜 core/pipeline.py)"""
+    """获取全局 TradingPipeline 实例 (来自 core/pipeline.py)"""
     try:
         from app.core.pipeline import get_pipeline
         return get_pipeline()
@@ -104,13 +104,13 @@ def _get_pipeline():
 
 
 def _get_risk_model():
-    """鑾峰彇褰撳墠 Pipeline 涓殑 RiskModel"""
+    """获取当前 Pipeline 中的 RiskModel"""
     pipeline = _get_pipeline()
     return pipeline._risk if pipeline else None
 
 
 def record_insight(data: dict):
-    """璁板綍鏈€杩戠殑 Insight (渚?EventBus 鍥炶皟浣跨敤)"""
+    """记录最近的 Insight (供 EventBus 回调使用)"""
     global _recent_insights
     _recent_insights.append({
         **data,
@@ -121,7 +121,7 @@ def record_insight(data: dict):
 
 
 def record_verdict(data: dict):
-    """璁板綍鏈€杩戠殑椋庢帶鍐崇瓥"""
+    """记录最近的风控决策"""
     global _recent_verdicts
     _recent_verdicts.append({
         **data,
@@ -139,11 +139,11 @@ async def get_pipeline_status(
     current_user: CurrentUser,
 ):
     """
-    鑾峰彇 Pipeline 瀹炴椂鐘舵€?
+    获取 Pipeline 实时状态
 
-    娣峰悎鏁版嵁婧?
-    - DB 鏌ヨ: 绛栫暐鏁般€佽鍗曟暟銆佷粨浣嶆暟 (鎸佷箙鍖? 涓嶉殢閲嶅惎涓㈠け)
-    - 鍐呭瓨缁熻: 鏈杩愯鏈熼棿鐨勬祦姘寸嚎璁℃暟 (杈呭姪)
+    混合数据源:
+    - DB 查询: 策略数、订单数、仓位数 (持久化, 不随重启丢失)
+    - 内存统计: 本次运行期间的流水线计数 (辅助)
     """
     from sqlalchemy import select, func
     from app.models.order import Order, OrderStatus
@@ -153,18 +153,18 @@ async def get_pipeline_status(
     pipeline = _get_pipeline()
     risk_model = _get_risk_model()
 
-    # 璁＄畻杩愯鏃堕棿
+    # 计算运行时间
     uptime = (datetime.utcnow() - _startup_time).total_seconds()
 
-    # 浠?Pipeline 鑾峰彇鍐呭瓨缁熻 (鏈杩愯)
+    # 从 Pipeline 获取内存统计 (本次运行)
     mem_stats = {}
     if pipeline:
         mem_stats = pipeline.get_stats()
 
-    # ===== 浠?DB 鑾峰彇鐪熷疄鎸佷箙鍖栫粺璁?=====
+    # ===== 从 DB 获取真实持久化统计 =====
     user_id = current_user.id
 
-    # Alpha: 娲昏穬绛栫暐鏁?
+    # Alpha: 活跃策略数
     strategy_count = 0
     try:
         r = await db.execute(
@@ -177,7 +177,7 @@ async def get_pipeline_status(
     except Exception:
         pass
 
-    # Portfolio/Risk/Execution: 璁㈠崟缁熻
+    # Portfolio/Risk/Execution: 订单统计
     total_orders = 0
     filled_orders = 0
     rejected_orders = 0
@@ -203,7 +203,7 @@ async def get_pipeline_status(
     except Exception:
         pass
 
-    # 浠撲綅缁熻
+    # 仓位统计
     open_positions = 0
     closed_positions = 0
     try:
@@ -224,29 +224,29 @@ async def get_pipeline_status(
     except Exception:
         pass
 
-    # 鍚堝苟缁熻
+    # 合并统计
     alpha_count = strategy_count + mem_stats.get("insights_generated", 0)
-    portfolio_count = total_orders  # 姣忎釜璁㈠崟閮界粡杩?Portfolio 璁＄畻
+    portfolio_count = total_orders  # 每个订单都经过 Portfolio 计算
     risk_count = filled_orders + rejected_orders + mem_stats.get("risk_approved", 0) + mem_stats.get("risk_rejected", 0)
     exec_count = filled_orders + mem_stats.get("orders_executed", 0)
 
     is_active = total_orders > 0 or strategy_count > 0
 
-    # 鐔旀柇 / 椋庢帶鏃佽矾鐘舵€?
+    # 熔断 / 风控旁路状态
     circuit_breaker = False
     risk_bypass = False
     if risk_model:
         circuit_breaker = risk_model.is_circuit_breaker_active
         risk_bypass = risk_model.risk_bypass
 
-    # 鏋勯€犲洓灞傜姸鎬?
+    # 构造四层状态
     layers = []
 
-    # Alpha 灞?
-    alpha_detail = f"{strategy_count} 涓椿璺冪瓥鐣?
+    # Alpha 层
+    alpha_detail = f"{strategy_count} 个活跃策略"
     if pipeline and pipeline._alphas:
         alpha_names = [a.get_name() for a in pipeline._alphas]
-        alpha_detail += f" 路 Models: {', '.join(alpha_names)}"
+        alpha_detail += f" · Models: {', '.join(alpha_names)}"
     layers.append(LayerStatus(
         name="Alpha",
         status="active" if strategy_count > 0 else "idle",
@@ -254,17 +254,17 @@ async def get_pipeline_status(
         count=alpha_count,
     ))
 
-    # Portfolio 灞?
+    # Portfolio 层
     portfolio_model = pipeline._portfolio if pipeline else None
     portfolio_type = type(portfolio_model).__name__ if portfolio_model else "FixedPercentModel"
     layers.append(LayerStatus(
         name="Portfolio",
         status="active" if is_active else "idle",
-        detail=f"Model: {portfolio_type} 路 {total_orders} 绗旇鍗?,
+        detail=f"Model: {portfolio_type} · {total_orders} 笔订单",
         count=portfolio_count,
     ))
 
-    # Risk 灞?
+    # Risk 层
     risk_status = "active"
     if circuit_breaker:
         risk_status = "error"
@@ -273,11 +273,11 @@ async def get_pipeline_status(
     elif not is_active:
         risk_status = "idle"
     
-    risk_detail = f"閫氳繃: {filled_orders}, 鎷掔粷: {rejected_orders}"
+    risk_detail = f"通过: {filled_orders}, 拒绝: {rejected_orders}"
     if circuit_breaker:
-        risk_detail += " 鈿狅笍 鐔旀柇涓?
+        risk_detail += " ⚠️ 熔断中"
     elif risk_bypass:
-        risk_detail += " 鈿狅笍 椋庢帶宸插叧闂?
+        risk_detail += " ⚠️ 风控已关闭"
     
     layers.append(LayerStatus(
         name="Risk",
@@ -286,11 +286,11 @@ async def get_pipeline_status(
         count=risk_count,
     ))
 
-    # Execution 灞?
+    # Execution 层
     layers.append(LayerStatus(
         name="Execution",
         status="active" if exec_count > 0 else "idle",
-        detail=f"宸叉墽琛? {filled_orders} 路 鎸佷粨: {open_positions} 路 宸插钩: {closed_positions}",
+        detail=f"已执行: {filled_orders} · 持仓: {open_positions} · 已平: {closed_positions}",
         count=exec_count,
     ))
 
@@ -320,12 +320,12 @@ async def get_pipeline_status(
 async def get_pipeline_config(
     current_user: CurrentUser,
 ):
-    """鑾峰彇褰撳墠 Pipeline 閰嶇疆 (浠庣湡瀹炲疄渚嬭鍙?"""
+    """获取当前 Pipeline 配置 (从真实实例读取)"""
     pipeline = _get_pipeline()
     portfolio_model = pipeline._portfolio if pipeline else None
     risk_model = _get_risk_model()
 
-    # 榛樿鍊?
+    # 默认值
     config = PipelineConfigResponse(
         portfolio_model="fixed_percent",
         risk_percent=10.0,
@@ -337,7 +337,7 @@ async def get_pipeline_config(
         blacklist=[],
     )
 
-    # 浠庡疄闄呮ā鍨嬭鍙?
+    # 从实际模型读取
     if portfolio_model:
         from app.services.portfolio.model import FixedPercentModel, KellyPortfolioModel
         if isinstance(portfolio_model, FixedPercentModel):
@@ -365,10 +365,10 @@ async def control_circuit_breaker(
     body: CircuitBreakerRequest,
 ):
     """
-    鎺у埗椋庢帶鐔旀柇鍣?
+    控制风控熔断器
 
-    - trigger: 瑙﹀彂鐔旀柇 (鍋滄涓€鍒囦氦鏄?
-    - reset: 瑙ｉ櫎鐔旀柇
+    - trigger: 触发熔断 (停止一切交易)
+    - reset: 解除熔断
     """
     risk_model = _get_risk_model()
 
@@ -380,13 +380,13 @@ async def control_circuit_breaker(
         risk_model.trigger_circuit_breaker(body.reason)
         return CircuitBreakerResponse(
             circuit_breaker=True,
-            message=f"鐔旀柇宸茶Е鍙? {body.reason or 'manual'}"
+            message=f"熔断已触发: {body.reason or 'manual'}"
         )
     elif body.action == "reset":
         risk_model.reset_circuit_breaker()
         return CircuitBreakerResponse(
             circuit_breaker=False,
-            message="鐔旀柇宸茶В闄?
+            message="熔断已解除"
         )
     else:
         raise HTTPException(400, f"Unknown action: {body.action}")
@@ -398,10 +398,10 @@ async def control_risk_bypass(
     body: RiskBypassRequest,
 ):
     """
-    鎺у埗绯荤粺椋庢帶寮€鍏?
+    控制系统风控开关
 
-    - enabled=true: 鍏抽棴绯荤粺椋庢帶 (绛栫暐鑷绠＄悊椋庨櫓)
-    - enabled=false: 鎭㈠绯荤粺椋庢帶
+    - enabled=true: 关闭系统风控 (策略自行管理风险)
+    - enabled=false: 恢复系统风控
     """
     risk_model = _get_risk_model()
 
@@ -414,10 +414,10 @@ async def control_risk_bypass(
     if body.enabled:
         return RiskBypassResponse(
             risk_bypass=True,
-            message="鈿狅笍 绯荤粺椋庢帶宸插叧闂? 鎵€鏈変氦鏄撳皢鐢辩瓥鐣ヨ嚜琛岀鐞嗛闄?
+            message="⚠️ 系统风控已关闭, 所有交易将由策略自行管理风险"
         )
     else:
         return RiskBypassResponse(
             risk_bypass=False,
-            message="鉁?绯荤粺椋庢帶宸叉仮澶?
+            message="✅ 系统风控已恢复"
         )

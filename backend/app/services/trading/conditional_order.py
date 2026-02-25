@@ -1,12 +1,12 @@
 """
 Conditional Order Monitor
 =========================
-右侧条件单监控服�?
+右侧条件单监控服务
 
 职责:
 1. 监控实时价格
-2. 检�?K 线收盘确�?
-3. 触发条件单执�?
+2. 检查 K 线收盘确认
+3. 触发条件单执行
 4. 处理超时取消
 """
 
@@ -44,14 +44,14 @@ class ConditionalOrderMonitor:
         task_id: int,
     ) -> bool:
         """
-        开始监控某个条件任�?
+        开始监控某个条件任务
         
         Args:
-            db: 数据库会�?
+            db: 数据库会话
             task_id: 任务ID
             
         Returns:
-            是否成功开始监�?
+            是否成功开始监控
         """
         # 获取任务
         task = await db.get(TaskTicket, task_id)
@@ -67,7 +67,7 @@ class ConditionalOrderMonitor:
         if not task.expires_at:
             task.expires_at = datetime.utcnow() + timedelta(hours=task.timeout_hours or 24)
         
-        # 更新状态为监控�?
+        # 更新状态为监控中
         task.status = TaskStatus.MONITORING
         await db.commit()
         
@@ -87,10 +87,10 @@ class ConditionalOrderMonitor:
         current_price: Decimal,
     ) -> bool:
         """
-        检查突破条件是否满�?
+        检查突破条件是否满足
         
         Args:
-            db: 数据库会�?
+            db: 数据库会话
             task_id: 任务ID
             current_price: 当前实时价格
             
@@ -101,7 +101,7 @@ class ConditionalOrderMonitor:
         if not task or task.status != TaskStatus.MONITORING:
             return False
         
-        # 检查是否超�?
+        # 检查是否超时
         if task.expires_at and datetime.utcnow() > task.expires_at:
             task.status = TaskStatus.EXPIRED
             await db.commit()
@@ -118,7 +118,7 @@ class ConditionalOrderMonitor:
         phase = task.condition_phase or 1
         
         # ============================================================
-        # 简单突破模�?(原逻辑)
+        # 简单突破模式 (原逻辑)
         # ============================================================
         if condition_type == ConditionType.SIMPLE_BREAKOUT:
             is_breakout = False
@@ -133,7 +133,7 @@ class ConditionalOrderMonitor:
         # ============================================================
         # 跌破回抽模式 (BREAKDOWN_RECLAIM) - 用于做多
         # 阶段1: 等待价格跌破 trigger_price
-        # 阶段2: 等待价格回抽�?trigger_price
+        # 阶段2: 等待价格回抽上 trigger_price
         # ============================================================
         elif condition_type == ConditionType.BREAKDOWN_RECLAIM:
             if phase == 1:
@@ -143,20 +143,20 @@ class ConditionalOrderMonitor:
                     task.condition_phase = 2
                     task.phase1_triggered_at = datetime.utcnow()
                     await db.commit()
-                return False  # 阶段1完成，但还需等阶�?
+                return False  # 阶段1完成，但还需等阶段2
             
             elif phase == 2:
                 # 阶段2: 等待回抽上来
                 if current_price > trigger_price:
                     logger.info(f"[ConditionalMonitor] Task {task_id}: Phase 2 triggered! Price {current_price} > {trigger_price}")
-                    # 两阶段都满足，继续检�?K 线确�?
+                    # 两阶段都满足，继续检查 K 线确认
                 else:
                     return False
         
         # ============================================================
         # 突破回撤模式 (BREAKOUT_PULLBACK) - 用于做空
-        # 阶段1: 等待价格突破�?trigger_price
-        # 阶段2: 等待价格回撤�?trigger_price
+        # 阶段1: 等待价格突破上 trigger_price
+        # 阶段2: 等待价格回撤下 trigger_price
         # ============================================================
         elif condition_type == ConditionType.BREAKOUT_PULLBACK:
             if phase == 1:
@@ -166,17 +166,17 @@ class ConditionalOrderMonitor:
                     task.condition_phase = 2
                     task.phase1_triggered_at = datetime.utcnow()
                     await db.commit()
-                return False  # 阶段1完成，但还需等阶�?
+                return False  # 阶段1完成，但还需等阶段2
             
             elif phase == 2:
                 # 阶段2: 等待回撤下来
                 if current_price < trigger_price:
                     logger.info(f"[ConditionalMonitor] Task {task_id}: Phase 2 triggered! Price {current_price} < {trigger_price}")
-                    # 两阶段都满足，继续检�?K 线确�?
+                    # 两阶段都满足，继续检查 K 线确认
                 else:
                     return False
         
-        # 检查偏离是否在允许范围�?
+        # 检查偏离是否在允许范围内
         max_dev = task.max_deviation_pct or Decimal("0.5")
         if task.trade_side == TradeSide.LONG:
             max_allowed = trigger_price * (1 + max_dev / 100)
@@ -189,7 +189,7 @@ class ConditionalOrderMonitor:
                 logger.debug(f"[ConditionalMonitor] Price {current_price} below min deviation {min_allowed}")
                 return False
         
-        # 检�?K 线确�?
+        # 检查 K 线确认
         kline_confirmed = await cls._check_kline_confirmation(
             db=db,
             symbol=task.symbol,
@@ -217,20 +217,20 @@ class ConditionalOrderMonitor:
         confirm_count: int,
     ) -> bool:
         """
-        检�?K 线收盘确�?
+        检查 K 线收盘确认
         
         Args:
-            db: 数据库会�?
-            symbol: 交易�?
+            db: 数据库会话
+            symbol: 交易对
             trigger_price: 触发价格
             trade_side: 交易方向
-            interval: K 线周�?
-            confirm_count: 需要确认的 K 线数�?
+            interval: K 线周期
+            confirm_count: 需要确认的 K 线数量
             
         Returns:
             True 如果确认通过
         """
-        # 从数据库获取最近的完整 K �?
+        # 从数据库获取最近的完整 K 线
         query = (
             select(Kline)
             .where(Kline.symbol == symbol.upper())
@@ -245,7 +245,7 @@ class ConditionalOrderMonitor:
             logger.debug(f"[ConditionalMonitor] Not enough klines for confirmation")
             return False
         
-        # 跳过第一�?(可能未完�?，检查后续的
+        # 跳过第一根 (可能未完成)，检查后续的
         confirmed_count = 0
         for kline in klines[1:confirm_count+1]:
             if trade_side == TradeSide.LONG:
@@ -266,10 +266,10 @@ class ConditionalOrderMonitor:
         task_id: int,
     ) -> bool:
         """
-        执行条件任务 (市价�?+ 止损止盈)
+        执行条件任务 (市价单 + 止损止盈)
         
         Args:
-            db: 数据库会�?
+            db: 数据库会话
             task_id: 任务ID
             
         Returns:
@@ -286,7 +286,7 @@ class ConditionalOrderMonitor:
             # 确定订单方向
             order_side = OrderSide.BUY if task.trade_side == TradeSide.LONG else OrderSide.SELL
             
-            # 创建市价�?
+            # 创建市价单
             order = await OrderExecutor.create_order(
                 db=db,
                 user_id=task.user_id,
@@ -300,7 +300,7 @@ class ConditionalOrderMonitor:
                 note=f"Right-side breakout task #{task.id}",
             )
             
-            # 更新任务状�?
+            # 更新任务状态
             task.status = TaskStatus.COMPLETED
             task.executed_at = datetime.utcnow()
             task.execution_result = {
@@ -330,7 +330,7 @@ class ConditionalOrderMonitor:
         取消条件任务
         
         Args:
-            db: 数据库会�?
+            db: 数据库会话
             task_id: 任务ID
             
         Returns:
@@ -357,10 +357,10 @@ class ConditionalOrderMonitor:
         user_id: Optional[int] = None,
     ) -> list[TaskTicket]:
         """
-        获取所有监控中的任�?
+        获取所有监控中的任务
         
         Args:
-            db: 数据库会�?
+            db: 数据库会话
             user_id: 可选，过滤特定用户
             
         Returns:
