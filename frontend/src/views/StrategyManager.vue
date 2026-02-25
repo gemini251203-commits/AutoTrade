@@ -678,11 +678,18 @@ onMounted(() => {
                     </span>
                     <span class="text-xs text-gray-600 font-mono">{{ s.interval }}</span>
                     <span
-                      v-if="s.strategy_type === 'pipeline'"
+                      v-if="s.config_yaml && s.config_yaml.includes('alphas')"
                       class="px-2 py-0.5 rounded text-[10px] font-medium tracking-wide flex items-center gap-1"
                       style="background: rgba(168,85,247,0.1); color: #a855f7; border: 1px solid rgba(168,85,247,0.2);"
                     >
-                      <NIcon size="12"><TrophyOutline /></NIcon> PIPELINE
+                      Pipeline
+                    </span>
+                    <span
+                      v-else
+                      class="px-2 py-0.5 rounded text-[10px] font-medium tracking-wide"
+                      style="background: rgba(34,197,94,0.1); color: #22c55e; border: 1px solid rgba(34,197,94,0.2);"
+                    >
+                      传统
                     </span>
                   </div>
                   <div class="flex items-center gap-4 mt-1 text-xs text-gray-500">
