@@ -10,6 +10,9 @@ AI 交易代理角色提示词
 - mentor: 交易教练
 """
 
+# 工具文档分隔标记 (深度思考模式用它剥离工具部分)
+TOOL_DOCS_MARKER = "===== TOOL DOCS START ====="
+
 # 可用工具描述 (注入所有角色的 system prompt)
 TOOLS_DESCRIPTION = """
 你可以使用以下工具来执行操作。当你需要使用工具时，输出以下格式：
@@ -757,7 +760,7 @@ def build_system_prompt(persona: str, context_text: str) -> str:
     # 注入交易规则、工具描述和上下文
     context_section = CONTEXT_PREFIX.format(context=context_text) if context_text else ""
     prompt = prompt.replace("{trading_rules}", TRADING_RULES)
-    prompt = prompt.replace("{tools}", TOOLS_DESCRIPTION)
+    prompt = prompt.replace("{tools}", f"{TOOL_DOCS_MARKER}\n{TOOLS_DESCRIPTION}")
     prompt = prompt.replace("{context}", context_section)
 
     return prompt

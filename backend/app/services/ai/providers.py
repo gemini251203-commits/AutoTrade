@@ -32,6 +32,7 @@ class ChatResponse:
     model: str
     usage: Optional[Dict[str, int]] = None
     raw_response: Optional[Dict] = None
+    reasoning_content: Optional[str] = None  # R1 深度推理思考链
 
 
 class BaseProvider(ABC):
@@ -127,7 +128,9 @@ class DeepSeekProvider(BaseProvider):
                 
                 data = resp.json()
                 
-                content = data["choices"][0]["message"]["content"]
+                message = data["choices"][0]["message"]
+                content = message["content"]
+                reasoning = message.get("reasoning_content")  # R1 推理链
                 usage = data.get("usage")
                 
                 return ChatResponse(
@@ -135,6 +138,7 @@ class DeepSeekProvider(BaseProvider):
                     model=use_model,
                     usage=usage,
                     raw_response=data,
+                    reasoning_content=reasoning,
                 )
         
         except httpx.TimeoutException:

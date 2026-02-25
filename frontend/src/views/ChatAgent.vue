@@ -42,6 +42,7 @@ import {
   type SSEEvent,
   type AutopilotStatus,
 } from '@/api/chat'
+import { getAIConfig, updateAIConfig } from '@/api/aiConfig'
 import { useAuthStore } from '@/stores/auth'
 
 // ==================== State ====================
@@ -78,6 +79,10 @@ const autopilotRunOnceLoading = ref(false)
 const autopilotInterval = ref('15m')
 let autopilotPollTimer: ReturnType<typeof setInterval> | null = null
 
+// Deep Thinking
+const deepThinkingEnabled = ref(false)
+const deepThinkingLoading = ref(false)
+
 
 
 // ==================== Computed ====================
@@ -98,6 +103,7 @@ const displayMessages = computed(() => {
 onMounted(async () => {
   await loadConversations()
   await pollAutopilotStatus()
+  await loadDeepThinkingState()
   // 每 10 秒检查一次状态
   autopilotPollTimer = setInterval(pollAutopilotStatus, 10000)
 })
@@ -154,6 +160,33 @@ async function handleRunOnce() {
     message.error(e.response?.data?.detail || '运行失败')
   } finally {
     autopilotRunOnceLoading.value = false
+  }
+}
+
+async function loadDeepThinkingState() {
+  try {
+    const config = await getAIConfig()
+    deepThinkingEnabled.value = config.use_deep_thinking
+  } catch (e) {
+    // 静默失败
+  }
+}
+
+async function toggleDeepThinking() {
+  deepThinkingLoading.value = true
+  const newVal = !deepThinkingEnabled.value
+  try {
+    const config = await getAIConfig()
+    await updateAIConfig({
+      provider: config.provider as any,
+      use_deep_thinking: newVal,
+    })
+    deepThinkingEnabled.value = newVal
+    message.success(newVal ? '🧠 深度思考已开启 (R1 + Chat)' : '深度思考已关闭')
+  } catch (e: any) {
+    message.error(e.response?.data?.detail || '切换失败')
+  } finally {
+    deepThinkingLoading.value = false
   }
 }
 
@@ -450,6 +483,16 @@ const formatTime = formatTimeBJ
               title="手动执行一次 Autopilot 决策"
             >
               {{ autopilotRunOnceLoading ? '执行中...' : '▷ 运行一次' }}
+            </button>
+            <button
+              :class="['deep-think-btn', { active: deepThinkingEnabled }]"
+              @click="toggleDeepThinking"
+              :disabled="deepThinkingLoading"
+              title="深度思考: R1推理分析 + Chat执行"
+            >
+              <span v-if="deepThinkingLoading">⏳</span>
+              <span v-else>🧠</span>
+              {{ deepThinkingEnabled ? 'R1' : 'R1' }}
             </button>
             <div v-if="autopilotStatus?.running" class="autopilot-info">
               <span>已运行 {{ autopilotStatus.total_cycles }} 轮</span>
@@ -931,6 +974,32 @@ function renderMarkdown(text: string): string {
   color: #d8b4fe;
 }
 .autopilot-run-once-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.deep-think-btn {
+  padding: 5px 10px;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 16px;
+  background: rgba(245, 158, 11, 0.08);
+  color: #f59e0b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+.deep-think-btn:hover {
+  border-color: rgba(245, 158, 11, 0.6);
+  background: rgba(245, 158, 11, 0.15);
+}
+.deep-think-btn.active {
+  border-color: rgba(245, 158, 11, 0.8);
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+}
+.deep-think-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

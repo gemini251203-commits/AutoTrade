@@ -99,6 +99,81 @@ async def _build_context_text(db: AsyncSession, user_id: int) -> str:
     return AIBrain._format_context(context)
 
 
+async def _deep_think(
+    db: AsyncSession,
+    user_id: int,
+    system_prompt: str,
+    messages: list,
+) -> str:
+    """
+    第一阶段: 调用 DeepSeek-R1 (deepseek-reasoner) 进行深度推理
+    
+    R1 收到与 Chat 模型完全相同的上下文信息:
+    - 系统提示 (角色设定 + 实时上下文: 余额/持仓/价格)
+    - 对话历史 (含策略信号、技术指标、交易记忆、趋势分析等)
+    唯一区别: 不包含工具定义，R1 只输出纯文本分析。
+    
+    Args:
+        db: 数据库会话
+        user_id: 用户 ID
+        system_prompt: 完整 system prompt (含上下文，不含工具列表)
+        messages: 当前对话消息列表
+    
+    Returns:
+        R1 深度分析报告 (推理链 + 结论)
+    """
+    from app.services.agent.prompts import TOOL_DOCS_MARKER
+    
+    # 从 system prompt 中移除工具文档部分 (R1 不需要工具)
+    clean_prompt = system_prompt
+    if TOOL_DOCS_MARKER in clean_prompt:
+        clean_prompt = clean_prompt.split(TOOL_DOCS_MARKER)[0].rstrip()
+    
+    # 在 system prompt 末尾追加 R1 专属指令
+    r1_prompt = (
+        clean_prompt + "\n\n"
+        "你现在以「深度推理」模式运行。请对当前市场状况进行全面深入的分析:\n"
+        "1. 综合所有指标、策略信号、资金费率、趋势分析、交易记忆\n"
+        "2. 分析潜在风险和机会\n"
+        "3. 给出明确的交易建议 (做多/做空/观望) 及详细理由\n"
+        "4. 如果建议交易, 给出建议的仓位大小、止损价、止盈价\n\n"
+        "注意: 你只需要输出分析和建议, 不要尝试执行任何操作。"
+    )
+    
+    # 构建 R1 消息 (system + history)
+    r1_messages = [ProviderMessage(role="system", content=r1_prompt)]
+    for msg in messages[1:]:  # 跳过原始 system 消息
+        r1_messages.append(msg)
+    
+    try:
+        reasoner = await AIBrain.get_reasoner_provider(db, user_id)
+        response = await reasoner.chat(
+            messages=r1_messages,
+            temperature=0.6,  # R1 推理用略低温度
+            max_tokens=4000,  # R1 可能输出长推理链
+        )
+        
+        # 合成分析报告: 推理过程 + 最终结论
+        report_parts = []
+        if response.reasoning_content:
+            report_parts.append(f"[推理过程]\n{response.reasoning_content}")
+        if response.content:
+            report_parts.append(f"[分析结论]\n{response.content}")
+        
+        report = "\n\n".join(report_parts) if report_parts else response.content or "（无分析结果）"
+        
+        logger.info(
+            f"[DeepThink] R1 analysis done for user {user_id}, "
+            f"reasoning={len(response.reasoning_content or '')} chars, "
+            f"content={len(response.content or '')} chars"
+        )
+        return report
+        
+    except Exception as e:
+        logger.warning(f"[DeepThink] R1 failed, falling back: {e}")
+        return ""
+
+
 async def execute_tool(
     tool_name: str,
     args: Dict[str, str],
@@ -162,10 +237,34 @@ async def chat_stream(
         for msg in history:
             messages.append(ProviderMessage(role=msg["role"], content=msg["content"]))
 
-        # 6. 获取 AI Provider
+        # 6. 深度思考模式: R1 先分析 → 注入分析报告
+        try:
+            if await AIBrain.is_deep_thinking_enabled(db, user_id):
+                yield {"type": "deep_think", "status": "thinking"}
+                deep_think_report = await _deep_think(
+                    db, user_id, system_prompt, messages
+                )
+                if deep_think_report:
+                    messages.append(ProviderMessage(
+                        role="user",
+                        content=(
+                            "[深度分析报告 — 由 DeepSeek-R1 推理引擎生成]\n\n"
+                            f"{deep_think_report}\n\n"
+                            "[/深度分析报告]\n\n"
+                            "请参考上述深度分析报告，结合你自己的判断做出最终决策。"
+                            "如果需要执行操作，使用 [TOOL_CALL: ...] 调用工具。"
+                        ),
+                    ))
+                    yield {"type": "deep_think", "status": "done", "report": deep_think_report}
+                else:
+                    yield {"type": "deep_think", "status": "skipped"}
+        except Exception as e:
+            logger.warning(f"[DeepThink] Skipped in stream: {e}")
+
+        # 7. 获取 AI Provider
         provider = await AIBrain.get_provider(db, user_id)
 
-        # 7. 多轮工具调用循环
+        # 8. 多轮工具调用循环
         final_content = ""
         tool_calls_log = []  # 记录所有工具调用
 
@@ -303,10 +402,33 @@ async def chat_complete(
         for msg in history:
             messages.append(ProviderMessage(role=msg["role"], content=msg["content"]))
 
-        # 6. 获取 AI Provider
+        # 6. 深度思考模式: R1 先分析 → 注入分析报告
+        deep_think_report = ""
+        try:
+            if await AIBrain.is_deep_thinking_enabled(db, user_id):
+                logger.info(f"[DeepThink] Phase 1 starting for user {user_id}")
+                deep_think_report = await _deep_think(
+                    db, user_id, system_prompt, messages
+                )
+                if deep_think_report:
+                    # 将 R1 分析报告注入对话，让 Chat 参考
+                    messages.append(ProviderMessage(
+                        role="user",
+                        content=(
+                            "[深度分析报告 — 由 DeepSeek-R1 推理引擎生成]\n\n"
+                            f"{deep_think_report}\n\n"
+                            "[/深度分析报告]\n\n"
+                            "请参考上述深度分析报告，结合你自己的判断做出最终决策。"
+                            "如果需要执行操作，使用 [TOOL_CALL: ...] 调用工具。"
+                        ),
+                    ))
+        except Exception as e:
+            logger.warning(f"[DeepThink] Skipped: {e}")
+
+        # 7. 获取 AI Provider
         provider = await AIBrain.get_provider(db, user_id)
 
-        # 7. 多轮工具调用循环
+        # 8. 多轮工具调用循环
         final_content = ""
         tool_calls_log = []
 

@@ -282,6 +282,42 @@ class AIBrain:
             raise ValueError(f"Unsupported provider: {config.provider}")
     
     @staticmethod
+    async def get_reasoner_provider(db: AsyncSession, user_id: int) -> DeepSeekProvider:
+        """
+        获取深度推理 Provider (deepseek-reasoner)
+        
+        复用用户的 API Key 和 base_url，
+        但固定使用 deepseek-reasoner 模型，超时 120s。
+        """
+        result = await db.execute(
+            select(UserAIConfig).where(UserAIConfig.user_id == user_id)
+        )
+        config = result.scalar_one_or_none()
+        
+        if not config or not config.api_key_encrypted:
+            raise ValueError("Deep thinking requires configured API Key")
+        
+        api_key = decrypt_api_key(config.api_key_encrypted)
+        
+        return DeepSeekProvider(
+            api_key=api_key,
+            base_url=config.api_base_url or "https://api.deepseek.com",
+            model="deepseek-reasoner",
+            timeout=120,
+        )
+    
+    @staticmethod
+    async def is_deep_thinking_enabled(db: AsyncSession, user_id: int) -> bool:
+        """检查用户是否启用了深度思考模式"""
+        result = await db.execute(
+            select(UserAIConfig.use_deep_thinking).where(
+                UserAIConfig.user_id == user_id
+            )
+        )
+        val = result.scalar_one_or_none()
+        return bool(val)
+    
+    @staticmethod
     async def build_context(
         db: AsyncSession,
         user_id: int,

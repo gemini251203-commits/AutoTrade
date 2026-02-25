@@ -34,6 +34,7 @@ class AIConfigResponse(BaseModel):
     ollama_base_url: Optional[str] = None
     ollama_model: Optional[str] = None
     system_prompt: Optional[str] = None
+    use_deep_thinking: bool = False  # 深度思考模式
     max_leverage: int = 20
     max_position_percent: float = 50.0
     max_loss_percent: float = 5.0
@@ -48,6 +49,7 @@ class AIConfigUpdate(BaseModel):
     ollama_base_url: Optional[str] = None
     ollama_model: Optional[str] = None
     system_prompt: Optional[str] = None
+    use_deep_thinking: Optional[bool] = None  # 深度思考模式
     max_leverage: Optional[int] = Field(None, ge=1, le=125)
     max_position_percent: Optional[float] = Field(None, ge=1, le=100)
     max_loss_percent: Optional[float] = Field(None, ge=1, le=50)
@@ -96,6 +98,7 @@ async def get_ai_config(
             api_base_url="https://api.deepseek.com",
             api_model="deepseek-chat",
             system_prompt="You are QuantaPro, a professional Crypto Quant Trader.",
+            use_deep_thinking=False,
         )
     
     # 解密并脱敏 API Key
@@ -115,6 +118,7 @@ async def get_ai_config(
         ollama_base_url=config.ollama_base_url,
         ollama_model=config.ollama_model,
         system_prompt=config.system_prompt,
+        use_deep_thinking=config.use_deep_thinking,
         max_leverage=config.max_leverage,
         max_position_percent=config.max_position_percent,
         max_loss_percent=config.max_loss_percent,
@@ -173,6 +177,9 @@ async def update_ai_config(
     
     if request.max_loss_percent is not None:
         config.max_loss_percent = request.max_loss_percent
+    
+    if request.use_deep_thinking is not None:
+        config.use_deep_thinking = request.use_deep_thinking
     
     await db.commit()
     await db.refresh(config)

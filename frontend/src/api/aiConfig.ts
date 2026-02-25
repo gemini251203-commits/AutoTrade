@@ -25,6 +25,7 @@ export interface AIConfigResponse {
   ollama_base_url: string | null
   ollama_model: string | null
   system_prompt: string | null
+  use_deep_thinking: boolean  // 深度思考模式
   max_leverage: number
   max_position_percent: number
   max_loss_percent: number
@@ -39,6 +40,7 @@ export interface AIConfigUpdate {
   ollama_base_url?: string
   ollama_model?: string
   system_prompt?: string
+  use_deep_thinking?: boolean  // 深度思考模式
   max_leverage?: number
   max_position_percent?: number
   max_loss_percent?: number
