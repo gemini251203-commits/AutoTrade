@@ -313,7 +313,7 @@ class AgentAutopilot:
                     "strategy_name": log.strategy_name,
                     "source": log.source or "autopilot",
                     "error_message": log.error_message,
-                    "created_at": log.created_at.isoformat() if log.created_at else None,
+                    "created_at": log.created_at.isoformat() + "Z" if log.created_at else None,
                 }
                 for log in logs
             ]

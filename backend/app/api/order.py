@@ -1,5 +1,5 @@
 """
-Order API (合约交易版)
+Order API (合约交易�?
 =======================
 订单管理端点
 
@@ -82,9 +82,9 @@ async def list_orders(
     """
     获取用户订单列表
     
-    可选过滤条件:
+    可选过滤条�?
     - status_filter: pending, open, filled, cancelled
-    - symbol: BTCUSDT 等
+    - symbol: BTCUSDT �?
     """
     orders = await OrderExecutor.get_user_orders(
         db, current_user.id, status_filter, symbol, limit
@@ -110,8 +110,8 @@ async def list_orders(
             take_profit=o.take_profit,
             commission=o.commission,
             realized_pnl=o.realized_pnl,
-            created_at=o.created_at.isoformat(),
-            filled_at=o.filled_at.isoformat() if o.filled_at else None,
+            created_at=o.created_at.isoformat() + "Z",
+            filled_at=o.filled_at.isoformat() + "Z" if o.filled_at else None,
         )
         for o in orders
     ]
@@ -127,14 +127,14 @@ async def create_order(
     创建订单 (通过统一 Pipeline)
     
     订单类型:
-    - market: 市价单 (立即成交)
-    - limit: 限价单 (挂单等待)
-    - stop_market: 止损市价单 (需要 trigger_price)
-    - stop_limit: 止损限价单 (需要 trigger_price + price)
-    - take_profit_market: 止盈市价单
-    - take_profit_limit: 止盈限价单
+    - market: 市价�?(立即成交)
+    - limit: 限价�?(挂单等待)
+    - stop_market: 止损市价�?(需�?trigger_price)
+    - stop_limit: 止损限价�?(需�?trigger_price + price)
+    - take_profit_market: 止盈市价�?
+    - take_profit_limit: 止盈限价�?
     
-    ⚠️ 所有订单通过 Pipeline 统一入口: Risk 审批 → Execution 执行
+    ⚠️ 所有订单通过 Pipeline 统一入口: Risk 审批 �?Execution 执行
     """
     from app.core.pipeline import get_pipeline
     from sqlalchemy import select
@@ -144,7 +144,7 @@ async def create_order(
     try:
         pipeline = get_pipeline(current_user.id)
         
-        # 获取余额和持仓用于风控
+        # 获取余额和持仓用于风�?
         wallet_result = await db.execute(
             select(Wallet).where(Wallet.user_id == current_user.id)
         )
@@ -185,7 +185,7 @@ async def create_order(
         if not result.get("success"):
             raise OrderError(result.get("error", "Pipeline 执行失败"))
         
-        # 从 DB 加载完整 order 对象以构造响应
+        # �?DB 加载完整 order 对象以构造响�?
         order_id = result.get("order_id")
         order = await db.get(Order, order_id)
         
@@ -211,8 +211,8 @@ async def create_order(
             take_profit=order.take_profit,
             commission=order.commission,
             realized_pnl=order.realized_pnl,
-            created_at=order.created_at.isoformat(),
-            filled_at=order.filled_at.isoformat() if order.filled_at else None,
+            created_at=order.created_at.isoformat() + "Z",
+            filled_at=order.filled_at.isoformat() + "Z" if order.filled_at else None,
         )
         
     except OrderError as e:
@@ -264,8 +264,8 @@ async def cancel_order(
             take_profit=order.take_profit,
             commission=order.commission,
             realized_pnl=order.realized_pnl,
-            created_at=order.created_at.isoformat(),
-            filled_at=order.filled_at.isoformat() if order.filled_at else None,
+            created_at=order.created_at.isoformat() + "Z",
+            filled_at=order.filled_at.isoformat() + "Z" if order.filled_at else None,
         )
         
     except OrderNotFoundError:
@@ -296,20 +296,20 @@ class TpSlPreviewRequest(BaseModel):
 class TpSlPreviewResponse(BaseModel):
     """止盈止损盈亏预览响应"""
     take_profit_pnl: float  # 止盈盈亏 (USDT)
-    take_profit_pct: float  # 止盈收益率 (%)
+    take_profit_pct: float  # 止盈收益�?(%)
     stop_loss_pnl: float    # 止损盈亏 (USDT)
-    stop_loss_pct: float    # 止损收益率 (%)
-    risk_reward_ratio: float  # 风险回报比
-    margin_required: float  # 所需保证金
-    notional: float         # 名义价值
+    stop_loss_pct: float    # 止损收益�?(%)
+    risk_reward_ratio: float  # 风险回报�?
+    margin_required: float  # 所需保证�?
+    notional: float         # 名义价�?
 
 
 @router.post("/tp-sl-preview", response_model=TpSlPreviewResponse)
 async def preview_tp_sl(request: TpSlPreviewRequest):
     """
-    计算止盈止损的预计盈亏
+    计算止盈止损的预计盈�?
     
-    用于在下单前预览潜在的盈亏情况
+    用于在下单前预览潜在的盈亏情�?
     """
     from app.services.margin.calculator import MarginCalculator
     from app.models.position import PositionSide
@@ -352,10 +352,10 @@ class LeverageInfoRequest(BaseModel):
 class LeverageInfoResponse(BaseModel):
     """杠杆信息响应"""
     symbol: str
-    max_leverage: int           # 最大杠杆
+    max_leverage: int           # 最大杠�?
     maintenance_margin_rate: float  # 维持保证金率 (%)
-    notional: float             # 名义价值
-    min_notional: float = 5.0   # 最小名义价值
+    notional: float             # 名义价�?
+    min_notional: float = 5.0   # 最小名义价�?
 
 
 @router.post("/leverage-info", response_model=LeverageInfoResponse)
@@ -363,7 +363,7 @@ async def get_leverage_info(request: LeverageInfoRequest):
     """
     查询指定仓位的最大杠杆和维持保证金率
     
-    根据币安规则，仓位越大，允许的最大杠杆越低
+    根据币安规则，仓位越大，允许的最大杠杆越�?
     """
     from app.services.margin.leverage_tiers import (
         get_max_leverage,
@@ -371,7 +371,7 @@ async def get_leverage_info(request: LeverageInfoRequest):
         MIN_NOTIONAL_VALUE,
     )
     
-    # 计算名义价值
+    # 计算名义价�?
     if request.notional:
         notional = request.notional
     elif request.quantity and request.price:
@@ -385,7 +385,7 @@ async def get_leverage_info(request: LeverageInfoRequest):
     return LeverageInfoResponse(
         symbol=request.symbol.upper(),
         max_leverage=max_lev,
-        maintenance_margin_rate=float(mmr * 100),  # 转为百分比
+        maintenance_margin_rate=float(mmr * 100),  # 转为百分�?
         notional=float(notional),
         min_notional=float(MIN_NOTIONAL_VALUE),
     )

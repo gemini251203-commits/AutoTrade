@@ -4,8 +4,8 @@ Grid Trading API
 网格交易端点
 
 端点:
-    GET  /api/grid/            - 获取用户网格机器人列表
-    POST /api/grid/            - 创建网格机器人
+    GET  /api/grid/            - 获取用户网格机器人列�?
+    POST /api/grid/            - 创建网格机器�?
     POST /api/grid/{id}/start  - 启动网格
     POST /api/grid/{id}/stop   - 停止网格
     GET  /api/grid/{id}        - 获取网格详情
@@ -76,15 +76,15 @@ class GridResponse(BaseModel):
 
 
 class GridDetailResponse(GridResponse):
-    """网格详情响应 (含级别数据)"""
+    """网格详情响应 (含级别数�?"""
     grid_levels: Optional[List[dict]]
 
 
 # ==================== Helper ====================
 
 def bot_to_response(bot: GridBot) -> GridResponse:
-    """转换 GridBot 为 API 响应"""
-    # 格式化小数位: 价格2位, 数量5位, 金额2位
+    """转换 GridBot �?API 响应"""
+    # 格式化小数位: 价格2�? 数量5�? 金额2�?
     def fmt_price(v: Decimal) -> str:
         return str(v.quantize(Decimal("0.01")))
     
@@ -113,8 +113,8 @@ def bot_to_response(bot: GridBot) -> GridResponse:
         realized_pnl=fmt_price(bot.realized_pnl),
         profit_rate=fmt_price(bot.profit_rate),
         matched_count=bot.matched_count,
-        created_at=bot.created_at.isoformat(),
-        started_at=bot.started_at.isoformat() if bot.started_at else None,
+        created_at=bot.created_at.isoformat() + "Z",
+        started_at=bot.started_at.isoformat() + "Z" if bot.started_at else None,
     )
 
 
@@ -126,7 +126,7 @@ async def list_grid_bots(
     db: DbSession,
     status_filter: Optional[GridStatus] = None,
 ):
-    """获取用户网格机器人列表"""
+    """获取用户网格机器人列�?""
     bots = await GridStrategy.get_user_grid_bots(db, current_user.id, status_filter)
     return [bot_to_response(bot) for bot in bots]
 
@@ -138,17 +138,17 @@ async def create_grid_bot(
     db: DbSession,
 ):
     """
-    创建网格机器人
+    创建网格机器�?
     
     参数:
-    - name: 机器人名称
-    - symbol: 交易对 (如 BTCUSDT)
+    - name: 机器人名�?
+    - symbol: 交易�?(�?BTCUSDT)
     - lower_price / upper_price: 网格价格区间
     - grid_count: 网格数量 (2-200)
     - investment: 投入金额 (USDT)
     - leverage: 杠杆倍数
-    - grid_type: arithmetic (等差) 或 geometric (等比)
-    - direction: long (做多) 或 short (做空) 或 neutral (中性)
+    - grid_type: arithmetic (等差) �?geometric (等比)
+    - direction: long (做多) �?short (做空) �?neutral (中�?
     """
     try:
         # 直接调用服务方法 (session 已经在隐式事务中)
@@ -171,7 +171,7 @@ async def create_grid_bot(
         # 提交事务
         await db.commit()
         
-        # 刷新实例以获取最新数据
+        # 刷新实例以获取最新数�?
         await db.refresh(bot)
         return bot_to_response(bot)
         
@@ -198,7 +198,7 @@ async def start_grid_bot(
     db: DbSession,
 ):
     """
-    启动网格机器人
+    启动网格机器�?
     
     根据当前价格在网格区间内放置订单
     """
@@ -236,7 +236,7 @@ async def stop_grid_bot(
     cancel_orders: bool = True,
 ):
     """
-    停止网格机器人
+    停止网格机器�?
     
     取消所有挂单并释放资金
     """
@@ -272,7 +272,7 @@ async def get_grid_bot(
     current_user: CurrentUser,
     db: DbSession,
 ):
-    """获取网格机器人详情"""
+    """获取网格机器人详�?""
     result = await db.execute(
         select(GridBot).where(
             GridBot.id == bot_id,
@@ -301,7 +301,7 @@ async def delete_grid_bot(
     db: DbSession,
 ):
     """
-    删除网格机器人
+    删除网格机器�?
     
     只能删除已停止的网格
     """

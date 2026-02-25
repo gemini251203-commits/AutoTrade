@@ -117,7 +117,7 @@ async def list_trade_memories(
             indicators_snapshot=m.indicators_snapshot,
             lesson=m.lesson,
             strategy_name=m.strategy_name,
-            created_at=m.created_at.isoformat() if m.created_at else None,
+            created_at=m.created_at.isoformat() + "Z" if m.created_at else None,
         )
         for m in memories
     ]
@@ -147,7 +147,7 @@ async def get_journal_stats(
     row = result.one()
     total = row.total or 0
     
-    # 按来源分组
+    # 按来源分�?
     source_result = await db.execute(
         select(
             TradeMemory.source,
@@ -207,7 +207,7 @@ async def delete_memory(
     memory = result.scalar_one_or_none()
     
     if not memory:
-        raise HTTPException(status_code=404, detail="记录不存在")
+        raise HTTPException(status_code=404, detail="记录不存�?)
     
     await db.delete(memory)
     await db.commit()

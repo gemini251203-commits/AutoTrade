@@ -4,9 +4,9 @@ Position API
 仓位管理端点
 
 端点:
-    GET  /api/position/           - 获取用户所有仓位
+    GET  /api/position/           - 获取用户所有仓�?
     GET  /api/position/{id}       - 获取单个仓位详情
-    POST /api/position/open       - 开仓
+    POST /api/position/open       - 开�?
     POST /api/position/{id}/close - 平仓
     POST /api/position/{id}/tp-sl - 设置止盈止损
 """
@@ -28,14 +28,14 @@ router = APIRouter(tags=["Position"])
 # ==================== Schemas ====================
 
 class OpenPositionRequest(BaseModel):
-    """开仓请求"""
+    """开仓请�?""
     symbol: str = Field(..., example="BTCUSDT")
     side: PositionSide = Field(..., example="long")
     quantity: Decimal = Field(..., gt=0, example=0.01)
     entry_price: Decimal = Field(..., gt=0, example=80000)
     leverage: int = Field(default=10, ge=1, le=125, example=10)
     margin_mode: MarginMode = Field(default=MarginMode.CROSS)
-    reduce_only: bool = Field(default=False, description="只减仓 (平仓模式)")
+    reduce_only: bool = Field(default=False, description="只减�?(平仓模式)")
     stop_loss: Optional[Decimal] = Field(default=None, example=75000)
     take_profit: Optional[Decimal] = Field(default=None, example=90000)
 
@@ -75,7 +75,7 @@ class PositionResponse(BaseModel):
 
 
 class PositionWithPnlResponse(PositionResponse):
-    """带未实现盈亏的仓位响应"""
+    """带未实现盈亏的仓位响�?""
     unrealized_pnl: Optional[Decimal] = None
     roe_percent: Optional[Decimal] = None
 
@@ -95,9 +95,9 @@ async def list_positions(
     status_filter: Optional[PositionStatus] = None,
 ):
     """
-    获取用户所有仓位
+    获取用户所有仓�?
     
-    可选按状态过滤: open, closed, liquidated
+    可选按状态过�? open, closed, liquidated
     """
     positions = await PositionManager.get_user_positions(
         db, current_user.id, status_filter
@@ -119,7 +119,7 @@ async def list_positions(
             stop_loss=p.stop_loss,
             take_profit=p.take_profit,
             realized_pnl=p.realized_pnl,
-            created_at=p.created_at.isoformat(),
+            created_at=p.created_at.isoformat() + "Z",
         )
         for p in positions
     ]
@@ -132,15 +132,15 @@ async def open_position(
     db: DbSession,
 ):
     """
-    开仓 / 只减仓
+    开�?/ 只减�?
     
-    ⚠️ 资金原子性: 冻结保证金和创建仓位在同一事务中完成
+    ⚠️ 资金原子�? 冻结保证金和创建仓位在同一事务中完�?
     
-    当 reduce_only=True 时，只能平掉现有仓位，不能开新仓位
+    �?reduce_only=True 时，只能平掉现有仓位，不能开新仓�?
     """
     try:
         if request.reduce_only:
-            # 只减仓模式 - 执行平仓
+            # 只减仓模�?- 执行平仓
             # 确定要平仓的仓位方向 (反向)
             close_side = PositionSide.SHORT if request.side == PositionSide.LONG else PositionSide.LONG
             
@@ -152,7 +152,7 @@ async def open_position(
             if not existing:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"只减仓模式: 没有可平仓的 {close_side.value} 仓位",
+                    detail=f"只减仓模�? 没有可平仓的 {close_side.value} 仓位",
                 )
             
             # 平仓
@@ -181,12 +181,12 @@ async def open_position(
                 stop_loss=position.stop_loss,
                 take_profit=position.take_profit,
                 realized_pnl=position.realized_pnl,
-                created_at=position.created_at.isoformat(),
+                created_at=position.created_at.isoformat() + "Z",
             )
         else:
-            # 正常开仓模式
+            # 正常开仓模�?
             
-            # ========== 止盈止损价格合理性校验 (与 set_tp_sl 保持一致) ==========
+            # ========== 止盈止损价格合理性校�?(�?set_tp_sl 保持一�? ==========
             if request.stop_loss is not None or request.take_profit is not None:
                 ref_price = request.entry_price
                 is_long = request.side == PositionSide.LONG
@@ -197,28 +197,28 @@ async def open_position(
                     if is_long and new_sl >= ref_price:
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"多单止损价 ({new_sl}) 必须低于开仓价 ({ref_price})，"
-                                   f"否则会立即触发",
+                            detail=f"多单止损�?({new_sl}) 必须低于开仓价 ({ref_price})�?
+                                   f"否则会立即触�?,
                         )
                     if not is_long and new_sl <= ref_price:
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"空单止损价 ({new_sl}) 必须高于开仓价 ({ref_price})，"
-                                   f"否则会立即触发",
+                            detail=f"空单止损�?({new_sl}) 必须高于开仓价 ({ref_price})�?
+                                   f"否则会立即触�?,
                         )
                 
                 if new_tp is not None and new_tp > 0:
                     if is_long and new_tp <= ref_price:
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"多单止盈价 ({new_tp}) 必须高于开仓价 ({ref_price})，"
-                                   f"否则会立即触发",
+                            detail=f"多单止盈�?({new_tp}) 必须高于开仓价 ({ref_price})�?
+                                   f"否则会立即触�?,
                         )
                     if not is_long and new_tp >= ref_price:
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"空单止盈价 ({new_tp}) 必须低于开仓价 ({ref_price})，"
-                                   f"否则会立即触发",
+                            detail=f"空单止盈�?({new_tp}) 必须低于开仓价 ({ref_price})�?
+                                   f"否则会立即触�?,
                         )
                 
                 # 止盈止损不能交叉
@@ -265,7 +265,7 @@ async def open_position(
                 stop_loss=position.stop_loss,
                 take_profit=position.take_profit,
                 realized_pnl=position.realized_pnl,
-                created_at=position.created_at.isoformat(),
+                created_at=position.created_at.isoformat() + "Z",
             )
         
     except InsufficientMarginError as e:
@@ -299,7 +299,7 @@ async def close_position(
     """
     平仓
     
-    ⚠️ 资金原子性: 释放保证金和结算盈亏在同一事务中完成
+    ⚠️ 资金原子�? 释放保证金和结算盈亏在同一事务中完�?
     """
     try:
         # 验证仓位属于当前用户
@@ -348,7 +348,7 @@ async def close_position(
                 stop_loss=position.stop_loss,
                 take_profit=position.take_profit,
                 realized_pnl=position.realized_pnl,
-                created_at=position.created_at.isoformat(),
+                created_at=position.created_at.isoformat() + "Z",
             ),
             realized_pnl=pnl,
         )
@@ -401,7 +401,7 @@ async def set_tp_sl(
             detail="Cannot modify closed position",
         )
     
-    # ========== 止盈止损价格合理性校验 ==========
+    # ========== 止盈止损价格合理性校�?==========
     # 使用前端传来的标记价格，若没有则用开仓价
     ref_price = request.mark_price or position.entry_price
     is_long = position.side == PositionSide.LONG
@@ -413,13 +413,13 @@ async def set_tp_sl(
         if is_long and new_sl >= ref_price:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"多单止损价 ({new_sl}) 必须低于当前标记价 ({ref_price})，"
+                detail=f"多单止损�?({new_sl}) 必须低于当前标记�?({ref_price})�?
                        f"否则会立即触发或变成止盈",
             )
         if not is_long and new_sl <= ref_price:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"空单止损价 ({new_sl}) 必须高于当前标记价 ({ref_price})，"
+                detail=f"空单止损�?({new_sl}) 必须高于当前标记�?({ref_price})�?
                        f"否则会立即触发或变成止盈",
             )
     
@@ -427,13 +427,13 @@ async def set_tp_sl(
         if is_long and new_tp <= ref_price:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"多单止盈价 ({new_tp}) 必须高于当前标记价 ({ref_price})，"
+                detail=f"多单止盈�?({new_tp}) 必须高于当前标记�?({ref_price})�?
                        f"否则会立即触发或变成止损",
             )
         if not is_long and new_tp >= ref_price:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"空单止盈价 ({new_tp}) 必须低于当前标记价 ({ref_price})，"
+                detail=f"空单止盈�?({new_tp}) 必须低于当前标记�?({ref_price})�?
                        f"否则会立即触发或变成止损",
             )
     
@@ -475,20 +475,20 @@ async def set_tp_sl(
         stop_loss=position.stop_loss,
         take_profit=position.take_profit,
         realized_pnl=position.realized_pnl,
-        created_at=position.created_at.isoformat(),
+        created_at=position.created_at.isoformat() + "Z",
     )
 
 
-# ==================== 动态强平价格 (Cross Margin) ====================
+# ==================== 动态强平价�?(Cross Margin) ====================
 
 class LiquidationInfoRequest(BaseModel):
-    """动态强平价格计算请求"""
+    """动态强平价格计算请�?""
     position_id: int
     current_price: Decimal = Field(..., gt=0, description="当前市场价格")
 
 
 class LiquidationInfoResponse(BaseModel):
-    """动态强平价格响应"""
+    """动态强平价格响�?""
     position_id: int
     symbol: str
     side: str
@@ -497,7 +497,7 @@ class LiquidationInfoResponse(BaseModel):
     liquidation_price: Decimal
     is_dynamic: bool
     unrealized_pnl: Decimal
-    margin_ratio: Decimal  # 保证金率 (>= 1.0 时触发强平)
+    margin_ratio: Decimal  # 保证金率 (>= 1.0 时触发强�?
     account_equity: Decimal  # 账户权益 (仅全仓模式有意义)
 
 
@@ -508,12 +508,12 @@ async def get_liquidation_info(
     db: DbSession,
 ):
     """
-    获取仓位动态强平信息
+    获取仓位动态强平信�?
     
-    - 逐仓模式: 返回固定强平价 (开仓时确定)
+    - 逐仓模式: 返回固定强平�?(开仓时确定)
     - 全仓模式: 根据账户权益动态计算强平价
     
-    ⚠️ 全仓模式下强平价会随账户余额和其他仓位盈亏变化
+    ⚠️ 全仓模式下强平价会随账户余额和其他仓位盈亏变�?
     """
     from sqlalchemy import select, and_
     from app.services.margin import MarginCalculator
@@ -535,12 +535,12 @@ async def get_liquidation_info(
             detail="Position not found or not open",
         )
     
-    # 2. 计算该仓位的未实现盈亏 (使用 Position 模型方法)
+    # 2. 计算该仓位的未实现盈�?(使用 Position 模型方法)
     unrealized_pnl = position.calculate_unrealized_pnl(request.current_price)
     
-    # 3. 根据保证金模式计算强平价格
+    # 3. 根据保证金模式计算强平价�?
     if position.margin_mode == MarginMode.ISOLATED:
-        # 逐仓: 使用固定强平价
+        # 逐仓: 使用固定强平�?
         liq_price = position.liquidation_price or MarginCalculator.calculate_isolated_liquidation_price(
             entry_price=position.entry_price,
             leverage=position.leverage,
@@ -549,7 +549,7 @@ async def get_liquidation_info(
         is_dynamic = False
         account_equity = position.margin + unrealized_pnl
     else:
-        # 全仓: 动态计算
+        # 全仓: 动态计�?
         # 3.1 获取账户余额 (可用 + 冻结)
         wallet = await WalletManager.get_wallet(db, current_user.id)
         if not wallet:
@@ -598,7 +598,7 @@ async def get_liquidation_info(
     if equity_for_position > 0:
         margin_ratio = maintenance_margin / equity_for_position
     else:
-        margin_ratio = Decimal("999")  # 已爆仓
+        margin_ratio = Decimal("999")  # 已爆�?
     
     return LiquidationInfoResponse(
         position_id=position.id,

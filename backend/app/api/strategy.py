@@ -126,7 +126,7 @@ class MemoryResponse(BaseModel):
 # ==================== Helper ====================
 
 def _strategy_to_response(s: Strategy) -> dict:
-    """将 ORM 模型转为响应字典"""
+    """�?ORM 模型转为响应字典"""
     return {
         "id": s.id,
         "user_id": s.user_id,
@@ -137,13 +137,13 @@ def _strategy_to_response(s: Strategy) -> dict:
         "strategy_type": getattr(s, "strategy_type", "basic"),
         "is_active": s.is_active,
         "decision_interval": getattr(s, "decision_interval", "30m") or "30m",
-        "last_run_at": s.last_run_at.isoformat() if s.last_run_at else None,
+        "last_run_at": s.last_run_at.isoformat() + "Z" if s.last_run_at else None,
         "last_signal": s.last_signal,
         "total_trades": s.total_trades,
         "win_trades": s.win_trades,
         "total_pnl": s.total_pnl,
-        "created_at": s.created_at.isoformat() if s.created_at else "",
-        "updated_at": s.updated_at.isoformat() if s.updated_at else "",
+        "created_at": s.created_at.isoformat() + "Z" if s.created_at else "",
+        "updated_at": s.updated_at.isoformat() + "Z" if s.updated_at else "",
     }
 
 
@@ -154,7 +154,7 @@ async def list_strategies(
     current_user: CurrentUser,
     db: DbSession,
 ):
-    """获取用户的策略列表"""
+    """获取用户的策略列�?""
     result = await db.execute(
         select(Strategy)
         .where(Strategy.user_id == current_user.id)
@@ -173,7 +173,7 @@ async def create_strategy(
     """
     创建策略
     
-    会验证 YAML 配置的合法性（指标名称、比较运算符等）
+    会验�?YAML 配置的合法性（指标名称、比较运算符等）
     """
     # 验证 YAML
     engine = StrategyEngine()
@@ -215,9 +215,9 @@ async def update_strategy(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        raise HTTPException(status_code=404, detail="策略不存在")
+        raise HTTPException(status_code=404, detail="策略不存�?)
     
-    # decision_interval 可以在运行中修改，其他字段需停止后修改
+    # decision_interval 可以在运行中修改，其他字段需停止后修�?
     only_decision_interval = (
         request.decision_interval is not None
         and request.name is None
@@ -232,7 +232,7 @@ async def update_strategy(
             detail="策略运行中，请先停止再修改（决策间隔可直接修改）",
         )
     
-    # 如果更新了 YAML，验证合法性
+    # 如果更新�?YAML，验证合法�?
     if request.config_yaml:
         engine = StrategyEngine()
         try:
@@ -270,14 +270,14 @@ async def delete_strategy(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        raise HTTPException(status_code=404, detail="策略不存在")
+        raise HTTPException(status_code=404, detail="策略不存�?)
     
     if strategy.is_active:
-        raise HTTPException(status_code=400, detail="策略运行中，请先停止再删除")
+        raise HTTPException(status_code=400, detail="策略运行中，请先停止再删�?)
     
     await db.delete(strategy)
     await db.commit()
-    return {"message": f"策略 '{strategy.name}' 已删除"}
+    return {"message": f"策略 '{strategy.name}' 已删�?}
 
 
 @router.post("/{strategy_id}/start")
@@ -295,10 +295,10 @@ async def start_strategy(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        raise HTTPException(status_code=404, detail="策略不存在")
+        raise HTTPException(status_code=404, detail="策略不存�?)
     
     if strategy.is_active:
-        raise HTTPException(status_code=400, detail="策略已在运行中")
+        raise HTTPException(status_code=400, detail="策略已在运行�?)
     
     # 再次验证 YAML
     engine = StrategyEngine()
@@ -310,7 +310,7 @@ async def start_strategy(
     strategy.is_active = True
     await db.commit()
     
-    return {"message": f"策略 '{strategy.name}' 已启动", "is_active": True}
+    return {"message": f"策略 '{strategy.name}' 已启�?, "is_active": True}
 
 
 @router.post("/{strategy_id}/stop")
@@ -328,12 +328,12 @@ async def stop_strategy(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        raise HTTPException(status_code=404, detail="策略不存在")
+        raise HTTPException(status_code=404, detail="策略不存�?)
     
     strategy.is_active = False
     await db.commit()
     
-    return {"message": f"策略 '{strategy.name}' 已停止", "is_active": False}
+    return {"message": f"策略 '{strategy.name}' 已停�?, "is_active": False}
 
 
 @router.post("/{strategy_id}/run-once")
@@ -342,7 +342,7 @@ async def run_strategy_once(
     current_user: CurrentUser,
     db: DbSession,
 ):
-    """手动触发一次策略决策"""
+    """手动触发一次策略决�?""
     result = await db.execute(
         select(Strategy).where(
             Strategy.id == strategy_id,
@@ -351,7 +351,7 @@ async def run_strategy_once(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        raise HTTPException(status_code=404, detail="策略不存在")
+        raise HTTPException(status_code=404, detail="策略不存�?)
     
     from app.services.agent.autopilot import autopilot
     try:
@@ -363,7 +363,7 @@ async def run_strategy_once(
             strategy_id=strategy.id,
         )
         return {
-            "message": f"策略 '{strategy.name}' 已执行一次决策",
+            "message": f"策略 '{strategy.name}' 已执行一次决�?,
             "reply": reply,
         }
     except Exception as e:
@@ -386,7 +386,7 @@ async def get_strategy_logs(
         )
     )
     if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="策略不存在")
+        raise HTTPException(status_code=404, detail="策略不存�?)
     
     result = await db.execute(
         select(StrategyLog)
@@ -410,7 +410,7 @@ async def get_strategy_logs(
             "risk_reason": log.risk_reason,
             "order_id": log.order_id,
             "pnl": log.pnl,
-            "created_at": log.created_at.isoformat() if log.created_at else "",
+            "created_at": log.created_at.isoformat() + "Z" if log.created_at else "",
         }
         for log in logs
     ]
@@ -452,9 +452,9 @@ async def get_memories(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        raise HTTPException(status_code=404, detail="策略不存在")
+        raise HTTPException(status_code=404, detail="策略不存�?)
     
-    # 获取该交易对 + 量化来源的记忆（不再混入手动交易）
+    # 获取该交易对 + 量化来源的记忆（不再混入手动交易�?
     result = await db.execute(
         select(TradeMemory)
         .where(
@@ -480,7 +480,7 @@ async def get_memories(
             "pnl_usdt": m.pnl_usdt,
             "situation": m.situation,
             "lesson": m.lesson,
-            "created_at": m.created_at.isoformat() if m.created_at else "",
+            "created_at": m.created_at.isoformat() + "Z" if m.created_at else "",
         }
         for m in memories
     ]

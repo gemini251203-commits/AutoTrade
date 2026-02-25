@@ -69,7 +69,7 @@ async def list_schemes(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    """列出用户的所有趋势分析方案"""
+    """列出用户的所有趋势分析方�?""
     result = await db.execute(
         select(TrendScheme).where(
             TrendScheme.user_id == current_user.id,
@@ -85,8 +85,8 @@ async def list_schemes(
             is_active=s.is_active,
             is_preset=s.is_preset,
             last_result=s.last_result,
-            last_run_at=s.last_run_at.isoformat() if s.last_run_at else None,
-            created_at=s.created_at.isoformat(),
+            last_run_at=s.last_run_at.isoformat() + "Z" if s.last_run_at else None,
+            created_at=s.created_at.isoformat() + "Z",
         )
         for s in schemes
     ]
@@ -116,7 +116,7 @@ async def create_scheme(
     await db.commit()
     await db.refresh(scheme)
 
-    return {"id": scheme.id, "name": scheme.name, "message": f"方案 '{scheme.name}' 已创建"}
+    return {"id": scheme.id, "name": scheme.name, "message": f"方案 '{scheme.name}' 已创�?}
 
 
 @router.put("/schemes/{scheme_id}")
@@ -135,7 +135,7 @@ async def update_scheme(
     )
     scheme = result.scalar_one_or_none()
     if not scheme:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise HTTPException(status_code=404, detail="方案不存�?)
 
     if body.name is not None:
         scheme.name = body.name
@@ -151,7 +151,7 @@ async def update_scheme(
         scheme.is_active = body.is_active
 
     await db.commit()
-    return {"id": scheme.id, "message": f"方案 '{scheme.name}' 已更新"}
+    return {"id": scheme.id, "message": f"方案 '{scheme.name}' 已更�?}
 
 
 @router.delete("/schemes/{scheme_id}")
@@ -169,11 +169,11 @@ async def delete_scheme(
     )
     scheme = result.scalar_one_or_none()
     if not scheme:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise HTTPException(status_code=404, detail="方案不存�?)
 
     await db.delete(scheme)
     await db.commit()
-    return {"message": f"方案 '{scheme.name}' 已删除"}
+    return {"message": f"方案 '{scheme.name}' 已删�?}
 
 
 @router.post("/schemes/{scheme_id}/run")
@@ -192,9 +192,9 @@ async def run_analysis(
     )
     scheme = result.scalar_one_or_none()
     if not scheme:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise HTTPException(status_code=404, detail="方案不存�?)
 
-    # 获取 K 线
+    # 获取 K �?
     from app.core.network import net_manager
     interval = "1h"
     try:
@@ -211,7 +211,7 @@ async def run_analysis(
                 params={"symbol": symbol.upper(), "interval": interval, "limit": 200},
             )
             if resp.status_code != 200:
-                raise HTTPException(status_code=502, detail="获取 K 线失败")
+                raise HTTPException(status_code=502, detail="获取 K 线失�?)
 
             raw = resp.json()
             klines = [{
@@ -292,7 +292,7 @@ async def list_snapshots(
             regime=s.regime,
             confidence=s.confidence,
             suitable_strategies=s.suitable_strategies,
-            created_at=s.created_at.isoformat(),
+            created_at=s.created_at.isoformat() + "Z",
         )
         for s in snapshots
     ]
@@ -303,8 +303,8 @@ async def init_presets(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    """初始化预置方案 (用户首次使用时调用)"""
-    # 检查是否已有预置方案
+    """初始化预置方�?(用户首次使用时调�?"""
+    # 检查是否已有预置方�?
     existing = await db.execute(
         select(TrendScheme).where(
             TrendScheme.user_id == current_user.id,
@@ -312,7 +312,7 @@ async def init_presets(
         )
     )
     if existing.scalars().first():
-        return {"message": "预置方案已存在"}
+        return {"message": "预置方案已存�?}
 
     created = []
     for key, preset in PRESET_SCHEMES.items():
@@ -320,11 +320,11 @@ async def init_presets(
             user_id=current_user.id,
             name=preset["name"],
             config_yaml=preset["yaml"],
-            is_active=(key == "standard"),  # 只激活标准方案
+            is_active=(key == "standard"),  # 只激活标准方�?
             is_preset=True,
         )
         db.add(scheme)
         created.append(preset["name"])
 
     await db.commit()
-    return {"message": f"已创建 {len(created)} 个预置方案", "schemes": created}
+    return {"message": f"已创�?{len(created)} 个预置方�?, "schemes": created}

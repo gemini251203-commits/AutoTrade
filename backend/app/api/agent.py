@@ -4,16 +4,16 @@ Agent API
 AI 交易代理端点
 
 端点:
-    POST /api/agent/conversations           - 创建新会话
+    POST /api/agent/conversations           - 创建新会�?
     GET  /api/agent/conversations           - 列出会话
     DELETE /api/agent/conversations/{id}    - 删除会话
-    POST /api/agent/conversations/{id}/chat - 发消息 (SSE 流式)
+    POST /api/agent/conversations/{id}/chat - 发消�?(SSE 流式)
     GET  /api/agent/conversations/{id}/messages - 获取历史消息
     GET  /api/agent/personas               - 获取可用角色列表
     POST /api/agent/autopilot/start        - 启动自动交易
     POST /api/agent/autopilot/stop         - 停止自动交易
-    POST /api/agent/autopilot/run-once     - 手动触发一次
-    GET  /api/agent/autopilot/status       - 查询状态
+    POST /api/agent/autopilot/run-once     - 手动触发一�?
+    GET  /api/agent/autopilot/status       - 查询状�?
 """
 
 import json
@@ -95,9 +95,9 @@ async def create_conversation(
     db: DbSession,
 ):
     """
-    创建新会话
+    创建新会�?
 
-    每个会话有独立的 AI 记忆和角色设定
+    每个会话有独立的 AI 记忆和角色设�?
     """
     # 验证角色 ID
     valid_personas = [p["id"] for p in get_persona_names()]
@@ -119,8 +119,8 @@ async def create_conversation(
         id=conv.id,
         title=conv.title,
         persona=conv.persona,
-        created_at=conv.created_at.isoformat(),
-        updated_at=conv.updated_at.isoformat(),
+        created_at=conv.created_at.isoformat() + "Z",
+        updated_at=conv.updated_at.isoformat() + "Z",
     )
 
 
@@ -130,7 +130,7 @@ async def list_conversations(
     db: DbSession,
 ):
     """
-    列出用户的所有会话
+    列出用户的所有会�?
 
     按更新时间倒序排列
     """
@@ -146,8 +146,8 @@ async def list_conversations(
             id=c.id,
             title=c.title,
             persona=c.persona,
-            created_at=c.created_at.isoformat(),
-            updated_at=c.updated_at.isoformat(),
+            created_at=c.created_at.isoformat() + "Z",
+            updated_at=c.updated_at.isoformat() + "Z",
         )
         for c in conversations
     ]
@@ -160,7 +160,7 @@ async def delete_conversation(
     db: DbSession,
 ):
     """
-    删除会话及其所有消息
+    删除会话及其所有消�?
     """
     # 验证所属权
     result = await db.execute(
@@ -194,12 +194,12 @@ async def chat(
     发送消息并获取 AI 回复 (SSE 流式)
 
     响应格式: Server-Sent Events
-    每个事件是 JSON 对象:
-    - {"type": "text", "content": "..."} — AI 文本片段
-    - {"type": "tool_call", "tool": "...", "args": {...}} — 工具调用
-    - {"type": "tool_result", "tool": "...", "result": "..."} — 工具结果
-    - {"type": "done", "full_reply": "..."} — 完成
-    - {"type": "error", "message": "..."} — 错误
+    每个事件�?JSON 对象:
+    - {"type": "text", "content": "..."} �?AI 文本片段
+    - {"type": "tool_call", "tool": "...", "args": {...}} �?工具调用
+    - {"type": "tool_result", "tool": "...", "result": "..."} �?工具结果
+    - {"type": "done", "full_reply": "..."} �?完成
+    - {"type": "error", "message": "..."} �?错误
     """
     # 验证会话所属权
     result = await db.execute(
@@ -244,9 +244,9 @@ async def get_messages(
     limit: int = 50,
 ):
     """
-    获取会话的历史消息
+    获取会话的历史消�?
 
-    按时间正序排列
+    按时间正序排�?
     """
     # 验证会话所属权
     result = await db.execute(
@@ -275,7 +275,7 @@ async def get_messages(
             content=m.content,
             tool_name=m.tool_name,
             tool_result=m.tool_result,
-            created_at=m.created_at.isoformat(),
+            created_at=m.created_at.isoformat() + "Z",
         )
         for m in messages
     ]
@@ -285,9 +285,9 @@ async def get_messages(
 
 class AutopilotStartRequest(BaseModel):
     """启动 autopilot 请求"""
-    symbols: List[str] = Field(default=["BTCUSDT"], description="交易对列表")
+    symbols: List[str] = Field(default=["BTCUSDT"], description="交易对列�?)
     interval: str = Field(default="15m", description="决策间隔: 5m/15m/30m/1h/4h")
-    intervals: List[str] = Field(default=[], description="多级别指标: [5m, 1h, 4h]")
+    intervals: List[str] = Field(default=[], description="多级别指�? [5m, 1h, 4h]")
 
 
 @router.post("/autopilot/start")
@@ -297,7 +297,7 @@ async def autopilot_start(
 ):
     """启动自动交易模式"""
     if request.interval not in ("5m", "15m", "30m", "1h", "4h"):
-        raise HTTPException(status_code=400, detail="interval 只支持 5m/15m/30m/1h/4h")
+        raise HTTPException(status_code=400, detail="interval 只支�?5m/15m/30m/1h/4h")
 
     await autopilot.start(
         user_id=current_user.id,
@@ -320,16 +320,16 @@ async def autopilot_stop(current_user: CurrentUser):
 @router.post("/autopilot/run-once")
 async def autopilot_run_once(
     current_user: CurrentUser,
-    symbol: str = Query(default="BTCUSDT", description="交易对"),
+    symbol: str = Query(default="BTCUSDT", description="交易�?),
 ):
-    """手动触发一次 autopilot 决策"""
+    """手动触发一�?autopilot 决策"""
     reply = await autopilot.run_once(current_user.id, symbol)
     return {"reply": reply}
 
 
 @router.get("/autopilot/status")
 async def autopilot_status(current_user: CurrentUser):
-    """查询 autopilot 状态"""
+    """查询 autopilot 状�?""
     return autopilot.get_status(current_user.id)
 
 
@@ -338,7 +338,7 @@ async def autopilot_logs(
     current_user: CurrentUser,
     limit: int = Query(default=200, ge=1, le=500, description="返回条数"),
     symbol: Optional[str] = Query(default=None, description="按交易对过滤"),
-    since: Optional[str] = Query(default=None, description="只返回此时间之后的日志 (ISO格式)"),
+    since: Optional[str] = Query(default=None, description="只返回此时间之后的日�?(ISO格式)"),
 ):
     """查询 autopilot 决策日志"""
     logs = await autopilot.get_logs(
@@ -363,4 +363,4 @@ async def autopilot_clear_logs(
         )
     )
     await db.commit()
-    return {"message": f"已清空 {result.rowcount} 条记录"}
+    return {"message": f"已清�?{result.rowcount} 条记�?}

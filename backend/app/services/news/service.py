@@ -4,7 +4,7 @@ News Service
 新闻业务查询 + 统计
 
 职责:
-- 查询最新新闻 (支持币种/分类/关键词过滤)
+- 查询最新新�?(支持币种/分类/关键词过�?
 - 计算市场情绪指标
 - 新闻交易绩效统计
 - 新闻监控规则 CRUD
@@ -35,13 +35,13 @@ async def get_latest_news(
     limit: int = 20,
 ) -> List[Dict[str, Any]]:
     """
-    查询最新新闻
+    查询最新新�?
     
     Args:
-        db: 数据库会话
-        currency: 币种过滤 (如 "BTC")
-        news_category: 分类过滤 (如 "macro")
-        keyword: 关键词搜索 (标题模糊匹配)
+        db: 数据库会�?
+        currency: 币种过滤 (�?"BTC")
+        news_category: 分类过滤 (�?"macro")
+        keyword: 关键词搜�?(标题模糊匹配)
         limit: 返回条数
     
     Returns:
@@ -59,7 +59,7 @@ async def get_latest_news(
     if news_category:
         query = query.where(NewsArticle.news_category == news_category)
     
-    # 关键词搜索
+    # 关键词搜�?
     if keyword:
         query = query.where(
             or_(
@@ -72,7 +72,7 @@ async def get_latest_news(
     result = await db.execute(query)
     articles = result.scalars().all()
     
-    # 如果有币种过滤，在 Python 层再过滤 (JSON 查询兼容性)
+    # 如果有币种过滤，�?Python 层再过滤 (JSON 查询兼容�?
     if currency:
         currency_upper = currency.upper()
         articles = [
@@ -92,8 +92,8 @@ async def get_market_sentiment(
     计算市场情绪指标
     
     Args:
-        db: 数据库会话
-        currency: 币种 (如 "BTC")
+        db: 数据库会�?
+        currency: 币种 (�?"BTC")
         hours: 回看时间窗口
     
     Returns:
@@ -116,7 +116,7 @@ async def get_market_sentiment(
     result = await db.execute(query)
     articles = result.scalars().all()
     
-    # 如果有币种过滤
+    # 如果有币种过�?
     if currency:
         currency_upper = currency.upper()
         articles = [
@@ -142,11 +142,11 @@ async def get_market_sentiment(
     negative_count = sum(1 for a in articles if a.sentiment == "negative")
     neutral_count = sum(1 for a in articles if a.sentiment == "neutral")
     
-    # 加权平均分
+    # 加权平均�?
     total_score = sum(a.sentiment_score or 0.0 for a in articles)
     avg_score = total_score / len(articles) if articles else 0.0
     
-    # 按分类统计
+    # 按分类统�?
     by_category: Dict[str, Dict] = {}
     for a in articles:
         cat = a.news_category or "other"
@@ -192,7 +192,7 @@ async def get_user_alerts(
     user_id: int,
     active_only: bool = False,
 ) -> List[Dict[str, Any]]:
-    """查询用户的所有监控规则"""
+    """查询用户的所有监控规�?""
     query = (
         select(NewsAlert)
         .where(NewsAlert.user_id == user_id)
@@ -260,7 +260,7 @@ async def get_news_trading_stats(
 
 
 # ============================================================
-# 思考记录查询
+# 思考记录查�?
 # ============================================================
 
 async def get_thinkings(
@@ -269,7 +269,7 @@ async def get_thinkings(
     news_article_id: Optional[int] = None,
     limit: int = 20,
 ) -> List[Dict[str, Any]]:
-    """查询 AI 思考记录"""
+    """查询 AI 思考记�?""
     query = (
         select(NewsThinking)
         .where(NewsThinking.user_id == user_id)
@@ -289,7 +289,7 @@ async def get_thinkings(
 # ============================================================
 
 def _article_to_dict(a: NewsArticle) -> Dict[str, Any]:
-    """NewsArticle ORM → 字典"""
+    """NewsArticle ORM �?字典"""
     return {
         "id": a.id,
         "source": a.source,
@@ -303,13 +303,13 @@ def _article_to_dict(a: NewsArticle) -> Dict[str, Any]:
         "importance": a.importance,
         "votes_positive": a.votes_positive,
         "votes_negative": a.votes_negative,
-        "published_at": a.published_at.isoformat() if a.published_at else "",
-        "created_at": a.created_at.isoformat() if a.created_at else "",
+        "published_at": a.published_at.isoformat() + "Z" if a.published_at else "",
+        "created_at": a.created_at.isoformat() + "Z" if a.created_at else "",
     }
 
 
 def _alert_to_dict(a: NewsAlert) -> Dict[str, Any]:
-    """NewsAlert ORM → 字典"""
+    """NewsAlert ORM �?字典"""
     win_rate = 0.0
     total = a.win_count + a.loss_count
     if total > 0:
@@ -339,14 +339,14 @@ def _alert_to_dict(a: NewsAlert) -> Dict[str, Any]:
         "total_pnl": a.total_pnl,
         "win_rate": win_rate,
         "last_triggered_at": (
-            a.last_triggered_at.isoformat() if a.last_triggered_at else None
+            a.last_triggered_at.isoformat() + "Z" if a.last_triggered_at else None
         ),
-        "created_at": a.created_at.isoformat() if a.created_at else "",
+        "created_at": a.created_at.isoformat() + "Z" if a.created_at else "",
     }
 
 
 def _thinking_to_dict(t: NewsThinking) -> Dict[str, Any]:
-    """NewsThinking ORM → 字典"""
+    """NewsThinking ORM �?字典"""
     return {
         "id": t.id,
         "user_id": t.user_id,
@@ -362,5 +362,5 @@ def _thinking_to_dict(t: NewsThinking) -> Dict[str, Any]:
         "trade_result": t.trade_result,
         "trade_pnl": t.trade_pnl,
         "ai_reflection": t.ai_reflection,
-        "created_at": t.created_at.isoformat() if t.created_at else "",
+        "created_at": t.created_at.isoformat() + "Z" if t.created_at else "",
     }

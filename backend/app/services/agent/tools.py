@@ -3,12 +3,12 @@ Agent Tools
 =============
 AI 交易代理的工具集
 
-每个工具是一个 async 函数，调用现有后端服务完成实际操作。
-工具的输入输出都是简单的 dict/str，方便 AI 解析。
+每个工具是一�?async 函数，调用现有后端服务完成实际操作�?
+工具的输入输出都是简单的 dict/str，方�?AI 解析�?
 
 命名规范:
-- 工具名: snake_case (与 prompts.py 中的工具名一一对应)
-- 参数名: snake_case (与 API 层/DB 层一致)
+- 工具�? snake_case (�?prompts.py 中的工具名一一对应)
+- 参数�? snake_case (�?API �?DB 层一�?
 """
 
 import json
@@ -26,17 +26,17 @@ from app.models.wallet import Wallet
 from app.models.market import Kline
 from app.models.strategy import TradeMemory, Strategy
 
-# ==================== 来源上下文 ====================
-# Autopilot 调用前设置此变量，tools 自动使用正确的 note 前缀
+# ==================== 来源上下�?====================
+# Autopilot 调用前设置此变量，tools 自动使用正确�?note 前缀
 agent_source_var = contextvars.ContextVar('agent_source', default='agent')
 
-# ==================== 工具注册表 ====================
+# ==================== 工具注册�?====================
 
 TOOL_REGISTRY: Dict[str, Any] = {}
 
 
 def register_tool(func):
-    """注册工具到全局注册表"""
+    """注册工具到全局注册�?""
     TOOL_REGISTRY[func.__name__] = func
     return func
 
@@ -87,13 +87,13 @@ async def get_funding_rate(
     symbol: str = "BTCUSDT",
 ) -> str:
     """
-    查询资金费率 — 交易成本分析
+    查询资金费率 �?交易成本分析
 
     参数:
-        symbol: 交易对, 如 BTCUSDT / ETHUSDT
+        symbol: 交易�? �?BTCUSDT / ETHUSDT
 
     返回:
-        当前费率、年化成本、下次结算时间、多空方向提示
+        当前费率、年化成本、下次结算时间、多空方向提�?
     """
     from app.services.funding_rate import funding_rate_service
     info = await funding_rate_service.get_funding_info(symbol.upper())
@@ -110,7 +110,7 @@ async def get_klines(
     interval: str = "1h",
     limit: int = 20,
 ) -> str:
-    """获取 K 线数据"""
+    """获取 K 线数�?""
     limit = min(int(limit), 50)  # 限制返回数量避免 token 过多
     result = await db.execute(
         select(Kline)
@@ -121,7 +121,7 @@ async def get_klines(
     klines = list(reversed(result.scalars().all()))
 
     if not klines:
-        return json.dumps({"error": f"无 {symbol} {interval} K线数据"}, ensure_ascii=False)
+        return json.dumps({"error": f"�?{symbol} {interval} K线数�?}, ensure_ascii=False)
 
     data = [
         {
@@ -175,9 +175,9 @@ async def get_positions(db: AsyncSession, user_id: int) -> str:
     positions = result.scalars().all()
 
     if not positions:
-        return json.dumps({"positions": [], "message": "当前无持仓"}, ensure_ascii=False)
+        return json.dumps({"positions": [], "message": "当前无持�?}, ensure_ascii=False)
 
-    # 获取实时价格计算未实现盈亏
+    # 获取实时价格计算未实现盈�?
     from app.services.exchange import BinanceClient
     client = BinanceClient()
 
@@ -219,7 +219,7 @@ async def get_open_orders(db: AsyncSession, user_id: int) -> str:
     orders = result.scalars().all()
 
     if not orders:
-        return json.dumps({"orders": [], "message": "当前无挂单"}, ensure_ascii=False)
+        return json.dumps({"orders": [], "message": "当前无挂�?}, ensure_ascii=False)
 
     data = [
         {
@@ -238,7 +238,7 @@ async def get_open_orders(db: AsyncSession, user_id: int) -> str:
 
 # ==================== 交易工具 ====================
 
-# 统一品种管理器 (替代散落的 exchange_rules 字典)
+# 统一品种管理�?(替代散落�?exchange_rules 字典)
 from app.models.security import security_manager
 
 
@@ -255,13 +255,13 @@ async def place_order(
     stop_loss: float = 0,
     take_profit: float = 0,
 ) -> str:
-    """下单 (含 Binance 规则预检验)"""
+    """下单 (�?Binance 规则预检�?"""
     from app.services.trading import OrderExecutor, OrderError
 
     try:
         symbol = symbol.upper()
 
-        # ==================== 预检验: Binance 交易规则 ====================
+        # ==================== 预检�? Binance 交易规则 ====================
         from app.services.exchange import BinanceClient
         client = BinanceClient()
         try:
@@ -271,7 +271,7 @@ async def place_order(
             current_price = 0
 
         if current_price > 0:
-            # 使用统一品种管理器验证
+            # 使用统一品种管理器验�?
             validation = security_manager.validate_order(symbol, quantity, current_price, leverage)
             if not validation["valid"]:
                 return json.dumps({
@@ -280,7 +280,7 @@ async def place_order(
                     "suggestion": validation["suggestion"],
                 }, ensure_ascii=False)
 
-            # 检查保证金是否够
+            # 检查保证金是否�?
             notional = quantity * current_price
             margin = notional / leverage if leverage > 0 else notional
             wallet_result = await db.execute(
@@ -289,17 +289,17 @@ async def place_order(
             wallet = wallet_result.scalar_one_or_none()
             if wallet and margin > float(wallet.balance):
                 available = float(wallet.balance)
-                # 计算建议的修正参数
+                # 计算建议的修正参�?
                 safe_margin = available * 0.3  # 使用30%可用余额
                 safe_notional = safe_margin * leverage
                 safe_qty = safe_notional / current_price
-                # 按步长取整
+                # 按步长取�?
                 safe_qty = float(security_manager.round_quantity_up(symbol, safe_qty))
                 return json.dumps({
                     "success": False, 
                     "error": (
-                        f"保证金不足: 需要 ${margin:,.2f} (名义${notional:,.2f} / {leverage}x), "
-                        f"但可用余额仅 ${available:,.2f}。"
+                        f"保证金不�? 需�?${margin:,.2f} (名义${notional:,.2f} / {leverage}x), "
+                        f"但可用余额仅 ${available:,.2f}�?
                     ),
                     "suggested_fix": {
                         "quantity": safe_qty,
@@ -307,10 +307,10 @@ async def place_order(
                         "margin": round(safe_margin, 2),
                         "notional": round(safe_notional, 2),
                     },
-                    "hint": f"建议使用 quantity={safe_qty}, leverage={leverage} 重试下单。",
+                    "hint": f"建议使用 quantity={safe_qty}, leverage={leverage} 重试下单�?,
                 }, ensure_ascii=False)
 
-        # ==================== 通过预检验, 执行下单 ====================
+        # ==================== 通过预检�? 执行下单 ====================
         order_side = OrderSide(side.lower())
         otype = OrderType(order_type.lower())
         order_price = Decimal(str(price)) if price and float(price) > 0 else None
@@ -319,7 +319,7 @@ async def place_order(
         sl = Decimal(str(stop_loss)) if stop_loss and float(stop_loss) > 0 else None
         tp = Decimal(str(take_profit)) if take_profit and float(take_profit) > 0 else None
 
-        # 根据来源上下文确定 source
+        # 根据来源上下文确�?source
         source_label = agent_source_var.get('agent')
 
         # ==================== 通过 Pipeline 统一下单 ====================
@@ -327,7 +327,7 @@ async def place_order(
         
         pipeline = get_pipeline(user_id)
         
-        # 获取余额和持仓信息用于风控
+        # 获取余额和持仓信息用于风�?
         wallet_result2 = await db.execute(
             select(Wallet).where(Wallet.user_id == user_id)
         )
@@ -386,7 +386,7 @@ async def close_position(
     from app.services.trading import PositionManager, PositionError
 
     try:
-        # PositionManager.close_position 是 @staticmethod
+        # PositionManager.close_position �?@staticmethod
         # 签名: (db, position_id, close_price, close_quantity=None)
         # 返回: (position, realized_pnl)
         position, realized_pnl = await PositionManager.close_position(
@@ -420,7 +420,7 @@ async def cancel_order(
     from app.services.trading import OrderExecutor, OrderError
 
     try:
-        # OrderExecutor.cancel_order 是 @staticmethod
+        # OrderExecutor.cancel_order �?@staticmethod
         # 签名: (db, order_id, user_id)
         order = await OrderExecutor.cancel_order(
             db=db,
@@ -432,7 +432,7 @@ async def cancel_order(
             "success": True,
             "order_id": order.id,
             "symbol": order.symbol,
-            "message": f"订单 #{order.id} 已取消",
+            "message": f"订单 #{order.id} 已取�?,
         }, ensure_ascii=False)
 
     except OrderError as e:
@@ -451,7 +451,7 @@ async def get_indicators(
     symbol: str = "BTCUSDT",
     interval: str = "1h",
 ) -> str:
-    """获取技术指标 (增强版 — 使用完整指标库)"""
+    """获取技术指�?(增强�?�?使用完整指标�?"""
     from app.core.network import net_manager
     from app.services.quant.indicators import calculate_all_indicators
 
@@ -468,7 +468,7 @@ async def get_indicators(
             if resp.status_code == 200:
                 raw = resp.json()
                 if raw and len(raw) >= 50:
-                    # 转换为 indicators.py 要求的 kline dict 格式
+                    # 转换�?indicators.py 要求�?kline dict 格式
                     klines = []
                     for k in raw:
                         klines.append({
@@ -485,7 +485,7 @@ async def get_indicators(
                     # 调用完整指标计算
                     indicators = calculate_all_indicators(klines)
 
-                    # 格式化输出 — 只保留关键数据，避免过长
+                    # 格式化输�?�?只保留关键数据，避免过长
                     result = {
                         "symbol": symbol.upper(),
                         "interval": interval,
@@ -554,7 +554,7 @@ async def query_memories(
     user_id: int,
     symbol: str = "BTCUSDT",
 ) -> str:
-    """查询交易记忆 (所有来源: 手动/AI/信号/量化)"""
+    """查询交易记忆 (所有来�? 手动/AI/信号/量化)"""
     result = await db.execute(
         select(TradeMemory)
         .where(
@@ -569,7 +569,7 @@ async def query_memories(
     if not memories:
         return json.dumps({
             "memories": [],
-            "message": f"暂无 {symbol} 的交易记忆",
+            "message": f"暂无 {symbol} 的交易记�?,
         }, ensure_ascii=False)
 
     source_labels = {
@@ -594,7 +594,7 @@ async def query_memories(
             "had_take_profit": m.had_take_profit,
             "open_reason": m.open_reason,
             "lesson": m.lesson,
-            "created_at": m.created_at.isoformat() if m.created_at else "",
+            "created_at": m.created_at.isoformat() + "Z" if m.created_at else "",
         }
         for m in memories
     ]
@@ -609,10 +609,10 @@ async def list_strategies(
     db: AsyncSession,
     user_id: int,
 ) -> str:
-    """列出所有可用策略 (用户创建的 + 预设模板)"""
+    """列出所有可用策�?(用户创建�?+ 预设模板)"""
     from app.services.quant.strategy import list_templates
 
-    # 1. 用户自己的策略
+    # 1. 用户自己的策�?
     result = await db.execute(
         select(Strategy)
         .where(Strategy.user_id == user_id)
@@ -659,12 +659,12 @@ async def get_strategy_detail(
     user_id: int,
     strategy_id: str = "",
 ) -> str:
-    """查看策略详细配置 (支持用户策略 ID 或模板 ID)"""
+    """查看策略详细配置 (支持用户策略 ID 或模�?ID)"""
     from app.services.quant.strategy import StrategyEngine, STRATEGY_TEMPLATES
 
     engine = StrategyEngine()
 
-    # 尝试作为数据库 ID 查询
+    # 尝试作为数据�?ID 查询
     if str(strategy_id).isdigit():
         result = await db.execute(
             select(Strategy).where(
@@ -706,12 +706,12 @@ async def get_strategy_detail(
             "type": "template",
         }, ensure_ascii=False, default=str)
 
-    return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False)
+    return json.dumps({"error": f"找不到策�? {strategy_id}"}, ensure_ascii=False)
 
 
 async def _fetch_klines_map(symbol: str, timeframes: list) -> dict:
     """
-    获取多时间框架 K 线数据
+    获取多时间框�?K 线数�?
     
     Returns:
         {"1h": [klines...], "4h": [klines...], ...}
@@ -744,7 +744,7 @@ async def _fetch_klines_map(symbol: str, timeframes: list) -> dict:
                             "quote_volume": float(k[7]),
                         } for k in raw]
             except Exception as e:
-                logger.warning(f"[Tools] 获取 {tf} K线失败: {e}")
+                logger.warning(f"[Tools] 获取 {tf} K线失�? {e}")
     return klines_map
 
 
@@ -756,11 +756,11 @@ async def evaluate_strategy(
     symbol: str = "",
 ) -> str:
     """
-    评估策略在当前行情下的信号 (不会下单)
+    评估策略在当前行情下的信�?(不会下单)
 
     参数:
-        strategy_id: 用户策略 ID (数字) 或模板 ID (字符串)
-        symbol: 可选, 覆盖策略默认的交易对
+        strategy_id: 用户策略 ID (数字) 或模�?ID (字符�?
+        symbol: 可�? 覆盖策略默认的交易对
     """
     from app.services.quant.strategy import StrategyEngine, STRATEGY_TEMPLATES
 
@@ -786,22 +786,22 @@ async def evaluate_strategy(
         strategy_name = config.get("name", strategy_id)
 
     if not config:
-        return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False)
+        return json.dumps({"error": f"找不到策�? {strategy_id}"}, ensure_ascii=False)
 
-    # 如果指定了 symbol，覆盖策略默认的
+    # 如果指定�?symbol，覆盖策略默认的
     target_symbol = (symbol or config.get("symbol", "BTCUSDT")).upper()
     config["symbol"] = target_symbol
 
-    # 获取多时间框架 K 线数据
+    # 获取多时间框�?K 线数�?
     required_tfs = config.get("_required_timeframes", [config.get("interval", "1h")])
     
     try:
         klines_map = await _fetch_klines_map(target_symbol, required_tfs)
     except Exception as e:
-        return json.dumps({"error": f"获取K线异常: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"获取K线异�? {str(e)}"}, ensure_ascii=False)
 
     if not klines_map:
-        return json.dumps({"error": "无法获取任何时间框架的K线数据"}, ensure_ascii=False)
+        return json.dumps({"error": "无法获取任何时间框架的K线数�?}, ensure_ascii=False)
 
     # 执行策略评估
     try:
@@ -832,9 +832,9 @@ async def run_strategy(
     symbol: str = "",
 ) -> str:
     """
-    完整执行策略: 评估 → 风控 → 下单
+    完整执行策略: 评估 �?风控 �?下单
 
-    只有当策略产生入场信号 AND 通过风控时才下单。
+    只有当策略产生入场信�?AND 通过风控时才下单�?
     """
     from app.services.quant.strategy import StrategyEngine, STRATEGY_TEMPLATES
     from app.services.risk.risk_model import RiskModel
@@ -864,22 +864,22 @@ async def run_strategy(
         strategy_name = config.get("name", strategy_id)
 
     if not config:
-        return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False)
+        return json.dumps({"error": f"找不到策�? {strategy_id}"}, ensure_ascii=False)
 
     target_symbol = (symbol or config.get("symbol", "BTCUSDT")).upper()
     config["symbol"] = target_symbol
 
-    # 1. 获取多时间框架 K 线
+    # 1. 获取多时间框�?K �?
     required_tfs = config.get("_required_timeframes", [config.get("interval", "1h")])
     try:
         klines_map = await _fetch_klines_map(target_symbol, required_tfs)
     except Exception as e:
-        return json.dumps({"error": f"获取K线异常: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"获取K线异�? {str(e)}"}, ensure_ascii=False)
 
     if not klines_map:
-        return json.dumps({"error": "无法获取K线数据"}, ensure_ascii=False)
+        return json.dumps({"error": "无法获取K线数�?}, ensure_ascii=False)
 
-    # 取主时间框架 K 线 (用于价格和 ATR)
+    # 取主时间框架 K �?(用于价格�?ATR)
     default_interval = config.get("interval", "1h")
     main_klines = klines_map.get(default_interval, list(klines_map.values())[0])
 
@@ -894,7 +894,7 @@ async def run_strategy(
             "action": "no_signal",
             "strategy_name": strategy_name,
             "symbol": target_symbol,
-            "message": f"策略 '{strategy_name}' 当前无交易信号",
+            "message": f"策略 '{strategy_name}' 当前无交易信�?,
             "conditions_met": [str(c) for c in signal.conditions_met],
             "conditions_failed": [str(c) for c in signal.conditions_failed],
         }, ensure_ascii=False, default=str)
@@ -909,7 +909,7 @@ async def run_strategy(
             "conditions_met": [str(c) for c in signal.conditions_met],
         }, ensure_ascii=False, default=str)
 
-    # 3. 获取钱包余额和持仓 (供 Pipeline 风控使用)
+    # 3. 获取钱包余额和持�?(�?Pipeline 风控使用)
     wallet_result = await db.execute(
         select(Wallet).where(Wallet.user_id == user_id)
     )
@@ -946,11 +946,11 @@ async def run_strategy(
                 original_pct = position_pct
                 position_pct = round(position_pct * vol_factor, 1)
                 logger.info(
-                    f"[Strategy] 波动率调整: ATR%={atr_pct:.2f}%, "
-                    f"仓位 {original_pct}% → {position_pct}%"
+                    f"[Strategy] 波动率调�? ATR%={atr_pct:.2f}%, "
+                    f"仓位 {original_pct}% �?{position_pct}%"
                 )
         except Exception as e:
-            logger.warning(f"[Strategy] 波动率调整失败: {e}")
+            logger.warning(f"[Strategy] 波动率调整失�? {e}")
 
     trade_amount = wallet_balance * position_pct / 100
     quantity = Decimal(str(round(trade_amount / float(current_price), 4)))
@@ -958,7 +958,7 @@ async def run_strategy(
     side_map = {"buy": PositionSide.LONG, "sell": PositionSide.SHORT}
     position_side = side_map.get(signal.side.value, PositionSide.LONG) if signal.side else PositionSide.LONG
 
-    # 计算止损止盈 (L2: 支持动态止损)
+    # 计算止损止盈 (L2: 支持动态止�?
     stop_type = risk_config.get("stop_type", "fixed")
     stop_loss_pct = risk_config.get("stop_loss_pct", 3)
     take_profit_pct = risk_config.get("take_profit_pct", 9)
@@ -993,7 +993,7 @@ async def run_strategy(
             current_price, position_side, stop_loss_pct, take_profit_pct
         )
 
-    # 5. 通过 Pipeline 统一下单 (Risk → Execution)
+    # 5. 通过 Pipeline 统一下单 (Risk �?Execution)
     try:
         from app.core.pipeline import get_pipeline
         
@@ -1053,7 +1053,7 @@ def _calc_fixed_stops(
     stop_loss_pct: float,
     take_profit_pct: float,
 ) -> tuple:
-    """计算固定百分比止损止盈"""
+    """计算固定百分比止损止�?""
     if position_side.value == "long":
         stop_loss = current_price * (1 - Decimal(str(stop_loss_pct)) / 100) if stop_loss_pct else None
         take_profit = current_price * (1 + Decimal(str(take_profit_pct)) / 100) if take_profit_pct else None
@@ -1064,7 +1064,7 @@ def _calc_fixed_stops(
 
 
 def _build_validation_report(config: dict) -> dict:
-    """生成策略验证报告 — 让 AI 和用户确认策略实际包含什么"""
+    """生成策略验证报告 �?�?AI 和用户确认策略实际包含什�?""
     is_pipeline = any(k in config for k in ("alphas", "portfolio", "execution"))
     
     if is_pipeline:
@@ -1085,7 +1085,7 @@ def _build_validation_report(config: dict) -> dict:
     entry_conds = entry.get("conditions", [])
     exit_conds = exit_block.get("conditions", [])
 
-    # 收集使用的指标
+    # 收集使用的指�?
     indicators_used = set()
     for cond in entry_conds + exit_conds:
         if "indicator" in cond:
@@ -1093,11 +1093,11 @@ def _build_validation_report(config: dict) -> dict:
         if "reference" in cond:
             indicators_used.add(cond["reference"])
 
-    # 收集使用的功能
+    # 收集使用的功�?
     features = []
     for cond in entry_conds + exit_conds:
         if "timeframe" in cond:
-            features.append("多时间框架")
+            features.append("多时间框�?)
         if "cross" in cond:
             features.append("时序穿越")
         if "expression" in cond:
@@ -1105,13 +1105,13 @@ def _build_validation_report(config: dict) -> dict:
         if "weight" in cond:
             features.append("权重评分")
     if config.get("scoring"):
-        features.append(f"评分阈值={config['scoring'].get('min_score', '?')}")
+        features.append(f"评分阈�?{config['scoring'].get('min_score', '?')}")
     if config.get("stages"):
         features.append(f"分批建仓({len(config['stages'])}阶段)")
     if config.get("time_filter"):
         features.append("时间过滤")
     if risk.get("stop_type") and risk["stop_type"] != "fixed":
-        features.append(f"动态止损({risk['stop_type']})")
+        features.append(f"动态止�?{risk['stop_type']})")
     if risk.get("volatility_adjust"):
         features.append("波动率自适应")
 
@@ -1123,11 +1123,11 @@ def _build_validation_report(config: dict) -> dict:
         "exit_operator": exit_block.get("operator", "OR"),
         "indicators_used": sorted(indicators_used),
         "risk_summary": {
-            "side": risk.get("side", "未设置"),
-            "leverage": risk.get("leverage", "未设置"),
-            "position_pct": risk.get("position_pct", "未设置"),
-            "stop_loss_pct": risk.get("stop_loss_pct", "未设置"),
-            "take_profit_pct": risk.get("take_profit_pct", "未设置"),
+            "side": risk.get("side", "未设�?),
+            "leverage": risk.get("leverage", "未设�?),
+            "position_pct": risk.get("position_pct", "未设�?),
+            "stop_loss_pct": risk.get("stop_loss_pct", "未设�?),
+            "take_profit_pct": risk.get("take_profit_pct", "未设�?),
             "stop_type": risk.get("stop_type", "fixed"),
         },
         "required_timeframes": config.get("_required_timeframes", []),
@@ -1141,7 +1141,7 @@ def _build_validation_report(config: dict) -> dict:
     if len(exit_conds) == 0:
         warnings.append("⚠️ 没有出场条件")
     if not risk.get("side"):
-        warnings.append("⚠️ 未设置 risk.side (buy/sell)")
+        warnings.append("⚠️ 未设�?risk.side (buy/sell)")
     if warnings:
         report["warnings"] = warnings
 
@@ -1162,14 +1162,14 @@ async def create_strategy(
 
     参数:
         name: 策略名称
-        symbol: 交易对
-        interval: K 线周期
-        config_yaml: YAML 格式的策略配置
+        symbol: 交易�?
+        interval: K 线周�?
+        config_yaml: YAML 格式的策略配�?
     """
     from app.services.quant.strategy import StrategyEngine
 
     if not name or not config_yaml:
-        return json.dumps({"error": "缺少必要参数: name 和 config_yaml"}, ensure_ascii=False)
+        return json.dumps({"error": "缺少必要参数: name �?config_yaml"}, ensure_ascii=False)
 
     engine = StrategyEngine()
     try:
@@ -1182,7 +1182,7 @@ async def create_strategy(
     if not report.get("is_valid", False):
         error_msgs = []
         if report.get("unknown_indicators"):
-            error_msgs.append(f"使用了系统不支持的指标: {', '.join(report['unknown_indicators'])}")
+            error_msgs.append(f"使用了系统不支持的指�? {', '.join(report['unknown_indicators'])}")
         if report.get("syntax_errors"):
             error_msgs.extend(report["syntax_errors"])
         if error_msgs:
@@ -1206,7 +1206,7 @@ async def create_strategy(
         "name": strategy.name,
         "symbol": strategy.symbol,
         "interval": strategy.interval,
-        "message": f"策略 '{name}' 已创建 (ID: {strategy.id})，默认未启用",
+        "message": f"策略 '{name}' 已创�?(ID: {strategy.id})，默认未启用",
         "validation_report": report,
     }, ensure_ascii=False)
 
@@ -1218,10 +1218,10 @@ async def list_modules(
     layer: str = "",
 ) -> str:
     """
-    查询可用的策略模块目录
+    查询可用的策略模块目�?
 
     参数:
-        layer: 指定层 (alpha/portfolio/risk/execution)，空=显示全部
+        layer: 指定�?(alpha/portfolio/risk/execution)，空=显示全部
 
     返回:
         各层可用模块清单，含参数说明
@@ -1229,12 +1229,12 @@ async def list_modules(
     from app.services.quant.module_registry import list_modules as _list, get_registry_summary
 
     if layer and layer not in ("alpha", "portfolio", "risk", "execution"):
-        return json.dumps({"error": f"未知层: {layer}。可选: alpha/portfolio/risk/execution"}, ensure_ascii=False)
+        return json.dumps({"error": f"未知�? {layer}。可�? alpha/portfolio/risk/execution"}, ensure_ascii=False)
 
     modules = _list(layer or None)
 
     if not modules:
-        return json.dumps({"error": f"层 '{layer}' 没有可用模块"}, ensure_ascii=False)
+        return json.dumps({"error": f"�?'{layer}' 没有可用模块"}, ensure_ascii=False)
 
     result = []
     for m in modules:
@@ -1259,18 +1259,18 @@ async def create_pipeline_strategy(
     config_yaml: str = "",
 ) -> str:
     """
-    创建多模块流水线策略并保存到数据库
+    创建多模块流水线策略并保存到数据�?
 
     参数:
         name: 策略名称
-        symbol: 交易对
-        interval: K 线周期
-        config_yaml: YAML 格式的 pipeline 策略配置
+        symbol: 交易�?
+        interval: K 线周�?
+        config_yaml: YAML 格式�?pipeline 策略配置
     """
     from app.services.quant.strategy import StrategyEngine
 
     if not name or not config_yaml:
-        return json.dumps({"error": "缺少必要参数: name 和 config_yaml"}, ensure_ascii=False)
+        return json.dumps({"error": "缺少必要参数: name �?config_yaml"}, ensure_ascii=False)
 
     engine = StrategyEngine()
     try:
@@ -1299,7 +1299,7 @@ async def create_pipeline_strategy(
         "name": strategy.name,
         "symbol": strategy.symbol,
         "interval": strategy.interval,
-        "message": f"流水线策略 '{name}' 已创建 (ID: {strategy.id})，默认未启用",
+        "message": f"流水线策�?'{name}' 已创�?(ID: {strategy.id})，默认未启用",
         "validation_report": report,
     }, ensure_ascii=False)
 
@@ -1319,12 +1319,12 @@ async def update_strategy(
 
     参数:
         strategy_id: 策略 ID (数字)
-        name/symbol/interval/config_yaml: 要更新的字段 (空字符串表示不修改)
+        name/symbol/interval/config_yaml: 要更新的字段 (空字符串表示不修�?
     """
     from app.services.quant.strategy import StrategyEngine
 
     if not str(strategy_id).isdigit():
-        return json.dumps({"error": f"无效的策略 ID: {strategy_id}"}, ensure_ascii=False)
+        return json.dumps({"error": f"无效的策�?ID: {strategy_id}"}, ensure_ascii=False)
 
     result = await db.execute(
         select(Strategy).where(
@@ -1334,9 +1334,9 @@ async def update_strategy(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        return json.dumps({"error": f"找不到策略 ID: {strategy_id}"}, ensure_ascii=False)
+        return json.dumps({"error": f"找不到策�?ID: {strategy_id}"}, ensure_ascii=False)
 
-    # 验证新的 YAML (如果提供了)
+    # 验证新的 YAML (如果提供�?
     report = {}
     if config_yaml:
         engine = StrategyEngine()
@@ -1345,12 +1345,12 @@ async def update_strategy(
         except ValueError as e:
             return json.dumps({"error": f"YAML 配置解析失败: {str(e)}"}, ensure_ascii=False)
         
-        # 强校验新的 YAML
+        # 强校验新�?YAML
         report = _build_validation_report(config)
         if not report.get("is_valid", False):
             error_msgs = []
             if report.get("unknown_indicators"):
-                error_msgs.append(f"使用了系统不支持的指标: {', '.join(report['unknown_indicators'])}")
+                error_msgs.append(f"使用了系统不支持的指�? {', '.join(report['unknown_indicators'])}")
             if report.get("syntax_errors"):
                 error_msgs.extend(report["syntax_errors"])
             if error_msgs:
@@ -1369,7 +1369,7 @@ async def update_strategy(
 
     await db.commit()
 
-    # 如果没提供新的 YAML，生成旧 YAML 的验证报告
+    # 如果没提供新�?YAML，生成旧 YAML 的验证报�?
     if not config_yaml:
         try:
             engine = StrategyEngine()
@@ -1384,7 +1384,7 @@ async def update_strategy(
         "name": strategy.name,
         "symbol": strategy.symbol,
         "interval": strategy.interval,
-        "message": f"策略 '{strategy.name}' (ID: {strategy.id}) 已更新",
+        "message": f"策略 '{strategy.name}' (ID: {strategy.id}) 已更�?,
     }
     if report:
         result["validation_report"] = report
@@ -1398,9 +1398,9 @@ async def analyze_trend(
     symbol: str = "BTCUSDT",
 ) -> str:
     """
-    多周期趋势分析 — 分别在 15m/1h/4h/1d 四个周期判断趋势
+    多周期趋势分�?�?分别�?15m/1h/4h/1d 四个周期判断趋势
 
-    并推荐适合当前趋势的策略类型
+    并推荐适合当前趋势的策略类�?
     """
     from app.core.network import net_manager
     from app.services.quant.indicators import (
@@ -1511,11 +1511,11 @@ async def analyze_trend(
     elif macro == "bearish" and micro == "bearish":
         recommendations = ["趋势跟踪策略 (顺势做空)", "RSI 超买做空", "均线死叉策略"]
     elif macro == "bullish" and micro in ["neutral", "bearish"]:
-        recommendations = ["逢低买入策略", "RSI 超卖反弹 (大趋势看涨，短期回调)", "支撑位反弹"]
+        recommendations = ["逢低买入策略", "RSI 超卖反弹 (大趋势看涨，短期回调)", "支撑位反�?]
     elif macro == "bearish" and micro in ["neutral", "bullish"]:
-        recommendations = ["逢高做空策略", "阻力位反弹做空 (大趋势看跌，短期反弹)"]
+        recommendations = ["逢高做空策略", "阻力位反弹做�?(大趋势看跌，短期反弹)"]
     else:
-        recommendations = ["区间震荡策略", "布林带突破", "等待趋势明确再入场"]
+        recommendations = ["区间震荡策略", "布林带突�?, "等待趋势明确再入�?]
 
     return json.dumps({
         "symbol": symbol.upper(),
@@ -1539,12 +1539,12 @@ async def manage_autopilot(
     """
     管理自动交易 (AutoPilot)
     
-    action 可选:
-    - status: 查询当前状态
+    action 可�?
+    - status: 查询当前状�?
     - start: 启动自动交易
     - stop: 停止自动交易
-    - run_once: 手动触发一次决策
-    - logs: 查看最近日志
+    - run_once: 手动触发一次决�?
+    - logs: 查看最近日�?
     """
     from app.services.agent.autopilot import autopilot
     
@@ -1579,7 +1579,7 @@ async def manage_autopilot(
             await autopilot.stop(user_id)
             return json.dumps({
                 "action": "stopped",
-                "message": "AutoPilot 已停止",
+                "message": "AutoPilot 已停�?,
             }, ensure_ascii=False)
         
         elif action == "run_once":
@@ -1626,11 +1626,11 @@ async def manage_grid(
     """
     管理网格交易
     
-    action 可选:
+    action 可�?
     - list: 查看所有网格机器人
-    - start: 创建并启动网格 (需要 symbol/upper_price/lower_price/grid_count/investment)
-    - stop: 停止网格 (需要 grid_id)
-    - delete: 删除网格 (需要 grid_id)
+    - start: 创建并启动网�?(需�?symbol/upper_price/lower_price/grid_count/investment)
+    - stop: 停止网格 (需�?grid_id)
+    - delete: 删除网格 (需�?grid_id)
     """
     from app.services.grid import GridStrategy
     
@@ -1662,7 +1662,7 @@ async def manage_grid(
         
         elif action == "start":
             if upper_price <= 0 or lower_price <= 0:
-                return json.dumps({"error": "必须提供 upper_price 和 lower_price"}, ensure_ascii=False)
+                return json.dumps({"error": "必须提供 upper_price �?lower_price"}, ensure_ascii=False)
             
             # 获取当前价格
             from app.services.exchange import BinanceClient
@@ -1691,7 +1691,7 @@ async def manage_grid(
                 "lower_price": str(bot.lower_price),
                 "grid_count": bot.grid_count,
                 "investment": str(bot.investment),
-                "message": f"网格 {bot.name} 已启动",
+                "message": f"网格 {bot.name} 已启�?,
             }, ensure_ascii=False, default=str)
         
         elif action == "stop":
@@ -1704,7 +1704,7 @@ async def manage_grid(
             return json.dumps({
                 "action": "stopped",
                 "grid_id": bot.id,
-                "message": f"网格 {bot.name} 已停止",
+                "message": f"网格 {bot.name} 已停�?,
             }, ensure_ascii=False, default=str)
         
         elif action == "delete":
@@ -1714,7 +1714,7 @@ async def manage_grid(
             from app.models.grid_bot import GridBot, GridStatus
             bot = await db.get(GridBot, grid_id)
             if not bot or bot.user_id != user_id:
-                return json.dumps({"error": "网格不存在"}, ensure_ascii=False)
+                return json.dumps({"error": "网格不存�?}, ensure_ascii=False)
             if bot.status not in (GridStatus.STOPPED, GridStatus.CREATED, GridStatus.COMPLETED):
                 return json.dumps({"error": "只能删除已停止的网格"}, ensure_ascii=False)
             
@@ -1723,7 +1723,7 @@ async def manage_grid(
             return json.dumps({
                 "action": "deleted",
                 "grid_id": grid_id,
-                "message": "网格已删除",
+                "message": "网格已删�?,
             }, ensure_ascii=False)
         
         else:
@@ -1748,9 +1748,9 @@ async def get_trade_journal(
     """
     查询交易日记
     
-    可选过滤:
-    - source: agent / autopilot / quant / grid / manual (空=全部)
-    - result_filter: win / loss (空=全部)
+    可选过�?
+    - source: agent / autopilot / quant / grid / manual (�?全部)
+    - result_filter: win / loss (�?全部)
     - limit: 返回条数 (默认20)
     """
     from app.models.strategy import TradeMemory
@@ -1810,7 +1810,7 @@ async def get_trade_journal(
                 "situation": t.situation,
                 "what_went_right": t.what_went_right,
                 "what_went_wrong": t.what_went_wrong,
-                "closed_at": t.created_at.isoformat() if t.created_at else None,
+                "closed_at": t.created_at.isoformat() + "Z" if t.created_at else None,
             })
         
         win_rate = round(wins / len(trades) * 100, 1) if trades else 0
@@ -1844,12 +1844,12 @@ async def start_autopilot(
     启动策略自动交易
 
     参数:
-        strategy_id: 策略 ID (数字)。如果为空则启动所有活跃策略
+        strategy_id: 策略 ID (数字)。如果为空则启动所有活跃策�?
 
     说明:
-        启动后 autopilot 调度器会自动按策略设定的周期运行评估:
-        获取行情 → 评估策略信号 → AI 审核 → Pipeline 风控 → 执行
-        每次周期的决策过程会完整记录到决策日志中。
+        启动�?autopilot 调度器会自动按策略设定的周期运行评估:
+        获取行情 �?评估策略信号 �?AI 审核 �?Pipeline 风控 �?执行
+        每次周期的决策过程会完整记录到决策日志中�?
     """
     from app.services.agent.autopilot import autopilot
 
@@ -1865,7 +1865,7 @@ async def start_autopilot(
             )
             strategy = result.scalar_one_or_none()
             if not strategy:
-                return json.dumps({"error": f"策略 ID {sid} 不存在"}, ensure_ascii=False)
+                return json.dumps({"error": f"策略 ID {sid} 不存�?}, ensure_ascii=False)
 
             strategy.is_active = True
             await db.commit()
@@ -1886,11 +1886,11 @@ async def start_autopilot(
                 "strategy_name": strategy.name,
                 "symbol": strategy.symbol,
                 "interval": strategy.interval,
-                "message": f"策略 '{strategy.name}' 自动交易已启动",
+                "message": f"策略 '{strategy.name}' 自动交易已启�?,
             }, ensure_ascii=False)
 
         else:
-            # 启动所有活跃策略
+            # 启动所有活跃策�?
             result = await db.execute(
                 select(Strategy).where(
                     Strategy.user_id == user_id,
@@ -1899,7 +1899,7 @@ async def start_autopilot(
             )
             active = result.scalars().all()
             if not active:
-                return json.dumps({"error": "没有活跃的策略，请先启动一个策略"}, ensure_ascii=False)
+                return json.dumps({"error": "没有活跃的策略，请先启动一个策�?}, ensure_ascii=False)
 
             if not autopilot.is_running(user_id):
                 symbols = list(set(s.symbol for s in active))
@@ -1915,7 +1915,7 @@ async def start_autopilot(
             return json.dumps({
                 "action": "started",
                 "strategies": [{"id": s.id, "name": s.name} for s in active],
-                "message": f"已启动 {len(active)} 个策略的自动交易",
+                "message": f"已启�?{len(active)} 个策略的自动交易",
             }, ensure_ascii=False)
 
     except Exception as e:
@@ -1932,7 +1932,7 @@ async def stop_autopilot(
     停止自动交易
 
     参数:
-        strategy_id: 策略 ID (可选)。如果为空则停止所有自动交易
+        strategy_id: 策略 ID (可�?。如果为空则停止所有自动交�?
     """
     from app.services.agent.autopilot import autopilot
 
@@ -1952,12 +1952,12 @@ async def stop_autopilot(
                 return json.dumps({
                     "action": "stopped",
                     "strategy_id": sid,
-                    "message": f"策略 '{strategy.name}' 已停止",
+                    "message": f"策略 '{strategy.name}' 已停�?,
                 }, ensure_ascii=False)
-            return json.dumps({"error": f"策略 ID {sid} 不存在"}, ensure_ascii=False)
+            return json.dumps({"error": f"策略 ID {sid} 不存�?}, ensure_ascii=False)
         else:
             await autopilot.stop(user_id)
-            # 标记所有策略为非活跃
+            # 标记所有策略为非活�?
             result = await db.execute(
                 select(Strategy).where(
                     Strategy.user_id == user_id,
@@ -1981,7 +1981,7 @@ async def get_autopilot_status(
     user_id: int,
 ):
     """
-    查询自动交易运行状态
+    查询自动交易运行状�?
 
     返回:
         运行状态、监控交易对、运行时长、周期次数、执行操作数
@@ -2017,11 +2017,11 @@ async def get_trading_logs(
     查看最近的自动交易决策日志
 
     参数:
-        symbol: 可选，过滤交易对
+        symbol: 可选，过滤交易�?
         limit: 返回条数 (默认 10)
 
     返回:
-        每条日志包含: 时间、交易对、策略名、决策、AI思考摘要、是否执行
+        每条日志包含: 时间、交易对、策略名、决策、AI思考摘要、是否执�?
     """
     from app.models.autopilot_log import AutopilotLog
 
@@ -2041,7 +2041,7 @@ async def get_trading_logs(
         for l in logs:
             log_list.append({
                 "id": l.id,
-                "time": l.created_at.isoformat() if l.created_at else None,
+                "time": l.created_at.isoformat() + "Z" if l.created_at else None,
                 "symbol": l.symbol,
                 "strategy": l.strategy_name,
                 "decision": l.decision,
@@ -2069,13 +2069,13 @@ async def analyze_trend_now(
     symbol: str = "BTCUSDT",
 ):
     """
-    用活跃趋势方案分析当前市场趋势
+    用活跃趋势方案分析当前市场趋�?
 
     参数:
-        symbol: 交易对 (默认 BTCUSDT)
+        symbol: 交易�?(默认 BTCUSDT)
 
     返回:
-        趋势方向、强度、波动率、动量、市场体制、适合的策略类型
+        趋势方向、强度、波动率、动量、市场体制、适合的策略类�?
     """
     from app.models.trend_scheme import TrendScheme
     from app.services.quant.trend_analyzer import TrendAnalyzer
@@ -2093,7 +2093,7 @@ async def analyze_trend_now(
         if not scheme:
             return json.dumps({"error": "没有活跃的趋势分析方案，请先创建或初始化预置方案"}, ensure_ascii=False)
 
-        # 获取 K 线
+        # 获取 K �?
         from app.core.network import net_manager
         analyzer = TrendAnalyzer()
         config = analyzer.parse_yaml(scheme.config_yaml)
@@ -2155,10 +2155,10 @@ async def get_trend_result(
     获取最近的趋势分析结果 (不重新分析，读取缓存)
 
     参数:
-        symbol: 可选，过滤交易对
+        symbol: 可选，过滤交易�?
 
     返回:
-        所有活跃方案的最近分析结果
+        所有活跃方案的最近分析结�?
     """
     from app.models.trend_scheme import TrendScheme
 
@@ -2172,7 +2172,7 @@ async def get_trend_result(
         schemes = result.scalars().all()
 
         if not schemes:
-            return json.dumps({"error": "没有活跃的趋势分析方案"}, ensure_ascii=False)
+            return json.dumps({"error": "没有活跃的趋势分析方�?}, ensure_ascii=False)
 
         results = []
         for s in schemes:
@@ -2189,7 +2189,7 @@ async def get_trend_result(
                     "momentum": r.get("momentum", "unknown"),
                     "regime": r.get("regime", "unknown"),
                     "suitable": r.get("suitable_strategies", []),
-                    "last_run": s.last_run_at.isoformat() if s.last_run_at else None,
+                    "last_run": s.last_run_at.isoformat() + "Z" if s.last_run_at else None,
                 })
 
         return json.dumps({
@@ -2217,14 +2217,14 @@ async def get_news(
     limit: int = 10,
 ) -> str:
     """
-    查询最新加密货币新闻
+    查询最新加密货币新�?
 
     参数:
-        currency: 币种过滤, 如 BTC / ETH / SOL (空=全部)
-        limit: 返回条数 (默认10, 最大50)
+        currency: 币种过滤, �?BTC / ETH / SOL (�?全部)
+        limit: 返回条数 (默认10, 最�?0)
 
     返回:
-        新闻列表 (标题、中文标题、情绪、重要性、来源、时间)
+        新闻列表 (标题、中文标题、情绪、重要性、来源、时�?
     """
     from app.services.news.service import get_latest_news
 
@@ -2270,10 +2270,10 @@ async def get_market_sentiment(
     查询市场情绪 (基于新闻情感分析)
 
     参数:
-        currency: 币种, 如 BTC / ETH (空=全部)
+        currency: 币种, �?BTC / ETH (�?全部)
 
     返回:
-        整体情绪(看多/看空/中性)、情绪分数、正面/负面/中性新闻数量
+        整体情绪(看多/看空/中�?、情绪分数、正�?负面/中性新闻数�?
     """
     from app.services.news.service import get_market_sentiment as _get_sentiment
 
@@ -2285,7 +2285,7 @@ async def get_market_sentiment(
         )
 
         overall = sentiment.get("overall", "neutral")
-        overall_zh = {"positive": "看多", "negative": "看空", "neutral": "中性"}.get(overall, overall)
+        overall_zh = {"positive": "看多", "negative": "看空", "neutral": "中�?}.get(overall, overall)
 
         return json.dumps({
             "currency": currency,
@@ -2311,10 +2311,10 @@ async def list_alerts(
     user_id: int,
 ) -> str:
     """
-    查看所有新闻监控规则
+    查看所有新闻监控规�?
 
     返回:
-        监控规则列表 (名称、关键词、触发次数、胜率、总盈亏)
+        监控规则列表 (名称、关键词、触发次数、胜率、总盈�?
     """
     from app.services.news.service import get_user_alerts, _alert_to_dict
 
@@ -2371,44 +2371,44 @@ async def create_alert(
     创建新闻监控规则
 
     参数:
-        name: 规则名称, 如 "ETF利好做多"
-        keywords: 关键词列表, 逗号分隔, 如 "ETF,BlackRock,降息"
+        name: 规则名称, �?"ETF利好做多"
+        keywords: 关键词列�? 逗号分隔, �?"ETF,BlackRock,降息"
         action: 动作类型, notify=仅通知, trade=自动交易
-        trade_symbol: 交易对 (action=trade时生效)
+        trade_symbol: 交易�?(action=trade时生�?
         trade_side: 交易方向, buy/sell/auto (auto=根据新闻情感自动判断)
         trade_position_pct: 仓位比例% (1-15)
         trade_leverage: 杠杆倍数 (1-20)
-        trade_stop_loss_pct: 止损百分比
-        trade_take_profit_pct: 止盈百分比
-        news_categories: 可选, 分类过滤, 逗号分隔 (macro/etf/regulation/exchange/whale/project)
-        currencies: 可选, 币种过滤, 逗号分隔 (BTC/ETH/SOL)
+        trade_stop_loss_pct: 止损百分�?
+        trade_take_profit_pct: 止盈百分�?
+        news_categories: 可�? 分类过滤, 逗号分隔 (macro/etf/regulation/exchange/whale/project)
+        currencies: 可�? 币种过滤, 逗号分隔 (BTC/ETH/SOL)
         sentiment_filter: 情感过滤, any/positive/negative
 
     返回:
-        创建成功的规则详情
+        创建成功的规则详�?
     """
     from app.models.news import NewsAlert
     from app.services.news.service import get_user_alerts, _alert_to_dict
 
     try:
         if not name:
-            return json.dumps({"error": "请提供规则名称 (name)"}, ensure_ascii=False)
+            return json.dumps({"error": "请提供规则名�?(name)"}, ensure_ascii=False)
         if not keywords:
             return json.dumps({"error": "请提供关键词 (keywords), 逗号分隔"}, ensure_ascii=False)
 
-        # 检查规则数量限制
+        # 检查规则数量限�?
         existing = await get_user_alerts(db, user_id=user_id)
         if len(existing) >= 20:
-            return json.dumps({"error": "监控规则已达上限 (20条)"}, ensure_ascii=False)
+            return json.dumps({"error": "监控规则已达上限 (20�?"}, ensure_ascii=False)
 
-        # 解析逗号分隔的列表
+        # 解析逗号分隔的列�?
         kw_list = [k.strip() for k in keywords.split(",") if k.strip()]
         cat_list = [c.strip() for c in news_categories.split(",") if c.strip()] if news_categories else None
         cur_list = [c.strip().upper() for c in currencies.split(",") if c.strip()] if currencies else None
 
         # 验证 trade 模式参数
         if action == "trade" and not trade_symbol:
-            return json.dumps({"error": "交易模式需要指定 trade_symbol"}, ensure_ascii=False)
+            return json.dumps({"error": "交易模式需要指�?trade_symbol"}, ensure_ascii=False)
 
         alert = NewsAlert(
             user_id=user_id,
@@ -2465,15 +2465,15 @@ async def update_alert(
             - activate: 启用规则
             - deactivate: 暂停规则
             - delete: 删除规则
-        name: 新名称 (空=不修改)
-        keywords: 新关键词, 逗号分隔 (空=不修改)
-        is_active: "true"/"false" (空=不修改)
-        trade_side: buy/sell/auto (空=不修改)
-        trade_symbol: 交易对 (空=不修改)
-        trade_position_pct: 仓位比例% (0=不修改)
-        trade_leverage: 杠杆倍数 (0=不修改)
-        trade_stop_loss_pct: 止损% (0=不修改)
-        trade_take_profit_pct: 止盈% (0=不修改)
+        name: 新名�?(�?不修�?
+        keywords: 新关键词, 逗号分隔 (�?不修�?
+        is_active: "true"/"false" (�?不修�?
+        trade_side: buy/sell/auto (�?不修�?
+        trade_symbol: 交易�?(�?不修�?
+        trade_position_pct: 仓位比例% (0=不修�?
+        trade_leverage: 杠杆倍数 (0=不修�?
+        trade_stop_loss_pct: 止损% (0=不修�?
+        trade_take_profit_pct: 止盈% (0=不修�?
 
     返回:
         更新后的规则详情
@@ -2484,7 +2484,7 @@ async def update_alert(
 
     try:
         if alert_id <= 0:
-            return json.dumps({"error": "请提供规则 ID (alert_id)"}, ensure_ascii=False)
+            return json.dumps({"error": "请提供规�?ID (alert_id)"}, ensure_ascii=False)
 
         result = await db.execute(
             sa_select(NewsAlert).where(
@@ -2494,26 +2494,26 @@ async def update_alert(
         )
         alert = result.scalar_one_or_none()
         if not alert:
-            return json.dumps({"error": f"规则 #{alert_id} 不存在"}, ensure_ascii=False)
+            return json.dumps({"error": f"规则 #{alert_id} 不存�?}, ensure_ascii=False)
 
         # 删除操作
         if action == "delete":
             alert_name = alert.name
             await db.delete(alert)
             await db.commit()
-            return json.dumps({"message": f"规则 '{alert_name}' 已删除"}, ensure_ascii=False)
+            return json.dumps({"message": f"规则 '{alert_name}' 已删�?}, ensure_ascii=False)
 
         # 快捷启停
         if action == "activate":
             alert.is_active = True
             await db.commit()
-            return json.dumps({"message": f"规则 '{alert.name}' 已启用"}, ensure_ascii=False)
+            return json.dumps({"message": f"规则 '{alert.name}' 已启�?}, ensure_ascii=False)
         if action == "deactivate":
             alert.is_active = False
             await db.commit()
-            return json.dumps({"message": f"规则 '{alert.name}' 已暂停"}, ensure_ascii=False)
+            return json.dumps({"message": f"规则 '{alert.name}' 已暂�?}, ensure_ascii=False)
 
-        # 逐字段更新
+        # 逐字段更�?
         if name:
             alert.name = name
         if keywords:
@@ -2537,7 +2537,7 @@ async def update_alert(
         await db.refresh(alert)
 
         return json.dumps({
-            "message": f"规则 '{alert.name}' 已更新",
+            "message": f"规则 '{alert.name}' 已更�?,
             "alert": _alert_to_dict(alert),
         }, ensure_ascii=False, default=str)
 
@@ -2557,18 +2557,18 @@ async def analyze_news_impact(
     window_hours: str = "1,4,24",
 ) -> str:
     """
-    分析新闻对市场的影响 — 发现新闻-价格关联规律
+    分析新闻对市场的影响 �?发现新闻-价格关联规律
 
-    对过去N天的新闻，计算新闻发布后的价格变化，按分类/情感分组统计，
-    找出"哪类新闻发生后市场如何反应"的规律。
+    对过去N天的新闻，计算新闻发布后的价格变化，按分�?情感分组统计�?
+    找出"哪类新闻发生后市场如何反�?的规律�?
 
     参数:
-        symbol: 交易对 (默认 BTCUSDT)
-        days: 回看天数 (默认30, 最大90)
+        symbol: 交易�?(默认 BTCUSDT)
+        days: 回看天数 (默认30, 最�?0)
         window_hours: 观察窗口, 逗号分隔 (默认 "1,4,24" 表示1h/4h/24h后的涨跌)
 
     返回:
-        各分类/情感组合下的平均涨跌幅、胜率、样本数, 以及发现的规律总结
+        各分�?情感组合下的平均涨跌幅、胜率、样本数, 以及发现的规律总结
     """
     from sqlalchemy import select as sa_select, and_
     from app.models.news import NewsArticle
@@ -2583,7 +2583,7 @@ async def analyze_news_impact(
 
         cutoff = datetime.utcnow() - timedelta(days=days)
 
-        # 1. 查询有 currency 标签的新闻
+        # 1. 查询�?currency 标签的新�?
         news_result = await db.execute(
             sa_select(NewsArticle).where(
                 NewsArticle.published_at >= cutoff,
@@ -2596,14 +2596,14 @@ async def analyze_news_impact(
                 "message": f"过去 {days} 天没有新闻数据，无法分析",
             }, ensure_ascii=False)
 
-        # 2. 对每条新闻，获取发布时 + 各窗口后的价格
+        # 2. 对每条新闻，获取发布�?+ 各窗口后的价�?
         base_symbol = symbol.upper()
         impact_records = []
 
         for article in articles:
             pub_ts = int(article.published_at.timestamp() * 1000)
 
-            # 获取新闻发布时的1h K线 (作为基准价)
+            # 获取新闻发布时的1h K�?(作为基准�?
             base_kline = await db.execute(
                 sa_select(Kline).where(
                     and_(
@@ -2621,7 +2621,7 @@ async def analyze_news_impact(
             if base_price <= 0:
                 continue
 
-            # 各窗口后的价格变化
+            # 各窗口后的价格变�?
             changes = {}
             for w in windows:
                 target_ts = pub_ts + w * 3600 * 1000
@@ -2655,10 +2655,10 @@ async def analyze_news_impact(
 
         if not impact_records:
             return json.dumps({
-                "message": f"有 {len(articles)} 条新闻但无法匹配到 {base_symbol} K线数据",
+                "message": f"�?{len(articles)} 条新闻但无法匹配�?{base_symbol} K线数�?,
             }, ensure_ascii=False)
 
-        # 3. 按 (category, sentiment) 分组统计
+        # 3. �?(category, sentiment) 分组统计
         from collections import defaultdict
         groups = defaultdict(list)
         for rec in impact_records:
@@ -2699,7 +2699,7 @@ async def analyze_news_impact(
 
             group_stats.append(stats_entry)
 
-        # 按 4h 平均涨幅排序
+        # �?4h 平均涨幅排序
         sort_key = "4h_avg_change" if "4h" in windows else f"{windows[0]}h_avg_change"
         group_stats.sort(key=lambda x: abs(x.get(sort_key, 0)), reverse=True)
 
@@ -2716,11 +2716,11 @@ async def analyze_news_impact(
 
                 if avg > 0.5 and wr >= 60:
                     patterns.append({
-                        "rule": f"{s['category']}类 + {s['sentiment']}情感 → {w}h后平均涨{avg:.2f}%",
+                        "rule": f"{s['category']}�?+ {s['sentiment']}情感 �?{w}h后平均涨{avg:.2f}%",
                         "direction": "做多",
                         "avg_change": avg,
                         "win_rate": wr,
-                        "confidence": "高" if (samples >= 5 and wr >= 70) else "中",
+                        "confidence": "�? if (samples >= 5 and wr >= 70) else "�?,
                         "category": s["category"],
                         "sentiment": s["sentiment"],
                         "window": w,
@@ -2729,11 +2729,11 @@ async def analyze_news_impact(
                 elif avg < -0.5 and wr <= 40:
                     real_wr = 100 - wr  # 做空胜率
                     patterns.append({
-                        "rule": f"{s['category']}类 + {s['sentiment']}情感 → {w}h后平均跌{abs(avg):.2f}%",
+                        "rule": f"{s['category']}�?+ {s['sentiment']}情感 �?{w}h后平均跌{abs(avg):.2f}%",
                         "direction": "做空",
                         "avg_change": avg,
                         "win_rate": real_wr,
-                        "confidence": "高" if (samples >= 5 and real_wr >= 70) else "中",
+                        "confidence": "�? if (samples >= 5 and real_wr >= 70) else "�?,
                         "category": s["category"],
                         "sentiment": s["sentiment"],
                         "window": w,
@@ -2744,7 +2744,7 @@ async def analyze_news_impact(
 
         return json.dumps({
             "symbol": base_symbol,
-            "analysis_period": f"过去{days}天",
+            "analysis_period": f"过去{days}�?,
             "total_news": len(articles),
             "matched_news": len(impact_records),
             "windows": [f"{w}h" for w in windows],
@@ -2774,27 +2774,27 @@ async def auto_generate_alerts(
     """
     根据历史新闻-市场关联分析, 自动生成监控规则
 
-    先运行 analyze_news_impact 发现规律, 然后对胜率超过阈值的模式自动创建 Alert。
+    先运�?analyze_news_impact 发现规律, 然后对胜率超过阈值的模式自动创建 Alert�?
 
     参数:
-        symbol: 交易对 (默认 BTCUSDT)
+        symbol: 交易�?(默认 BTCUSDT)
         days: 分析回看天数 (默认30)
-        min_win_rate: 最低胜率阈值% (默认60, 低于此值不创建)
+        min_win_rate: 最低胜率阈�? (默认60, 低于此值不创建)
         min_samples: 最少样本数 (默认3)
         action: 规则动作, notify=仅通知, trade=自动交易
-        trade_position_pct: 仓位% (action=trade时)
-        trade_leverage: 杠杆 (action=trade时)
-        trade_stop_loss_pct: 止损% (action=trade时)
-        trade_take_profit_pct: 止盈% (action=trade时)
+        trade_position_pct: 仓位% (action=trade�?
+        trade_leverage: 杠杆 (action=trade�?
+        trade_stop_loss_pct: 止损% (action=trade�?
+        trade_take_profit_pct: 止盈% (action=trade�?
 
     返回:
-        自动创建的规则列表
+        自动创建的规则列�?
     """
     from app.models.news import NewsAlert
     from app.services.news.service import get_user_alerts
 
     try:
-        # 1. 先运行分析
+        # 1. 先运行分�?
         analysis_result = await analyze_news_impact(
             db=db,
             user_id=user_id,
@@ -2810,18 +2810,18 @@ async def auto_generate_alerts(
         patterns = analysis.get("discovered_patterns", [])
         if not patterns:
             return json.dumps({
-                "message": f"过去{days}天未发现显著的新闻-市场关联规律 (需要更多数据)",
+                "message": f"过去{days}天未发现显著的新�?市场关联规律 (需要更多数�?",
                 "total_news_analyzed": analysis.get("total_news", 0),
             }, ensure_ascii=False)
 
-        # 2. 检查已有规则数量
+        # 2. 检查已有规则数�?
         existing = await get_user_alerts(db, user_id=user_id)
         remaining_slots = 20 - len(existing)
         if remaining_slots <= 0:
-            return json.dumps({"error": "监控规则已达上限(20条), 请先删除旧规则"}, ensure_ascii=False)
+            return json.dumps({"error": "监控规则已达上限(20�?, 请先删除旧规�?}, ensure_ascii=False)
 
-        # 3. 按规则生成 Alert
-        # 分类到关键词的映射
+        # 3. 按规则生�?Alert
+        # 分类到关键词的映�?
         category_keywords = {
             "macro": ["fed", "rate cut", "rate hike", "inflation", "CPI", "GDP", "FOMC", "联储", "降息", "加息"],
             "etf": ["ETF", "BlackRock", "Grayscale", "Fidelity", "inflow", "outflow", "spot ETF"],
@@ -2848,12 +2848,12 @@ async def auto_generate_alerts(
             avg_change = pattern["avg_change"]
             window = pattern.get("window", 4)
 
-            # 生成规则名
+            # 生成规则�?
             cat_zh = {
                 "macro": "宏观", "etf": "ETF", "regulation": "监管",
                 "exchange": "交易所", "whale": "巨鲸", "project": "项目",
             }.get(category, category)
-            sent_zh = {"positive": "利好", "negative": "利空", "neutral": "中性"}.get(sentiment, sentiment)
+            sent_zh = {"positive": "利好", "negative": "利空", "neutral": "中�?}.get(sentiment, sentiment)
 
             name = f"[AI发现] {cat_zh}{sent_zh}→{direction} ({win_rate:.0f}%胜率)"
 
@@ -2861,7 +2861,7 @@ async def auto_generate_alerts(
             if any(e.get("name") == name for e in existing):
                 continue
 
-            # 获取关键词
+            # 获取关键�?
             keywords = category_keywords.get(category, [category])
 
             # 根据方向设置交易方向
@@ -2903,7 +2903,7 @@ async def auto_generate_alerts(
             await db.commit()
 
         return json.dumps({
-            "message": f"基于过去{days}天分析, 自动创建了 {len(created_alerts)} 条监控规则",
+            "message": f"基于过去{days}天分�? 自动创建�?{len(created_alerts)} 条监控规�?,
             "analysis_summary": {
                 "total_news": analysis.get("total_news", 0),
                 "matched_news": analysis.get("matched_news", 0),
@@ -2911,7 +2911,7 @@ async def auto_generate_alerts(
                 "rules_created": len(created_alerts),
             },
             "created_alerts": created_alerts,
-            "skipped_reason": f"跳过胜率<{min_win_rate}%或样本<{min_samples}的模式" if len(patterns) > len(created_alerts) else None,
+            "skipped_reason": f"跳过胜率<{min_win_rate}%或样�?{min_samples}的模�? if len(patterns) > len(created_alerts) else None,
         }, ensure_ascii=False, default=str)
 
     except Exception as e:

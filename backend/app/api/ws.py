@@ -1,13 +1,13 @@
 """
 WebSocket Price Push API
 =========================
-实时价格推送端点
+实时价格推送端�?
 
 功能:
 1. 前端通过 WebSocket 连接获取实时价格
-2. 从 price_stream 服务获取已缓存的价格
+2. �?price_stream 服务获取已缓存的价格
 3. 支持多交易对订阅
-4. 心跳检测保持连接
+4. 心跳检测保持连�?
 
 前端连接:
     const ws = new WebSocket('ws://localhost:8000/api/ws/prices')
@@ -17,7 +17,7 @@ WebSocket Price Push API
     }
 
 消息格式:
-    发送: { "type": "subscribe", "symbols": ["BTCUSDT", "ETHUSDT"] }
+    发�? { "type": "subscribe", "symbols": ["BTCUSDT", "ETHUSDT"] }
     接收: { "type": "price_update", "prices": { "BTCUSDT": "78000.5", ... }, "timestamp": "..." }
 """
 
@@ -36,7 +36,7 @@ router = APIRouter()
 
 
 class ConnectionManager:
-    """WebSocket 连接管理器"""
+    """WebSocket 连接管理�?""
     
     def __init__(self):
         self.active_connections: list[WebSocket] = []
@@ -56,7 +56,7 @@ class ConnectionManager:
         logger.info(f"[WS] Client disconnected, total={len(self.active_connections)}")
     
     async def broadcast(self, message: dict):
-        """广播消息给所有连接"""
+        """广播消息给所有连�?""
         data = json.dumps(message)
         disconnected = []
         
@@ -66,28 +66,28 @@ class ConnectionManager:
             except Exception:
                 disconnected.append(ws)
         
-        # 清理断开的连接
+        # 清理断开的连�?
         for ws in disconnected:
             self.disconnect(ws)
 
 
-# 全局连接管理器
+# 全局连接管理�?
 manager = ConnectionManager()
 
 
 @router.websocket("/prices")
 async def websocket_prices(websocket: WebSocket):
     """
-    实时价格推送
+    实时价格推�?
     
     每秒推送所有交易对的最新价格，
-    数据来源: price_stream 服务缓存的价格。
+    数据来源: price_stream 服务缓存的价格�?
     """
     await manager.connect(websocket)
     
     try:
         while True:
-            # 收集所有交易对的最新价格
+            # 收集所有交易对的最新价�?
             prices = {}
             for symbol in [
                 "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT",
@@ -97,15 +97,15 @@ async def websocket_prices(websocket: WebSocket):
                 if price is not None:
                     prices[symbol] = str(price)
             
-            # 推送价格更新
+            # 推送价格更�?
             if prices:
                 await websocket.send_json({
                     "type": "price_update",
                     "prices": prices,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
                 })
             
-            # 每秒推送一次
+            # 每秒推送一�?
             await asyncio.sleep(1)
             
     except WebSocketDisconnect:

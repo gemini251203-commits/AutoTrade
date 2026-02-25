@@ -2,14 +2,14 @@
 MarketCollector - 市场数据采集服务
 ===================================
 后台运行的数据采集服务，负责:
-1. 启动时回填历史 K 线数据
-2. 定时获取最新 K 线
-3. 写入 PostgreSQL + 推送 Redis
+1. 启动时回填历�?K 线数�?
+2. 定时获取最�?K �?
+3. 写入 PostgreSQL + 推�?Redis
 
-⚠️ 数据一致性:
-- 字段名使用下划线格式 (open_time, 非 openTime)
-- 价格使用 Decimal 字符串
-- 时间戳使用毫秒
+⚠️ 数据一致�?
+- 字段名使用下划线格式 (open_time, �?openTime)
+- 价格使用 Decimal 字符�?
+- 时间戳使用毫�?
 """
 
 import asyncio
@@ -32,10 +32,10 @@ from app.services.trading import OrderExecutor
 
 class MarketCollector:
     """
-    市场数据采集器
+    市场数据采集�?
     
     功能:
-    1. 后台循环采集 K 线数据
+    1. 后台循环采集 K 线数�?
     2. 支持多币种、多周期
     3. 自动回填历史数据
     4. 实时行情推送到 Redis
@@ -48,8 +48,8 @@ class MarketCollector:
     ]
     INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
     
-    # 采集频率 (秒)
-    FETCH_INTERVAL = 60  # 每分钟采集一次
+    # 采集频率 (�?
+    FETCH_INTERVAL = 60  # 每分钟采集一�?
     
     # Redis 键前缀
     REDIS_KEY_PREFIX = "autotrade:market:"
@@ -71,7 +71,7 @@ class MarketCollector:
         return self._redis
     
     async def start(self):
-        """启动采集器"""
+        """启动采集�?""
         if self._running:
             logger.warning("[MarketCollector] Already running")
             return
@@ -84,7 +84,7 @@ class MarketCollector:
         logger.info("[MarketCollector] Background task started")
     
     async def stop(self):
-        """停止采集器"""
+        """停止采集�?""
         self._running = False
         
         if self._task:
@@ -101,8 +101,8 @@ class MarketCollector:
         logger.info("[MarketCollector] Stopped")
     
     async def _run_loop(self):
-        """主循环"""
-        # 首次启动时回填历史数据
+        """主循�?""
+        # 首次启动时回填历史数�?
         await self._backfill_all()
         
         # 深度回填（如果启用）
@@ -122,7 +122,7 @@ class MarketCollector:
                 break
             except Exception as e:
                 logger.error(f"[MarketCollector] Loop error: {e}")
-                await asyncio.sleep(5)  # 出错后等待 5 秒重试
+                await asyncio.sleep(5)  # 出错后等�?5 秒重�?
     
     async def _backfill_all(self):
         """回填所有币种的历史数据"""
@@ -145,13 +145,13 @@ class MarketCollector:
         回填指定币种和周期的历史数据
         
         Args:
-            symbol: 交易对
+            symbol: 交易�?
             interval: 时间周期
             limit: 回填数量
         """
         logger.debug(f"[MarketCollector] Backfilling {symbol} {interval} x{limit}")
         
-        # 从币安获取 K 线
+        # 从币安获�?K �?
         klines = await self._client.get_klines(symbol, interval, limit)
         
         if not klines:
@@ -164,12 +164,12 @@ class MarketCollector:
         logger.info(f"[MarketCollector] Backfilled {len(klines)} klines for {symbol} {interval}")
     
     async def _deep_backfill(self):
-        """深度回填历史数据（按配置回填更长周期）"""
+        """深度回填历史数据（按配置回填更长周期�?""
         from app.core.config import settings
         intervals = [s.strip() for s in settings.deep_backfill_intervals.split(",")]
         days = settings.deep_backfill_days
         
-        logger.info(f"[DeepBackfill] 开始深度回填: {days}天, 周期={intervals}")
+        logger.info(f"[DeepBackfill] 开始深度回�? {days}�? 周期={intervals}")
         
         for symbol in self.SYMBOLS:
             for interval in intervals:
@@ -179,16 +179,16 @@ class MarketCollector:
                     logger.error(f"[DeepBackfill] {symbol} {interval} 失败: {e}")
                 await asyncio.sleep(0.3)
         
-        logger.info("[DeepBackfill] ✅ 深度回填完成")
+        logger.info("[DeepBackfill] �?深度回填完成")
     
     async def _deep_backfill_symbol(self, symbol: str, interval: str, days: int):
-        """深度回填单个币种和周期"""
+        """深度回填单个币种和周�?""
         from datetime import timedelta
         import time as time_module
         
         target_start_ms = int((time_module.time() - days * 86400) * 1000)
         
-        # 查询数据库中已有的最早数据
+        # 查询数据库中已有的最早数�?
         from sqlalchemy import select, func
         from app.models.market import Kline
         
@@ -202,10 +202,10 @@ class MarketCollector:
             earliest = result.scalar()
         
         if earliest and earliest <= target_start_ms:
-            logger.debug(f"[DeepBackfill] {symbol} {interval} 已有足够数据，跳过")
+            logger.debug(f"[DeepBackfill] {symbol} {interval} 已有足够数据，跳�?)
             return
         
-        # 从已有最早数据向前翻页
+        # 从已有最早数据向前翻�?
         end_time_ms = earliest - 1 if earliest else int(time_module.time() * 1000)
         total_fetched = 0
         max_pages = 50  # 安全上限
@@ -230,10 +230,10 @@ class MarketCollector:
             await asyncio.sleep(0.5)
         
         if total_fetched > 0:
-            logger.info(f"[DeepBackfill] ✅ {symbol} {interval} 回填 {total_fetched} 条 ({days}天)")
+            logger.info(f"[DeepBackfill] �?{symbol} {interval} 回填 {total_fetched} �?({days}�?")
     
     async def _fetch_all_latest(self):
-        """获取所有币种的最新数据"""
+        """获取所有币种的最新数�?""
         price_map = {}  # 用于风险监控
         
         for symbol in self.SYMBOLS:
@@ -248,7 +248,7 @@ class MarketCollector:
                     if current_price > 0:
                         price_map[symbol] = current_price
                         
-                        # 🔥 检查限价单是否可成交
+                        # 🔥 检查限价单是否可成�?
                         async with AsyncSessionLocal() as db:
                             filled = await OrderExecutor.check_limit_orders(
                                 db, symbol, current_price
@@ -278,7 +278,7 @@ class MarketCollector:
                                     f"[MarketCollector] {len(triggered)} conditional orders triggered for {symbol}"
                                 )
                 
-                # 获取最新 K 线 (只取最新 2 条，确保覆盖当前和上一根)
+                # 获取最�?K �?(只取最�?2 条，确保覆盖当前和上一�?
                 for interval in self.INTERVALS:
                     klines = await self._client.get_klines(symbol, interval, limit=2)
                     if klines:
@@ -292,9 +292,9 @@ class MarketCollector:
     
     async def _save_klines(self, symbol: str, interval: str, klines: List[dict]):
         """
-        批量保存 K 线到数据库 (UPSERT 逻辑)
+        批量保存 K 线到数据�?(UPSERT 逻辑)
         
-        使用 PostgreSQL 的 ON CONFLICT DO UPDATE 防止重复插入
+        使用 PostgreSQL �?ON CONFLICT DO UPDATE 防止重复插入
         """
         if not klines:
             return
@@ -321,7 +321,7 @@ class MarketCollector:
                 # PostgreSQL UPSERT
                 stmt = insert(Kline).values(values)
                 stmt = stmt.on_conflict_do_update(
-                    constraint="uq_kline_unique",  # 唯一约束名
+                    constraint="uq_kline_unique",  # 唯一约束�?
                     set_={
                         "open": stmt.excluded.open,
                         "high": stmt.excluded.high,
@@ -368,10 +368,10 @@ class MarketCollector:
                 "high": ticker.get("highPrice", "0"),
                 "low": ticker.get("lowPrice", "0"),
                 "volume": ticker.get("volume", "0"),
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat() + "Z",
             })
             
-            # 设置过期时间 (5 分钟)，防止过期数据残留
+            # 设置过期时间 (5 分钟)，防止过期数据残�?
             await r.expire(key, 300)
             
         except Exception as e:

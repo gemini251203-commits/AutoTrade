@@ -1,13 +1,13 @@
 """
-Funding Rate API — 资金费率端点
+Funding Rate API �?资金费率端点
 =================================
 提供资金费率查询接口, 支持所有系统内币种
 
 端点:
 - GET  /api/funding/rates          所有交易对当前费率
-- GET  /api/funding/rates/{symbol} 单个交易对详情 (含年化)
+- GET  /api/funding/rates/{symbol} 单个交易对详�?(含年�?
 - GET  /api/funding/history/{symbol} 历史费率
-- GET  /api/funding/my-fees        用户累计被扣的资金费用
+- GET  /api/funding/my-fees        用户累计被扣的资金费�?
 """
 
 from decimal import Decimal
@@ -25,9 +25,9 @@ router = APIRouter()
 @router.get("/rates")
 async def get_all_rates():
     """
-    获取所有交易对的当前资金费率 (从内存缓存读取)
+    获取所有交易对的当前资金费�?(从内存缓存读�?
 
-    返回系统中所有币种的费率、标记价、下次结算时间
+    返回系统中所有币种的费率、标记价、下次结算时�?
     """
     cached = FundingRateService.get_all_cached_rates()
     if not cached:
@@ -46,11 +46,11 @@ async def get_all_rates():
             "funding_rate_pct": f"{rate * 100:.4f}%",
             "annualized_pct": f"{annualized:.2f}%",
             "next_funding_time": data.get("nextFundingTime", 0),
-            "direction": "多头付费" if rate > 0 else "空头付费" if rate < 0 else "零费率",
+            "direction": "多头付费" if rate > 0 else "空头付费" if rate < 0 else "零费�?,
             "updated_at": data.get("updated_at"),
         })
 
-    # 按费率绝对值降序排列
+    # 按费率绝对值降序排�?
     result.sort(key=lambda x: abs(float(x.get("funding_rate", 0))), reverse=True)
     return {"rates": result, "count": len(result)}
 
@@ -58,11 +58,11 @@ async def get_all_rates():
 @router.get("/rates/{symbol}")
 async def get_rate_detail(symbol: str):
     """
-    获取单个交易对的完整费率信息 (含年化、下次结算倒计时)
+    获取单个交易对的完整费率信息 (含年化、下次结算倒计�?
     """
     info = await funding_rate_service.get_funding_info(symbol.upper())
     if not info:
-        return {"error": f"无法获取 {symbol} 的费率信息"}
+        return {"error": f"无法获取 {symbol} 的费率信�?}
     return info
 
 
@@ -85,7 +85,7 @@ async def get_my_fees(
     user: CurrentUser,
 ):
     """
-    查询当前用户的资金费率累计信息
+    查询当前用户的资金费率累计信�?
 
     包含:
     - 各仓位的累计费用
@@ -94,7 +94,7 @@ async def get_my_fees(
     from app.models.position import Position, PositionStatus
     from app.models.wallet_transaction import WalletTransaction, TransactionType
 
-    # 活跃仓位的费用
+    # 活跃仓位的费�?
     pos_result = await db.execute(
         select(Position).where(
             Position.user_id == user.id,
@@ -114,7 +114,7 @@ async def get_my_fees(
             "total_funding_fee": fee,
         })
 
-    # 总计 (从流水统计)
+    # 总计 (从流水统�?
     total_result = await db.execute(
         select(func.coalesce(func.sum(WalletTransaction.amount), 0)).where(
             WalletTransaction.user_id == user.id,
@@ -123,7 +123,7 @@ async def get_my_fees(
     )
     total_funding = float(total_result.scalar() or 0)
 
-    # 最近 20 条资金费率流水
+    # 最�?20 条资金费率流�?
     recent_result = await db.execute(
         select(WalletTransaction).where(
             WalletTransaction.user_id == user.id,
@@ -136,7 +136,7 @@ async def get_my_fees(
             "amount": float(tx.amount),
             "balance_after": float(tx.balance_after),
             "note": tx.note,
-            "created_at": tx.created_at.isoformat() if tx.created_at else None,
+            "created_at": tx.created_at.isoformat() + "Z" if tx.created_at else None,
         }
         for tx in recent_result.scalars().all()
     ]

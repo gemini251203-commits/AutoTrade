@@ -1,12 +1,12 @@
 """
-Indicator Service - 技术指标计算服务
+Indicator Service - 技术指标计算服�?
 ======================================
-为 AI 提供技术指标数据
+�?AI 提供技术指标数�?
 
 功能:
-1. 从数据库读取 K 线数据
-2. 计算技术指标 (RSI, MACD, MA, ATR)
-3. 缓存到 Redis 供 AI 调用
+1. 从数据库读取 K 线数�?
+2. 计算技术指�?(RSI, MACD, MA, ATR)
+3. 缓存�?Redis �?AI 调用
 4. 可扩展架构，便于添加更多指标
 
 指标列表:
@@ -36,15 +36,15 @@ from app.models.market import Kline
 
 class IndicatorService:
     """
-    技术指标计算服务
+    技术指标计算服�?
     
-    计算并缓存技术指标，供 AI 分析使用
+    计算并缓存技术指标，�?AI 分析使用
     """
     
     # Redis Key 前缀
     REDIS_KEY_PREFIX = "autotrade:indicators:"
     
-    # 指标缓存时间 (秒)
+    # 指标缓存时间 (�?
     CACHE_TTL = 300  # 5分钟
     
     # 默认周期
@@ -70,7 +70,7 @@ class IndicatorService:
         limit: int = 100
     ) -> List[Dict]:
         """
-        从数据库获取 K 线数据，数据库为空时 fallback 到 Binance API
+        从数据库获取 K 线数据，数据库为空时 fallback �?Binance API
         
         Returns:
             List of kline dicts with: open, high, low, close, volume
@@ -99,7 +99,7 @@ class IndicatorService:
                     })
                 return data
         
-        # 2. 数据库无数据 → fallback 到 Binance API
+        # 2. 数据库无数据 �?fallback �?Binance API
         try:
             from app.services.exchange import BinanceClient
             client = BinanceClient()
@@ -135,11 +135,11 @@ class IndicatorService:
         # 计算价格变化
         changes = [closes[i] - closes[i-1] for i in range(1, len(closes))]
         
-        # 分离上涨和下跌
+        # 分离上涨和下�?
         gains = [c if c > 0 else 0 for c in changes]
         losses = [-c if c < 0 else 0 for c in changes]
         
-        # 计算平均 (使用最近 period 个)
+        # 计算平均 (使用最�?period �?
         avg_gain = sum(gains[-period:]) / period
         avg_loss = sum(losses[-period:]) / period
         
@@ -181,8 +181,8 @@ class IndicatorService:
         
         macd_line = ema_fast - ema_slow
         
-        # 简化: 使用最后一个 MACD 值作为信号线估算
-        signal_line = macd_line * 0.9  # 简化处理
+        # 简�? 使用最后一�?MACD 值作为信号线估算
+        signal_line = macd_line * 0.9  # 简化处�?
         histogram = macd_line - signal_line
         
         return {
@@ -236,7 +236,7 @@ class IndicatorService:
         """
         计算成交量变化率 (量比)
         
-        当前成交量 / 过去 N 期平均成交量
+        当前成交�?/ 过去 N 期平均成交量
         """
         if len(volumes) < period + 1:
             return None
@@ -256,7 +256,7 @@ class IndicatorService:
         interval: str = "1h"
     ) -> Dict[str, Any]:
         """
-        计算所有技术指标
+        计算所有技术指�?
         
         Returns:
             {
@@ -275,7 +275,7 @@ class IndicatorService:
                 "updated_at": "2026-02-02T11:30:00"
             }
         """
-        # 获取 K 线数据
+        # 获取 K 线数�?
         klines = await self.get_klines(symbol, interval, limit=100)
         
         if not klines:
@@ -285,10 +285,10 @@ class IndicatorService:
                 "interval": interval,
                 "indicators": {},
                 "trend": "unknown",
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat() + "Z",
             }
         
-        # 提取收盘价和成交量
+        # 提取收盘价和成交�?
         closes = [k["close"] for k in klines]
         volumes = [k["volume"] for k in klines]
         
@@ -320,10 +320,10 @@ class IndicatorService:
                 "volume_ratio": volume_ratio,
             },
             "trend": trend,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat() + "Z",
         }
         
-        # 缓存到 Redis
+        # 缓存�?Redis
         try:
             r = await self._get_redis()
             key = f"{self.REDIS_KEY_PREFIX}{symbol.upper()}:{interval}"
@@ -336,7 +336,7 @@ class IndicatorService:
     
     async def get_cached(self, symbol: str, interval: str = "1h") -> Optional[Dict]:
         """
-        获取缓存的指标 (如果存在)
+        获取缓存的指�?(如果存在)
         """
         try:
             r = await self._get_redis()
@@ -350,7 +350,7 @@ class IndicatorService:
     
     async def get_or_calculate(self, symbol: str, interval: str = "1h") -> Dict:
         """
-        获取指标 (优先缓存，否则计算)
+        获取指标 (优先缓存，否则计�?
         """
         cached = await self.get_cached(symbol, interval)
         if cached:
@@ -359,19 +359,19 @@ class IndicatorService:
     
     def format_for_ai(self, indicators: Dict) -> str:
         """
-        格式化指标数据为 AI 可读的文本
+        格式化指标数据为 AI 可读的文�?
         """
         if not indicators.get("indicators"):
-            return f"暂无 {indicators.get('symbol', 'Unknown')} 的技术指标数据。"
+            return f"暂无 {indicators.get('symbol', 'Unknown')} 的技术指标数据�?
         
         ind = indicators["indicators"]
         trend = indicators.get("trend", "unknown")
         price = indicators.get("current_price", 0)
         
-        trend_cn = {"bullish": "看涨", "bearish": "看跌", "neutral": "中性"}.get(trend, "未知")
+        trend_cn = {"bullish": "看涨", "bearish": "看跌", "neutral": "中�?}.get(trend, "未知")
         
         text = f"""
-**{indicators['symbol']} 技术分析** (周期: {indicators['interval']})
+**{indicators['symbol']} 技术分�?* (周期: {indicators['interval']})
 
 当前价格: ${price:,.2f}
 趋势判断: {trend_cn}
