@@ -710,6 +710,36 @@ async def get_strategy_detail(
     return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False, default=str)
 
 
+@register_tool
+async def delete_strategy(
+    db: AsyncSession,
+    user_id: int,
+    strategy_id: int = 0,
+) -> str:
+    """删除指定策略"""
+    if not strategy_id:
+        return json.dumps({"error": "请提供 strategy_id"}, ensure_ascii=False, default=str)
+    
+    result = await db.execute(
+        select(Strategy).where(Strategy.id == strategy_id, Strategy.user_id == user_id)
+    )
+    strategy = result.scalar_one_or_none()
+    
+    if not strategy:
+        return json.dumps({"error": f"找不到策略 ID={strategy_id}，或该策略不属于你"}, ensure_ascii=False, default=str)
+    
+    name = strategy.name
+    await db.delete(strategy)
+    await db.commit()
+    
+    return json.dumps({
+        "action": "deleted",
+        "id": strategy_id,
+        "name": name,
+        "message": f"策略 '{name}' (ID: {strategy_id}) 已删除",
+    }, ensure_ascii=False, default=str)
+
+
 async def _fetch_klines_map(symbol: str, timeframes: list) -> dict:
     """
     获取多时间框架 K 线数据

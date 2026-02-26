@@ -118,6 +118,11 @@ TOOLS_DESCRIPTION = """
     - ⚠️ 系统会自动验证: YAML语法→指标白名单→干跑评估, 任一失败则保留旧配置
     示例: [TOOL_CALL: update_strategy(strategy_id=1)]
 
+20. delete_strategy(strategy_id) - 删除指定策略
+    - strategy_id: 策略 ID (必填，整数)
+    - ⚠️ 删除前先用 list_strategies 确认 ID，不要猜测 ID
+    示例: [TOOL_CALL: delete_strategy(strategy_id=6)]
+
 ⚠️ **策略条件中只能使用以下指标** (使用不在列表中的指标会被拒绝):
   均线: ema_5, ema_10, ema_20, ema_50, ema_100, ma7, ma25, ma99
   动量: rsi, macd, macd_histogram, macd_signal
