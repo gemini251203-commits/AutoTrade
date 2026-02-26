@@ -29,8 +29,9 @@ from . import memory
 
 
 # 工具调用正则: [TOOL_CALL: tool_name(param1=value1, param2=value2)]
+# 使用 .*? 非贪婪匹配，支持参数值中包含括号 (如 name=策略(V2))
 TOOL_CALL_PATTERN = re.compile(
-    r'\[TOOL_CALL:\s*(\w+)\(([^)]*)\)\]'
+    r'\[TOOL_CALL:\s*(\w+)\((.*?)\)\]'
 )
 
 
