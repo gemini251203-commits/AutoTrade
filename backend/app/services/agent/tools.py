@@ -59,7 +59,7 @@ async def get_price(db: AsyncSession, user_id: int, symbol: str = "BTCUSDT") -> 
                 "high_24h": float(ticker.get("highPrice", 0)),
                 "low_24h": float(ticker.get("lowPrice", 0)),
                 "volume_24h": float(ticker.get("volume", 0)),
-            }, ensure_ascii=False)
+            }, ensure_ascii=False, default=str)
     except Exception as e:
         logger.warning(f"[AgentTools] get_price failed: {e}")
 
@@ -76,7 +76,7 @@ async def get_price(db: AsyncSession, user_id: int, symbol: str = "BTCUSDT") -> 
             "symbol": symbol.upper(),
             "price": float(kline.close),
             "source": "database",
-        }, ensure_ascii=False)
+        }, ensure_ascii=False, default=str)
 
     return json.dumps({"error": f"无法获取 {symbol} 价格"}, ensure_ascii=False, default=str)
 
@@ -140,7 +140,7 @@ async def get_klines(
         "interval": interval,
         "count": len(data),
         "data": data,
-    }, ensure_ascii=False)
+    }, ensure_ascii=False, default=str)
 
 
 # ==================== 账户工具 ====================
@@ -161,7 +161,7 @@ async def get_balance(db: AsyncSession, user_id: int) -> str:
         "frozen": float(wallet.frozen),
         "total_equity": float(wallet.total_equity),
         "total_pnl": float(wallet.total_pnl),
-    }, ensure_ascii=False)
+    }, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -279,7 +279,7 @@ async def place_order(
                     "success": False,
                     "error": validation["error"],
                     "suggestion": validation["suggestion"],
-                }, ensure_ascii=False)
+                }, ensure_ascii=False, default=str)
 
             # 检查保证金是否够
             notional = quantity * current_price
@@ -309,7 +309,7 @@ async def place_order(
                         "notional": round(safe_notional, 2),
                     },
                     "hint": f"建议使用 quantity={safe_qty}, leverage={leverage} 重试下单。",
-                }, ensure_ascii=False)
+                }, ensure_ascii=False, default=str)
 
         # ==================== 通过预检验, 执行下单 ====================
         order_side = OrderSide(side.lower())
@@ -402,7 +402,7 @@ async def close_position(
             "symbol": position.symbol,
             "realized_pnl": float(realized_pnl),
             "message": f"仓位 #{position.id} 已平仓，盈亏 {float(realized_pnl):+.2f} USDT",
-        }, ensure_ascii=False)
+        }, ensure_ascii=False, default=str)
 
     except PositionError as e:
         return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False, default=str)
@@ -434,7 +434,7 @@ async def cancel_order(
             "order_id": order.id,
             "symbol": order.symbol,
             "message": f"订单 #{order.id} 已取消",
-        }, ensure_ascii=False)
+        }, ensure_ascii=False, default=str)
 
     except OrderError as e:
         return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False, default=str)
@@ -543,7 +543,7 @@ async def analyze_market(
         return json.dumps({
             "symbol": symbol.upper(),
             "analysis": result,
-        }, ensure_ascii=False)
+        }, ensure_ascii=False, default=str)
     except Exception as e:
         logger.warning(f"[AgentTools] analyze_market failed: {e}")
         return json.dumps({"error": f"市场分析失败: {str(e)}"}, ensure_ascii=False, default=str)
@@ -571,7 +571,7 @@ async def query_memories(
         return json.dumps({
             "memories": [],
             "message": f"暂无 {symbol} 的交易记忆",
-        }, ensure_ascii=False)
+        }, ensure_ascii=False, default=str)
 
     source_labels = {
         "manual": "手动", "agent": "AI Agent",
@@ -651,7 +651,7 @@ async def list_strategies(
         "strategies": strategies,
         "user_count": len(user_strategies),
         "template_count": len(templates),
-    }, ensure_ascii=False)
+    }, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -1209,7 +1209,7 @@ async def create_strategy(
         "interval": strategy.interval,
         "message": f"策略 '{name}' 已创建 (ID: {strategy.id})，默认未启用",
         "validation_report": report,
-    }, ensure_ascii=False)
+    }, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -1266,7 +1266,7 @@ async def update_strategy(
             return json.dumps({
                 "error": f"YAML 解析失败: {str(e)}",
                 "hint": "请检查 YAML 语法是否正确",
-            }, ensure_ascii=False)
+            }, ensure_ascii=False, default=str)
 
         # Step 2: 验证指标和结构
         report = _build_validation_report(config)
@@ -1279,7 +1279,7 @@ async def update_strategy(
             return json.dumps({
                 "error": f"策略配置无效: {'; '.join(error_msgs)}",
                 "old_config_preserved": True,
-            }, ensure_ascii=False)
+            }, ensure_ascii=False, default=str)
 
         # Step 3: 干跑评估 — 确保策略能正常运行
         try:
@@ -1293,7 +1293,7 @@ async def update_strategy(
                 "error": f"干跑评估失败 (策略无法运行): {str(e)}",
                 "old_config_preserved": True,
                 "hint": "请检查 entry/exit 条件中的指标名称和参数是否正确",
-            }, ensure_ascii=False)
+            }, ensure_ascii=False, default=str)
 
         # 所有验证通过, 更新配置
         strategy.config_yaml = config_yaml
@@ -1321,7 +1321,7 @@ async def update_strategy(
         "name": strategy.name,
         "changes": changes,
         "message": f"策略 '{strategy.name}' (ID:{strategy.id}) 更新成功: {', '.join(changes)}",
-    }, ensure_ascii=False)
+    }, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -1414,7 +1414,7 @@ async def create_pipeline_strategy(
         "interval": strategy.interval,
         "message": f"流水线策略 '{name}' 已创建 (ID: {strategy.id})，默认未启用",
         "validation_report": report,
-    }, ensure_ascii=False)
+    }, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -1693,7 +1693,7 @@ async def manage_autopilot(
             return json.dumps({
                 "action": "stopped",
                 "message": "AutoPilot 已停止",
-            }, ensure_ascii=False)
+            }, ensure_ascii=False, default=str)
         
         elif action == "run_once":
             symbol = symbols.split(",")[0].strip().upper()
@@ -1716,7 +1716,7 @@ async def manage_autopilot(
             return json.dumps({
                 "error": f"未知操作: {action}",
                 "valid_actions": ["status", "start", "stop", "run_once", "logs"],
-            }, ensure_ascii=False)
+            }, ensure_ascii=False, default=str)
     
     except Exception as e:
         logger.error(f"[AgentTools] manage_autopilot failed: {e}")
@@ -1837,13 +1837,13 @@ async def manage_grid(
                 "action": "deleted",
                 "grid_id": grid_id,
                 "message": "网格已删除",
-            }, ensure_ascii=False)
+            }, ensure_ascii=False, default=str)
         
         else:
             return json.dumps({
                 "error": f"未知操作: {action}",
                 "valid_actions": ["list", "start", "stop", "delete"],
-            }, ensure_ascii=False)
+            }, ensure_ascii=False, default=str)
     
     except Exception as e:
         logger.error(f"[AgentTools] manage_grid failed: {e}")
@@ -2000,7 +2000,7 @@ async def start_autopilot(
                 "symbol": strategy.symbol,
                 "interval": strategy.interval,
                 "message": f"策略 '{strategy.name}' 自动交易已启动",
-            }, ensure_ascii=False)
+            }, ensure_ascii=False, default=str)
 
         else:
             # 启动所有活跃策略
@@ -2029,7 +2029,7 @@ async def start_autopilot(
                 "action": "started",
                 "strategies": [{"id": s.id, "name": s.name} for s in active],
                 "message": f"已启动 {len(active)} 个策略的自动交易",
-            }, ensure_ascii=False)
+            }, ensure_ascii=False, default=str)
 
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
@@ -2066,7 +2066,7 @@ async def stop_autopilot(
                     "action": "stopped",
                     "strategy_id": sid,
                     "message": f"策略 '{strategy.name}' 已停止",
-                }, ensure_ascii=False)
+                }, ensure_ascii=False, default=str)
             return json.dumps({"error": f"策略 ID {sid} 不存在"}, ensure_ascii=False, default=str)
         else:
             await autopilot.stop(user_id)
@@ -2083,7 +2083,7 @@ async def stop_autopilot(
             return json.dumps({
                 "action": "stopped",
                 "message": "所有自动交易已停止",
-            }, ensure_ascii=False)
+            }, ensure_ascii=False, default=str)
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
 
@@ -2252,7 +2252,7 @@ async def analyze_trend_now(
             "suitable": trend_result.suitable_strategies,
             "unsuitable": trend_result.unsuitable_strategies,
             "summary": trend_result.summary(),
-        }, ensure_ascii=False)
+        }, ensure_ascii=False, default=str)
 
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
@@ -2707,7 +2707,7 @@ async def analyze_news_impact(
         if not articles:
             return json.dumps({
                 "message": f"过去 {days} 天没有新闻数据，无法分析",
-            }, ensure_ascii=False)
+            }, ensure_ascii=False, default=str)
 
         # 2. 对每条新闻，获取发布时 + 各窗口后的价格
         base_symbol = symbol.upper()
@@ -2769,7 +2769,7 @@ async def analyze_news_impact(
         if not impact_records:
             return json.dumps({
                 "message": f"有 {len(articles)} 条新闻但无法匹配到 {base_symbol} K线数据",
-            }, ensure_ascii=False)
+            }, ensure_ascii=False, default=str)
 
         # 3. 按 (category, sentiment) 分组统计
         from collections import defaultdict
@@ -2925,7 +2925,7 @@ async def auto_generate_alerts(
             return json.dumps({
                 "message": f"过去{days}天未发现显著的新闻-市场关联规律 (需要更多数据)",
                 "total_news_analyzed": analysis.get("total_news", 0),
-            }, ensure_ascii=False)
+            }, ensure_ascii=False, default=str)
 
         # 2. 检查已有规则数量
         existing = await get_user_alerts(db, user_id=user_id)
