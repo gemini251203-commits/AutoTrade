@@ -12,6 +12,7 @@ News Service
 
 import logging
 from datetime import datetime, timedelta, timezone
+from app.core.time_utils import utc_now
 from typing import Optional, List, Dict, Any
 
 from sqlalchemy import select, desc, func, and_, or_
@@ -107,7 +108,7 @@ async def get_market_sentiment(
             "by_category": {...},
         }
     """
-    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    since = utc_now() - timedelta(hours=hours)
     
     query = select(NewsArticle).where(
         NewsArticle.published_at >= since,
