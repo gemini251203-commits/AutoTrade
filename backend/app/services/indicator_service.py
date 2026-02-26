@@ -208,6 +208,64 @@ class IndicatorService:
                 result[f"ma{period}"] = None
         return result
     
+    def calculate_ema(self, closes: List[float], period: int) -> Optional[float]:
+        """计算 EMA (指数移动平均线)"""
+        if len(closes) < period:
+            return None
+        k = 2 / (period + 1)
+        ema_val = closes[0]
+        for price in closes[1:]:
+            ema_val = price * k + ema_val * (1 - k)
+        return round(ema_val, 4)
+    
+    def calculate_bollinger(self, closes: List[float], period: int = 20, std_dev: float = 2.0) -> Optional[Dict]:
+        """计算布林带"""
+        if len(closes) < period:
+            return None
+        window = closes[-period:]
+        middle = sum(window) / period
+        variance = sum((x - middle) ** 2 for x in window) / period
+        std = variance ** 0.5
+        return {
+            "upper": round(middle + std_dev * std, 4),
+            "middle": round(middle, 4),
+            "lower": round(middle - std_dev * std, 4),
+            "width": round((2 * std_dev * std) / middle * 100, 4) if middle else 0,
+        }
+    
+    def calculate_kdj(self, klines: List[Dict], k_period: int = 9, d_period: int = 3) -> Optional[Dict]:
+        """计算 KDJ 指标"""
+        if len(klines) < k_period:
+            return None
+        window = klines[-k_period:]
+        highest = max(k["high"] for k in window)
+        lowest = min(k["low"] for k in window)
+        current_close = klines[-1]["close"]
+        if highest == lowest:
+            rsv = 50.0
+        else:
+            rsv = (current_close - lowest) / (highest - lowest) * 100
+        k_val = rsv
+        d_val = k_val
+        j_val = 3 * k_val - 2 * d_val
+        return {
+            "k": round(k_val, 2),
+            "d": round(d_val, 2),
+            "j": round(j_val, 2),
+        }
+    
+    def calculate_obv(self, klines: List[Dict]) -> Optional[float]:
+        """计算 OBV (能量潮)"""
+        if len(klines) < 2:
+            return None
+        obv = 0.0
+        for i in range(1, len(klines)):
+            if klines[i]["close"] > klines[i-1]["close"]:
+                obv += klines[i]["volume"]
+            elif klines[i]["close"] < klines[i-1]["close"]:
+                obv -= klines[i]["volume"]
+        return round(obv, 2)
+    
     def calculate_atr(self, klines: List[Dict], period: int = 14) -> Optional[float]:
         """
         计算 ATR (平均真实波幅)
@@ -260,21 +318,7 @@ class IndicatorService:
         计算所有技术指标
         
         Returns:
-            {
-                "symbol": "BTCUSDT",
-                "interval": "1h",
-                "indicators": {
-                    "rsi": 55.2,
-                    "macd": {...},
-                    "ma7": 77000.0,
-                    "ma25": 76500.0,
-                    "ma99": 75000.0,
-                    "atr": 500.0,
-                    "volume_ratio": 1.2,
-                },
-                "trend": "bullish" | "bearish" | "neutral",
-                "updated_at": "2026-02-02T11:30:00"
-            }
+            包含完整指标集的字典，所有指标名称均为扁平化 key
         """
         # 获取 K 线数据
         klines = await self.get_klines(symbol, interval, limit=100)
@@ -293,33 +337,71 @@ class IndicatorService:
         closes = [k["close"] for k in klines]
         volumes = [k["volume"] for k in klines]
         
-        # 计算各项指标
+        # ── 基础指标 ──
         rsi = self.calculate_rsi(closes)
         macd = self.calculate_macd(closes)
         ma = self.calculate_ma(closes)
         atr = self.calculate_atr(klines)
         volume_ratio = self.calculate_volume_change(volumes)
         
-        # 判断趋势
+        # ── 新增指标 ──
+        ema_5  = self.calculate_ema(closes, 5)
+        ema_10 = self.calculate_ema(closes, 10)
+        ema_20 = self.calculate_ema(closes, 20)
+        ema_50 = self.calculate_ema(closes, 50)
+        ema_100 = self.calculate_ema(closes, 100)
+        bollinger = self.calculate_bollinger(closes)
+        kdj = self.calculate_kdj(klines)
+        obv = self.calculate_obv(klines)
+        
+        # 判断趋势 (用 EMA 交叉)
         trend = "neutral"
-        if rsi and ma.get("ma7") and ma.get("ma25"):
+        if rsi and ema_20 and ema_50:
             current_price = closes[-1]
-            if rsi > 50 and current_price > ma["ma7"] > ma["ma25"]:
+            if rsi > 50 and current_price > ema_20 > ema_50:
                 trend = "bullish"
-            elif rsi < 50 and current_price < ma["ma7"] < ma["ma25"]:
+            elif rsi < 50 and current_price < ema_20 < ema_50:
                 trend = "bearish"
+        
+        # 构建扁平化指标字典
+        indicators = {
+            # 动量
+            "rsi": rsi,
+            "macd": macd.get("macd") if macd else None,
+            "macd_histogram": macd.get("histogram") if macd else None,
+            "macd_signal": macd.get("signal") if macd else None,
+            # 均线
+            "ema_5": ema_5,
+            "ema_10": ema_10,
+            "ema_20": ema_20,
+            "ema_50": ema_50,
+            "ema_100": ema_100,
+            **ma,  # ma7, ma25, ma99
+            # 波动
+            "atr": atr,
+            # 量能
+            "obv": obv,
+            "volume_ratio": volume_ratio,
+        }
+        
+        # 布林带
+        if bollinger:
+            indicators["bollinger_upper"] = bollinger["upper"]
+            indicators["bollinger_middle"] = bollinger["middle"]
+            indicators["bollinger_lower"] = bollinger["lower"]
+            indicators["bollinger_width"] = bollinger["width"]
+        
+        # KDJ
+        if kdj:
+            indicators["kdj_k"] = kdj["k"]
+            indicators["kdj_d"] = kdj["d"]
+            indicators["kdj_j"] = kdj["j"]
         
         result = {
             "symbol": symbol.upper(),
             "interval": interval,
             "current_price": closes[-1] if closes else None,
-            "indicators": {
-                "rsi": rsi,
-                "macd": macd,
-                **ma,
-                "atr": atr,
-                "volume_ratio": volume_ratio,
-            },
+            "indicators": indicators,
             "trend": trend,
             "updated_at": utc_now().isoformat(),
         }
@@ -371,26 +453,65 @@ class IndicatorService:
         
         trend_cn = {"bullish": "看涨", "bearish": "看跌", "neutral": "中性"}.get(trend, "未知")
         
-        text = f"""
-**{indicators['symbol']} 技术分析** (周期: {indicators['interval']})
-
-当前价格: ${price:,.2f}
-趋势判断: {trend_cn}
-
-指标数据:
-- RSI(14): {ind.get('rsi', 'N/A')} {'(超买)' if ind.get('rsi', 0) > 70 else '(超卖)' if ind.get('rsi', 0) < 30 else ''}
-- MA7: ${ind.get('ma7', 0):,.2f}
-- MA25: ${ind.get('ma25', 0):,.2f}
-- MA99: ${ind.get('ma99', 0):,.2f}
-- ATR(14): ${ind.get('atr', 0):,.4f}
-- 成交量比: {ind.get('volume_ratio', 'N/A')}x
-"""
+        lines = [
+            f"**{indicators['symbol']}** ({indicators['interval']}) 价格: ${price:,.2f} | 趋势: {trend_cn}",
+            "",
+            f"RSI(14): {ind.get('rsi', 'N/A')} | MACD: {ind.get('macd', 'N/A')} | 柱状: {ind.get('macd_histogram', 'N/A')}",
+            f"EMA: 5={ind.get('ema_5', 'N/A')} | 10={ind.get('ema_10', 'N/A')} | 20={ind.get('ema_20', 'N/A')} | 50={ind.get('ema_50', 'N/A')}",
+            f"ATR: {ind.get('atr', 'N/A')} | 量比: {ind.get('volume_ratio', 'N/A')}x",
+        ]
         
-        if ind.get("macd"):
-            macd = ind["macd"]
-            text += f"- MACD: {macd.get('macd', 0):+.4f}\n"
+        if ind.get("bollinger_upper"):
+            lines.append(f"布林: 上={ind['bollinger_upper']} | 中={ind['bollinger_middle']} | 下={ind['bollinger_lower']}")
         
-        return text.strip()
+        if ind.get("kdj_k") is not None:
+            lines.append(f"KDJ: K={ind['kdj_k']} | D={ind['kdj_d']} | J={ind['kdj_j']}")
+        
+        return "\n".join(lines)
+
+
+# ============================================================
+# 可用指标白名单 (策略条件只能引用这些)
+# ============================================================
+
+AVAILABLE_INDICATORS = frozenset({
+    # 动量
+    "rsi", "macd", "macd_histogram", "macd_signal",
+    # 均线
+    "ema_5", "ema_10", "ema_20", "ema_50", "ema_100",
+    "ma7", "ma25", "ma99",
+    # 波动
+    "atr",
+    "bollinger_upper", "bollinger_middle", "bollinger_lower", "bollinger_width",
+    # 随机
+    "kdj_k", "kdj_d", "kdj_j",
+    # 量能
+    "obv", "volume_ratio",
+    # 价位 (策略中常用的伪指标)
+    "price", "close",
+    "near_support", "near_resistance",
+})
+
+
+def validate_strategy_indicators(config: dict) -> list[str]:
+    """
+    校验策略配置中引用的指标是否都在白名单内
+    
+    Returns:
+        错误列表 (空 = 全部通过)
+    """
+    errors = []
+    for alpha in config.get("alphas", []):
+        for cond in alpha.get("conditions", []):
+            ind = cond.get("indicator", "")
+            if ind and ind not in AVAILABLE_INDICATORS:
+                errors.append(f"指标 '{ind}' 不可用")
+    
+    if errors:
+        available = sorted(AVAILABLE_INDICATORS - {"price", "close", "near_support", "near_resistance"})
+        errors.append(f"可用指标: {', '.join(available)}")
+    
+    return errors
 
 
 # 全局单例

@@ -118,6 +118,14 @@ TOOLS_DESCRIPTION = """
     - ⚠️ 系统会自动验证: YAML语法→指标白名单→干跑评估, 任一失败则保留旧配置
     示例: [TOOL_CALL: update_strategy(strategy_id=1)]
 
+⚠️ **策略条件中只能使用以下指标** (使用不在列表中的指标会被拒绝):
+  均线: ema_5, ema_10, ema_20, ema_50, ema_100, ma7, ma25, ma99
+  动量: rsi, macd, macd_histogram, macd_signal
+  波动: atr, bollinger_upper, bollinger_middle, bollinger_lower, bollinger_width
+  随机: kdj_k, kdj_d, kdj_j
+  量能: obv, volume_ratio
+  价位: price, close, near_support, near_resistance
+
 ⚠️ **策略构建协议 (四步引导 — 必须遵守)**:
 当用户要求创建策略时，你必须按以下 4 步引导:
 
@@ -766,5 +774,16 @@ def build_system_prompt(persona: str, context_text: str) -> str:
     prompt = prompt.replace("{trading_rules}", TRADING_RULES)
     prompt = prompt.replace("{tools}", f"{TOOL_DOCS_MARKER}\n{TOOLS_DESCRIPTION}")
     prompt = prompt.replace("{context}", context_section)
+
+    # 注入回复风格指引 (所有角色通用)
+    prompt += """
+
+## 回复风格
+- 保持简洁，像朋友交流一样自然，避免冗长的分析报告
+- 重点突出：先给结论，再简述理由，不要罗列每个指标的详细数值
+- 每次回复控制在 3-5 段以内，不要写长篇报告
+- 避免过多格式化标题(###)和列表，正常说话即可
+- 如果用户问简单问题，简短回答就好
+"""
 
     return prompt

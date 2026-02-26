@@ -1065,87 +1065,77 @@ def _calc_fixed_stops(
 
 
 def _build_validation_report(config: dict) -> dict:
-    """生成策略验证报告 — 让 AI 和用户确认策略实际包含什么"""
+    """生成策略验证报告 — 校验指标是否可用"""
+    from app.services.indicator_service import AVAILABLE_INDICATORS
+    
     is_pipeline = any(k in config for k in ("alphas", "portfolio", "execution"))
     
-    if is_pipeline:
-        alphas = config.get("alphas", [])
-        return {
-            "is_pipeline": True,
-            "alphas": len(alphas),
-            "portfolio": config.get("portfolio", {}).get("type", "unknown"),
-            "risk": config.get("risk", {}).get("type", "unknown"),
-            "execution": config.get("execution", {}).get("type", "unknown"),
-            "features": ["Pipeline架构"]
-        }
-
-    entry = config.get("entry", {})
-    exit_block = config.get("exit", {})
-    risk = config.get("risk", {})
-
-    entry_conds = entry.get("conditions", [])
-    exit_conds = exit_block.get("conditions", [])
-
-    # 收集使用的指标
+    # 收集所有引用的指标
     indicators_used = set()
-    for cond in entry_conds + exit_conds:
-        if "indicator" in cond:
-            indicators_used.add(cond["indicator"])
-        if "reference" in cond:
-            indicators_used.add(cond["reference"])
-
-    # 收集使用的功能
-    features = []
-    for cond in entry_conds + exit_conds:
-        if "timeframe" in cond:
-            features.append("多时间框架")
-        if "cross" in cond:
-            features.append("时序穿越")
-        if "expression" in cond:
-            features.append("自定义表达式")
-        if "weight" in cond:
-            features.append("权重评分")
-    if config.get("scoring"):
-        features.append(f"评分阈值={config['scoring'].get('min_score', '?')}")
-    if config.get("stages"):
-        features.append(f"分批建仓({len(config['stages'])}阶段)")
-    if config.get("time_filter"):
-        features.append("时间过滤")
-    if risk.get("stop_type") and risk["stop_type"] != "fixed":
-        features.append(f"动态止损({risk['stop_type']})")
-    if risk.get("volatility_adjust"):
-        features.append("波动率自适应")
-
+    
+    if is_pipeline:
+        for alpha in config.get("alphas", []):
+            for cond in alpha.get("conditions", []):
+                if "indicator" in cond:
+                    indicators_used.add(cond["indicator"])
+                if "reference" in cond:
+                    indicators_used.add(cond["reference"])
+    else:
+        entry = config.get("entry", {})
+        exit_block = config.get("exit", {})
+        for cond in entry.get("conditions", []) + exit_block.get("conditions", []):
+            if "indicator" in cond:
+                indicators_used.add(cond["indicator"])
+            if "reference" in cond:
+                indicators_used.add(cond["reference"])
+    
+    # 校验指标白名单
+    unknown = sorted(indicators_used - AVAILABLE_INDICATORS)
+    
     report = {
-        "is_pipeline": False,
-        "entry_conditions": len(entry_conds),
-        "exit_conditions": len(exit_conds),
-        "entry_operator": entry.get("operator", "AND"),
-        "exit_operator": exit_block.get("operator", "OR"),
+        "is_valid": len(unknown) == 0,
+        "is_pipeline": is_pipeline,
         "indicators_used": sorted(indicators_used),
-        "risk_summary": {
+    }
+    
+    if unknown:
+        available_list = sorted(AVAILABLE_INDICATORS - {"price", "close", "near_support", "near_resistance"})
+        report["unknown_indicators"] = unknown
+        report["syntax_errors"] = [
+            f"使用了不可用的指标: {', '.join(unknown)}。",
+            f"可用指标: {', '.join(available_list)}",
+        ]
+    
+    if is_pipeline:
+        report["alphas"] = len(config.get("alphas", []))
+        report["portfolio"] = config.get("portfolio", {}).get("type", "unknown")
+    else:
+        entry = config.get("entry", {})
+        exit_block = config.get("exit", {})
+        risk = config.get("risk", {})
+        entry_conds = entry.get("conditions", [])
+        exit_conds = exit_block.get("conditions", [])
+        
+        report["entry_conditions"] = len(entry_conds)
+        report["exit_conditions"] = len(exit_conds)
+        report["risk_summary"] = {
             "side": risk.get("side", "未设置"),
             "leverage": risk.get("leverage", "未设置"),
-            "position_pct": risk.get("position_pct", "未设置"),
             "stop_loss_pct": risk.get("stop_loss_pct", "未设置"),
             "take_profit_pct": risk.get("take_profit_pct", "未设置"),
-            "stop_type": risk.get("stop_type", "fixed"),
-        },
-        "required_timeframes": config.get("_required_timeframes", []),
-        "features": sorted(set(features)) if features else ["基础策略"],
-    }
-
-    # 警告
-    warnings = []
-    if len(entry_conds) == 0:
-        warnings.append("⚠️ 没有入场条件")
-    if len(exit_conds) == 0:
-        warnings.append("⚠️ 没有出场条件")
-    if not risk.get("side"):
-        warnings.append("⚠️ 未设置 risk.side (buy/sell)")
-    if warnings:
-        report["warnings"] = warnings
-
+        }
+        
+        # 警告
+        warnings = []
+        if len(entry_conds) == 0:
+            warnings.append("没有入场条件")
+        if len(exit_conds) == 0:
+            warnings.append("没有出场条件")
+        if not risk.get("side"):
+            warnings.append("未设置 risk.side (buy/sell)")
+        if warnings:
+            report["warnings"] = warnings
+    
     return report
 
 
