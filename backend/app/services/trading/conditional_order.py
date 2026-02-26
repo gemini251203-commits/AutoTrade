@@ -19,8 +19,8 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.task import (
 from app.core.time_utils import utc_now
+from app.models.task import (
     TaskTicket, TaskStatus, TradingMode, TradeSide, ConfirmInterval
 )
 from app.models.market import Kline

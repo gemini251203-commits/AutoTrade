@@ -14,8 +14,8 @@ from pydantic import BaseModel
 
 from app.api.deps import get_db, get_current_user, DbSession, CurrentUser
 from app.models.user import User
-from app.models.task import (
 from app.core.time_utils import utc_now
+from app.models.task import (
     TaskTicket, TaskSource, TaskType, TaskStatus,
     TradingMode, TradeSide, ConfirmInterval, ConditionType
 )
