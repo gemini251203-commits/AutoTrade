@@ -78,7 +78,7 @@ async def get_price(db: AsyncSession, user_id: int, symbol: str = "BTCUSDT") -> 
             "source": "database",
         }, ensure_ascii=False)
 
-    return json.dumps({"error": f"无法获取 {symbol} 价格"}, ensure_ascii=False)
+    return json.dumps({"error": f"无法获取 {symbol} 价格"}, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -99,9 +99,9 @@ async def get_funding_rate(
     from app.services.funding_rate import funding_rate_service
     info = await funding_rate_service.get_funding_info(symbol.upper())
     if info:
-        return json.dumps(info, ensure_ascii=False)
+        return json.dumps(info, ensure_ascii=False, default=str)
 
-    return json.dumps({"error": f"无法获取 {symbol} 资金费率"}, ensure_ascii=False)
+    return json.dumps({"error": f"无法获取 {symbol} 资金费率"}, ensure_ascii=False, default=str)
 
 @register_tool
 async def get_klines(
@@ -122,7 +122,7 @@ async def get_klines(
     klines = list(reversed(result.scalars().all()))
 
     if not klines:
-        return json.dumps({"error": f"无 {symbol} {interval} K线数据"}, ensure_ascii=False)
+        return json.dumps({"error": f"无 {symbol} {interval} K线数据"}, ensure_ascii=False, default=str)
 
     data = [
         {
@@ -154,7 +154,7 @@ async def get_balance(db: AsyncSession, user_id: int) -> str:
     wallet = result.scalar_one_or_none()
 
     if not wallet:
-        return json.dumps({"error": "钱包未初始化"}, ensure_ascii=False)
+        return json.dumps({"error": "钱包未初始化"}, ensure_ascii=False, default=str)
 
     return json.dumps({
         "available": float(wallet.balance),
@@ -176,7 +176,7 @@ async def get_positions(db: AsyncSession, user_id: int) -> str:
     positions = result.scalars().all()
 
     if not positions:
-        return json.dumps({"positions": [], "message": "当前无持仓"}, ensure_ascii=False)
+        return json.dumps({"positions": [], "message": "当前无持仓"}, ensure_ascii=False, default=str)
 
     # 获取实时价格计算未实现盈亏
     from app.services.exchange import BinanceClient
@@ -205,7 +205,7 @@ async def get_positions(db: AsyncSession, user_id: int) -> str:
             "stop_loss": float(p.stop_loss) if p.stop_loss else None,
             "take_profit": float(p.take_profit) if p.take_profit else None,
         })
-    return json.dumps({"positions": data}, ensure_ascii=False)
+    return json.dumps({"positions": data}, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -220,7 +220,7 @@ async def get_open_orders(db: AsyncSession, user_id: int) -> str:
     orders = result.scalars().all()
 
     if not orders:
-        return json.dumps({"orders": [], "message": "当前无挂单"}, ensure_ascii=False)
+        return json.dumps({"orders": [], "message": "当前无挂单"}, ensure_ascii=False, default=str)
 
     data = [
         {
@@ -235,7 +235,7 @@ async def get_open_orders(db: AsyncSession, user_id: int) -> str:
         }
         for o in orders
     ]
-    return json.dumps({"orders": data}, ensure_ascii=False)
+    return json.dumps({"orders": data}, ensure_ascii=False, default=str)
 
 # ==================== 交易工具 ====================
 
@@ -370,10 +370,10 @@ async def place_order(
         return json.dumps(result, ensure_ascii=False, default=str)
 
     except OrderError as e:
-        return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
+        return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False, default=str)
     except Exception as e:
         logger.error(f"[AgentTools] place_order failed: {e}")
-        return json.dumps({"success": False, "error": f"下单失败: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"success": False, "error": f"下单失败: {str(e)}"}, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -405,10 +405,10 @@ async def close_position(
         }, ensure_ascii=False)
 
     except PositionError as e:
-        return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
+        return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False, default=str)
     except Exception as e:
         logger.error(f"[AgentTools] close_position failed: {e}")
-        return json.dumps({"success": False, "error": f"平仓失败: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"success": False, "error": f"平仓失败: {str(e)}"}, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -437,10 +437,10 @@ async def cancel_order(
         }, ensure_ascii=False)
 
     except OrderError as e:
-        return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
+        return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False, default=str)
     except Exception as e:
         logger.error(f"[AgentTools] cancel_order failed: {e}")
-        return json.dumps({"success": False, "error": f"取消失败: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"success": False, "error": f"取消失败: {str(e)}"}, ensure_ascii=False, default=str)
 
 
 # ==================== 分析工具 ====================
@@ -519,13 +519,13 @@ async def get_indicators(
                             trend = "bearish"
                     result["trend"] = trend
 
-                    return json.dumps(result, ensure_ascii=False)
+                    return json.dumps(result, ensure_ascii=False, default=str)
             else:
                 logger.warning(f"[AgentTools] Binance klines HTTP {resp.status_code}: {resp.text[:200]}")
     except Exception as e:
         logger.warning(f"[AgentTools] get_indicators failed: {e}")
 
-    return json.dumps({"error": f"无法获取 {symbol} {interval} 指标"}, ensure_ascii=False)
+    return json.dumps({"error": f"无法获取 {symbol} {interval} 指标"}, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -546,7 +546,7 @@ async def analyze_market(
         }, ensure_ascii=False)
     except Exception as e:
         logger.warning(f"[AgentTools] analyze_market failed: {e}")
-        return json.dumps({"error": f"市场分析失败: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"市场分析失败: {str(e)}"}, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -599,7 +599,7 @@ async def query_memories(
         }
         for m in memories
     ]
-    return json.dumps({"memories": data, "total": len(data)}, ensure_ascii=False)
+    return json.dumps({"memories": data, "total": len(data)}, ensure_ascii=False, default=str)
 
 
 # ==================== 策略管理工具 ====================
@@ -707,7 +707,7 @@ async def get_strategy_detail(
             "type": "template",
         }, ensure_ascii=False, default=str)
 
-    return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False)
+    return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False, default=str)
 
 
 async def _fetch_klines_map(symbol: str, timeframes: list) -> dict:
@@ -787,7 +787,7 @@ async def evaluate_strategy(
         strategy_name = config.get("name", strategy_id)
 
     if not config:
-        return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False)
+        return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False, default=str)
 
     # 如果指定了 symbol，覆盖策略默认的
     target_symbol = (symbol or config.get("symbol", "BTCUSDT")).upper()
@@ -799,16 +799,16 @@ async def evaluate_strategy(
     try:
         klines_map = await _fetch_klines_map(target_symbol, required_tfs)
     except Exception as e:
-        return json.dumps({"error": f"获取K线异常: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"获取K线异常: {str(e)}"}, ensure_ascii=False, default=str)
 
     if not klines_map:
-        return json.dumps({"error": "无法获取任何时间框架的K线数据"}, ensure_ascii=False)
+        return json.dumps({"error": "无法获取任何时间框架的K线数据"}, ensure_ascii=False, default=str)
 
     # 执行策略评估
     try:
         signal = engine.evaluate(config, klines_map=klines_map)
     except Exception as e:
-        return json.dumps({"error": f"策略评估失败: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"策略评估失败: {str(e)}"}, ensure_ascii=False, default=str)
 
     return json.dumps({
         "strategy_name": strategy_name,
@@ -865,7 +865,7 @@ async def run_strategy(
         strategy_name = config.get("name", strategy_id)
 
     if not config:
-        return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False)
+        return json.dumps({"error": f"找不到策略: {strategy_id}"}, ensure_ascii=False, default=str)
 
     target_symbol = (symbol or config.get("symbol", "BTCUSDT")).upper()
     config["symbol"] = target_symbol
@@ -875,10 +875,10 @@ async def run_strategy(
     try:
         klines_map = await _fetch_klines_map(target_symbol, required_tfs)
     except Exception as e:
-        return json.dumps({"error": f"获取K线异常: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"获取K线异常: {str(e)}"}, ensure_ascii=False, default=str)
 
     if not klines_map:
-        return json.dumps({"error": "无法获取K线数据"}, ensure_ascii=False)
+        return json.dumps({"error": "无法获取K线数据"}, ensure_ascii=False, default=str)
 
     # 取主时间框架 K 线 (用于价格和 ATR)
     default_interval = config.get("interval", "1h")
@@ -888,7 +888,7 @@ async def run_strategy(
     try:
         signal = engine.evaluate(config, klines_map=klines_map)
     except Exception as e:
-        return json.dumps({"error": f"策略评估异常: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"策略评估异常: {str(e)}"}, ensure_ascii=False, default=str)
 
     if not signal.has_signal:
         return json.dumps({
@@ -918,7 +918,7 @@ async def run_strategy(
     wallet_balance = float(wallet.balance) if wallet else 0.0
 
     if wallet_balance <= 0:
-        return json.dumps({"error": "钱包余额不足"}, ensure_ascii=False)
+        return json.dumps({"error": "钱包余额不足"}, ensure_ascii=False, default=str)
 
     pos_result = await db.execute(
         select(Position).where(
@@ -1045,7 +1045,7 @@ async def run_strategy(
                 "signal": signal.summary(),
             }, ensure_ascii=False, default=str)
     except Exception as e:
-        return json.dumps({"error": f"下单失败: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"下单失败: {str(e)}"}, ensure_ascii=False, default=str)
 
 
 def _calc_fixed_stops(
@@ -1170,13 +1170,13 @@ async def create_strategy(
     from app.services.quant.strategy import StrategyEngine
 
     if not name or not config_yaml:
-        return json.dumps({"error": "缺少必要参数: name 和 config_yaml"}, ensure_ascii=False)
+        return json.dumps({"error": "缺少必要参数: name 和 config_yaml"}, ensure_ascii=False, default=str)
 
     engine = StrategyEngine()
     try:
         config = engine.parse_yaml(config_yaml)
     except ValueError as e:
-        return json.dumps({"error": f"YAML 配置验证失败: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"YAML 配置验证失败: {str(e)}"}, ensure_ascii=False, default=str)
 
     # 强校验：是否存在不支持的指标
     report = _build_validation_report(config)
@@ -1187,7 +1187,7 @@ async def create_strategy(
         if report.get("syntax_errors"):
             error_msgs.extend(report["syntax_errors"])
         if error_msgs:
-            return json.dumps({"error": f"策略配置无效: {'; '.join(error_msgs)}"}, ensure_ascii=False)
+            return json.dumps({"error": f"策略配置无效: {'; '.join(error_msgs)}"}, ensure_ascii=False, default=str)
 
     strategy = Strategy(
         user_id=user_id,
@@ -1238,7 +1238,7 @@ async def update_strategy(
     from app.services.quant.strategy import StrategyEngine
 
     if not strategy_id:
-        return json.dumps({"error": "缺少 strategy_id"}, ensure_ascii=False)
+        return json.dumps({"error": "缺少 strategy_id"}, ensure_ascii=False, default=str)
 
     result = await db.execute(
         select(Strategy).where(
@@ -1248,7 +1248,7 @@ async def update_strategy(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        return json.dumps({"error": f"找不到策略 ID={strategy_id}"}, ensure_ascii=False)
+        return json.dumps({"error": f"找不到策略 ID={strategy_id}"}, ensure_ascii=False, default=str)
 
     # 保存旧配置用于回滚
     old_yaml = strategy.config_yaml
@@ -1342,12 +1342,12 @@ async def list_modules(
     from app.services.quant.module_registry import list_modules as _list, get_registry_summary
 
     if layer and layer not in ("alpha", "portfolio", "risk", "execution"):
-        return json.dumps({"error": f"未知层: {layer}。可选: alpha/portfolio/risk/execution"}, ensure_ascii=False)
+        return json.dumps({"error": f"未知层: {layer}。可选: alpha/portfolio/risk/execution"}, ensure_ascii=False, default=str)
 
     modules = _list(layer or None)
 
     if not modules:
-        return json.dumps({"error": f"层 '{layer}' 没有可用模块"}, ensure_ascii=False)
+        return json.dumps({"error": f"层 '{layer}' 没有可用模块"}, ensure_ascii=False, default=str)
 
     result = []
     for m in modules:
@@ -1383,13 +1383,13 @@ async def create_pipeline_strategy(
     from app.services.quant.strategy import StrategyEngine
 
     if not name or not config_yaml:
-        return json.dumps({"error": "缺少必要参数: name 和 config_yaml"}, ensure_ascii=False)
+        return json.dumps({"error": "缺少必要参数: name 和 config_yaml"}, ensure_ascii=False, default=str)
 
     engine = StrategyEngine()
     try:
         config = engine.parse_yaml(config_yaml)
     except ValueError as e:
-        return json.dumps({"error": f"YAML 配置验证失败: {str(e)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"YAML 配置验证失败: {str(e)}"}, ensure_ascii=False, default=str)
 
     report = _build_validation_report(config)
 
@@ -1437,7 +1437,7 @@ async def update_strategy(
     from app.services.quant.strategy import StrategyEngine
 
     if not str(strategy_id).isdigit():
-        return json.dumps({"error": f"无效的策略 ID: {strategy_id}"}, ensure_ascii=False)
+        return json.dumps({"error": f"无效的策略 ID: {strategy_id}"}, ensure_ascii=False, default=str)
 
     result = await db.execute(
         select(Strategy).where(
@@ -1447,7 +1447,7 @@ async def update_strategy(
     )
     strategy = result.scalar_one_or_none()
     if not strategy:
-        return json.dumps({"error": f"找不到策略 ID: {strategy_id}"}, ensure_ascii=False)
+        return json.dumps({"error": f"找不到策略 ID: {strategy_id}"}, ensure_ascii=False, default=str)
 
     # 验证新的 YAML (如果提供了)
     report = {}
@@ -1456,7 +1456,7 @@ async def update_strategy(
         try:
             config = engine.parse_yaml(config_yaml)
         except ValueError as e:
-            return json.dumps({"error": f"YAML 配置解析失败: {str(e)}"}, ensure_ascii=False)
+            return json.dumps({"error": f"YAML 配置解析失败: {str(e)}"}, ensure_ascii=False, default=str)
         
         # 强校验新的 YAML
         report = _build_validation_report(config)
@@ -1467,7 +1467,7 @@ async def update_strategy(
             if report.get("syntax_errors"):
                 error_msgs.extend(report["syntax_errors"])
             if error_msgs:
-                return json.dumps({"error": f"策略配置无效无法更新: {'; '.join(error_msgs)}"}, ensure_ascii=False)
+                return json.dumps({"error": f"策略配置无效无法更新: {'; '.join(error_msgs)}"}, ensure_ascii=False, default=str)
                 
         strategy.config_yaml = config_yaml
 
@@ -1501,7 +1501,7 @@ async def update_strategy(
     }
     if report:
         result["validation_report"] = report
-    return json.dumps(result, ensure_ascii=False)
+    return json.dumps(result, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -1720,7 +1720,7 @@ async def manage_autopilot(
     
     except Exception as e:
         logger.error(f"[AgentTools] manage_autopilot failed: {e}")
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -1775,7 +1775,7 @@ async def manage_grid(
         
         elif action == "start":
             if upper_price <= 0 or lower_price <= 0:
-                return json.dumps({"error": "必须提供 upper_price 和 lower_price"}, ensure_ascii=False)
+                return json.dumps({"error": "必须提供 upper_price 和 lower_price"}, ensure_ascii=False, default=str)
             
             # 获取当前价格
             from app.services.exchange import BinanceClient
@@ -1809,7 +1809,7 @@ async def manage_grid(
         
         elif action == "stop":
             if grid_id <= 0:
-                return json.dumps({"error": "必须提供 grid_id"}, ensure_ascii=False)
+                return json.dumps({"error": "必须提供 grid_id"}, ensure_ascii=False, default=str)
             
             bot = await GridStrategy.stop_grid(db=db, grid_id=grid_id, user_id=user_id)
             await db.commit()
@@ -1822,14 +1822,14 @@ async def manage_grid(
         
         elif action == "delete":
             if grid_id <= 0:
-                return json.dumps({"error": "必须提供 grid_id"}, ensure_ascii=False)
+                return json.dumps({"error": "必须提供 grid_id"}, ensure_ascii=False, default=str)
             
             from app.models.grid_bot import GridBot, GridStatus
             bot = await db.get(GridBot, grid_id)
             if not bot or bot.user_id != user_id:
-                return json.dumps({"error": "网格不存在"}, ensure_ascii=False)
+                return json.dumps({"error": "网格不存在"}, ensure_ascii=False, default=str)
             if bot.status not in (GridStatus.STOPPED, GridStatus.CREATED, GridStatus.COMPLETED):
-                return json.dumps({"error": "只能删除已停止的网格"}, ensure_ascii=False)
+                return json.dumps({"error": "只能删除已停止的网格"}, ensure_ascii=False, default=str)
             
             await db.delete(bot)
             await db.commit()
@@ -1847,7 +1847,7 @@ async def manage_grid(
     
     except Exception as e:
         logger.error(f"[AgentTools] manage_grid failed: {e}")
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -1941,7 +1941,7 @@ async def get_trade_journal(
     
     except Exception as e:
         logger.error(f"[AgentTools] get_trade_journal failed: {e}")
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
 
 
 # ==================== 自动交易管理工具 ====================
@@ -1978,7 +1978,7 @@ async def start_autopilot(
             )
             strategy = result.scalar_one_or_none()
             if not strategy:
-                return json.dumps({"error": f"策略 ID {sid} 不存在"}, ensure_ascii=False)
+                return json.dumps({"error": f"策略 ID {sid} 不存在"}, ensure_ascii=False, default=str)
 
             strategy.is_active = True
             await db.commit()
@@ -2012,7 +2012,7 @@ async def start_autopilot(
             )
             active = result.scalars().all()
             if not active:
-                return json.dumps({"error": "没有活跃的策略，请先启动一个策略"}, ensure_ascii=False)
+                return json.dumps({"error": "没有活跃的策略，请先启动一个策略"}, ensure_ascii=False, default=str)
 
             if not autopilot.is_running(user_id):
                 symbols = list(set(s.symbol for s in active))
@@ -2032,7 +2032,7 @@ async def start_autopilot(
             }, ensure_ascii=False)
 
     except Exception as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -2067,7 +2067,7 @@ async def stop_autopilot(
                     "strategy_id": sid,
                     "message": f"策略 '{strategy.name}' 已停止",
                 }, ensure_ascii=False)
-            return json.dumps({"error": f"策略 ID {sid} 不存在"}, ensure_ascii=False)
+            return json.dumps({"error": f"策略 ID {sid} 不存在"}, ensure_ascii=False, default=str)
         else:
             await autopilot.stop(user_id)
             # 标记所有策略为非活跃
@@ -2085,7 +2085,7 @@ async def stop_autopilot(
                 "message": "所有自动交易已停止",
             }, ensure_ascii=False)
     except Exception as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -2169,7 +2169,7 @@ async def get_trading_logs(
         }, ensure_ascii=False, default=str)
 
     except Exception as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
 
 
 # ==================== 趋势分析工具 ====================
@@ -2204,7 +2204,7 @@ async def analyze_trend_now(
         scheme = result.scalar_one_or_none()
 
         if not scheme:
-            return json.dumps({"error": "没有活跃的趋势分析方案，请先创建或初始化预置方案"}, ensure_ascii=False)
+            return json.dumps({"error": "没有活跃的趋势分析方案，请先创建或初始化预置方案"}, ensure_ascii=False, default=str)
 
         # 获取 K 线
         from app.core.network import net_manager
@@ -2218,7 +2218,7 @@ async def analyze_trend_now(
                 params={"symbol": symbol.upper(), "interval": interval, "limit": 200},
             )
             if resp.status_code != 200:
-                return json.dumps({"error": "获取行情失败"}, ensure_ascii=False)
+                return json.dumps({"error": "获取行情失败"}, ensure_ascii=False, default=str)
 
             raw = resp.json()
             klines = [{
@@ -2255,7 +2255,7 @@ async def analyze_trend_now(
         }, ensure_ascii=False)
 
     except Exception as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -2285,7 +2285,7 @@ async def get_trend_result(
         schemes = result.scalars().all()
 
         if not schemes:
-            return json.dumps({"error": "没有活跃的趋势分析方案"}, ensure_ascii=False)
+            return json.dumps({"error": "没有活跃的趋势分析方案"}, ensure_ascii=False, default=str)
 
         results = []
         for s in schemes:
@@ -2316,7 +2316,7 @@ async def get_trend_result(
         }, ensure_ascii=False, default=str)
 
     except Exception as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
 
 
 # ==================== 新闻工具 ====================
@@ -2349,7 +2349,7 @@ async def get_news(
         )
 
         if not articles:
-            return json.dumps({"message": f"暂无 {currency} 相关新闻"}, ensure_ascii=False)
+            return json.dumps({"message": f"暂无 {currency} 相关新闻"}, ensure_ascii=False, default=str)
 
         result = []
         for a in articles[:limit]:
@@ -2370,7 +2370,7 @@ async def get_news(
         }, ensure_ascii=False, default=str)
 
     except Exception as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -2412,7 +2412,7 @@ async def get_market_sentiment(
         }, ensure_ascii=False, default=str)
 
     except Exception as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
 
 
 # ==================== 新闻监控规则工具 ====================
@@ -2435,7 +2435,7 @@ async def list_alerts(
         alerts = await get_user_alerts(db, user_id=user_id)
 
         if not alerts:
-            return json.dumps({"message": "暂无监控规则，可使用 create_alert 创建"}, ensure_ascii=False)
+            return json.dumps({"message": "暂无监控规则，可使用 create_alert 创建"}, ensure_ascii=False, default=str)
 
         result = []
         for a in alerts:
@@ -2460,7 +2460,7 @@ async def list_alerts(
         }, ensure_ascii=False, default=str)
 
     except Exception as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -2505,14 +2505,14 @@ async def create_alert(
 
     try:
         if not name:
-            return json.dumps({"error": "请提供规则名称 (name)"}, ensure_ascii=False)
+            return json.dumps({"error": "请提供规则名称 (name)"}, ensure_ascii=False, default=str)
         if not keywords:
-            return json.dumps({"error": "请提供关键词 (keywords), 逗号分隔"}, ensure_ascii=False)
+            return json.dumps({"error": "请提供关键词 (keywords), 逗号分隔"}, ensure_ascii=False, default=str)
 
         # 检查规则数量限制
         existing = await get_user_alerts(db, user_id=user_id)
         if len(existing) >= 20:
-            return json.dumps({"error": "监控规则已达上限 (20条)"}, ensure_ascii=False)
+            return json.dumps({"error": "监控规则已达上限 (20条)"}, ensure_ascii=False, default=str)
 
         # 解析逗号分隔的列表
         kw_list = [k.strip() for k in keywords.split(",") if k.strip()]
@@ -2521,7 +2521,7 @@ async def create_alert(
 
         # 验证 trade 模式参数
         if action == "trade" and not trade_symbol:
-            return json.dumps({"error": "交易模式需要指定 trade_symbol"}, ensure_ascii=False)
+            return json.dumps({"error": "交易模式需要指定 trade_symbol"}, ensure_ascii=False, default=str)
 
         alert = NewsAlert(
             user_id=user_id,
@@ -2549,7 +2549,7 @@ async def create_alert(
         }, ensure_ascii=False, default=str)
 
     except Exception as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -2597,7 +2597,7 @@ async def update_alert(
 
     try:
         if alert_id <= 0:
-            return json.dumps({"error": "请提供规则 ID (alert_id)"}, ensure_ascii=False)
+            return json.dumps({"error": "请提供规则 ID (alert_id)"}, ensure_ascii=False, default=str)
 
         result = await db.execute(
             sa_select(NewsAlert).where(
@@ -2607,24 +2607,24 @@ async def update_alert(
         )
         alert = result.scalar_one_or_none()
         if not alert:
-            return json.dumps({"error": f"规则 #{alert_id} 不存在"}, ensure_ascii=False)
+            return json.dumps({"error": f"规则 #{alert_id} 不存在"}, ensure_ascii=False, default=str)
 
         # 删除操作
         if action == "delete":
             alert_name = alert.name
             await db.delete(alert)
             await db.commit()
-            return json.dumps({"message": f"规则 '{alert_name}' 已删除"}, ensure_ascii=False)
+            return json.dumps({"message": f"规则 '{alert_name}' 已删除"}, ensure_ascii=False, default=str)
 
         # 快捷启停
         if action == "activate":
             alert.is_active = True
             await db.commit()
-            return json.dumps({"message": f"规则 '{alert.name}' 已启用"}, ensure_ascii=False)
+            return json.dumps({"message": f"规则 '{alert.name}' 已启用"}, ensure_ascii=False, default=str)
         if action == "deactivate":
             alert.is_active = False
             await db.commit()
-            return json.dumps({"message": f"规则 '{alert.name}' 已暂停"}, ensure_ascii=False)
+            return json.dumps({"message": f"规则 '{alert.name}' 已暂停"}, ensure_ascii=False, default=str)
 
         # 逐字段更新
         if name:
@@ -2655,7 +2655,7 @@ async def update_alert(
         }, ensure_ascii=False, default=str)
 
     except Exception as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
 
 
 # ==================== 新闻-市场关联分析工具 ====================
@@ -2867,7 +2867,7 @@ async def analyze_news_impact(
         }, ensure_ascii=False, default=str)
 
     except Exception as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
 
 
 @register_tool
@@ -2918,7 +2918,7 @@ async def auto_generate_alerts(
         analysis = json.loads(analysis_result)
 
         if "error" in analysis:
-            return json.dumps({"error": analysis["error"]}, ensure_ascii=False)
+            return json.dumps({"error": analysis["error"]}, ensure_ascii=False, default=str)
 
         patterns = analysis.get("discovered_patterns", [])
         if not patterns:
@@ -2931,7 +2931,7 @@ async def auto_generate_alerts(
         existing = await get_user_alerts(db, user_id=user_id)
         remaining_slots = 20 - len(existing)
         if remaining_slots <= 0:
-            return json.dumps({"error": "监控规则已达上限(20条), 请先删除旧规则"}, ensure_ascii=False)
+            return json.dumps({"error": "监控规则已达上限(20条), 请先删除旧规则"}, ensure_ascii=False, default=str)
 
         # 3. 按规则生成 Alert
         # 分类到关键词的映射
@@ -3028,4 +3028,4 @@ async def auto_generate_alerts(
         }, ensure_ascii=False, default=str)
 
     except Exception as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
