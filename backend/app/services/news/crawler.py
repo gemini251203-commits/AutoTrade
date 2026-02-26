@@ -24,6 +24,7 @@ from app.models.news import NewsArticle
 from app.core.config import settings
 
 from .sentiment import analyze_sentiment, translate_title, classify_category
+from app.core.time_utils import utc_now
 
 
 logger = logging.getLogger(__name__)
@@ -201,7 +202,7 @@ class NewsCrawler:
         try:
             published_at = datetime.fromtimestamp(published_on, tz=timezone.utc).replace(tzinfo=None)
         except (ValueError, OSError):
-            published_at = datetime.now(timezone.utc)
+            published_at = utc_now()
         
         # 提取关联币种 (CryptoCompare 的 categories 字段包含币种)
         currencies = []

@@ -18,6 +18,7 @@ from app.models.position import Position, PositionSide, PositionStatus, MarginMo
 from app.services.wallet import WalletManager, InsufficientFundsError
 from app.services.margin.calculator import MarginCalculator
 from app.services.margin.leverage_tiers import MIN_NOTIONAL_VALUE
+from app.core.time_utils import utc_now
 
 
 class PositionError(Exception):
@@ -481,7 +482,7 @@ class PositionManager:
         
         if is_full_close:
             position.status = PositionStatus.CLOSED
-            position.closed_at = datetime.now(timezone.utc)
+            position.closed_at = utc_now()
             position.realized_pnl = pnl
             
             # 🔥 统一记忆: 平仓时自动生成交易记忆

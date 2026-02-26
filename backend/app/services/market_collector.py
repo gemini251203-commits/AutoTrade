@@ -28,6 +28,7 @@ from app.db.session import AsyncSessionLocal
 from app.models.market import Kline
 from app.services.exchange import BinanceClient
 from app.services.trading import OrderExecutor
+from app.core.time_utils import utc_now
 
 
 class MarketCollector:
@@ -331,7 +332,7 @@ class MarketCollector:
                         "close_time": stmt.excluded.close_time,
                         "quote_volume": stmt.excluded.quote_volume,
                         "trades": stmt.excluded.trades,
-                        "updated_at": datetime.now(timezone.utc),
+                        "updated_at": utc_now(),
                     }
                 )
                 
@@ -368,7 +369,7 @@ class MarketCollector:
                 "high": ticker.get("highPrice", "0"),
                 "low": ticker.get("lowPrice", "0"),
                 "volume": ticker.get("volume", "0"),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": utc_now().isoformat(),
             })
             
             # 设置过期时间 (5 分钟)，防止过期数据残留

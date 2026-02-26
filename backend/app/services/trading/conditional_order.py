@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.task import (
+from app.core.time_utils import utc_now
     TaskTicket, TaskStatus, TradingMode, TradeSide, ConfirmInterval
 )
 from app.models.market import Kline
@@ -65,7 +66,7 @@ class ConditionalOrderMonitor:
         
         # 设置过期时间
         if not task.expires_at:
-            task.expires_at = datetime.now(timezone.utc) + timedelta(hours=task.timeout_hours or 24)
+            task.expires_at = utc_now() + timedelta(hours=task.timeout_hours or 24)
         
         # 更新状态为监控中
         task.status = TaskStatus.MONITORING
@@ -102,7 +103,7 @@ class ConditionalOrderMonitor:
             return False
         
         # 检查是否超时
-        if task.expires_at and datetime.now(timezone.utc) > task.expires_at:
+        if task.expires_at and utc_now() > task.expires_at:
             task.status = TaskStatus.EXPIRED
             await db.commit()
             logger.info(f"[ConditionalMonitor] Task {task_id} expired")
@@ -141,7 +142,7 @@ class ConditionalOrderMonitor:
                 if current_price < trigger_price:
                     logger.info(f"[ConditionalMonitor] Task {task_id}: Phase 1 triggered! Price {current_price} < {trigger_price}")
                     task.condition_phase = 2
-                    task.phase1_triggered_at = datetime.now(timezone.utc)
+                    task.phase1_triggered_at = utc_now()
                     await db.commit()
                 return False  # 阶段1完成，但还需等阶段2
             
@@ -164,7 +165,7 @@ class ConditionalOrderMonitor:
                 if current_price > trigger_price:
                     logger.info(f"[ConditionalMonitor] Task {task_id}: Phase 1 triggered! Price {current_price} > {trigger_price}")
                     task.condition_phase = 2
-                    task.phase1_triggered_at = datetime.now(timezone.utc)
+                    task.phase1_triggered_at = utc_now()
                     await db.commit()
                 return False  # 阶段1完成，但还需等阶段2
             
@@ -302,11 +303,11 @@ class ConditionalOrderMonitor:
             
             # 更新任务状态
             task.status = TaskStatus.COMPLETED
-            task.executed_at = datetime.now(timezone.utc)
+            task.executed_at = utc_now()
             task.execution_result = {
                 "order_id": order.id,
                 "executed_price": str(order.avg_price) if order.avg_price else None,
-                "executed_at": datetime.now(timezone.utc).isoformat(),
+                "executed_at": utc_now().isoformat(),
             }
             await db.commit()
             

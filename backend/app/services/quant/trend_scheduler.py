@@ -19,6 +19,7 @@ from sqlalchemy import select
 from app.db.session import AsyncSessionLocal
 from app.models.trend_scheme import TrendScheme, TrendSnapshot
 from app.services.quant.trend_analyzer import TrendAnalyzer
+from app.core.time_utils import utc_now
 
 
 logger = logging.getLogger(__name__)
@@ -155,7 +156,7 @@ class TrendScheduler:
 
         # 更新缓存
         scheme.last_result = trend_result.to_dict()
-        scheme.last_run_at = datetime.now(timezone.utc)
+        scheme.last_run_at = utc_now()
 
         # 写入快照
         snapshot = TrendSnapshot(

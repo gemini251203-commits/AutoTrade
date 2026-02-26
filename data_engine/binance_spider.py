@@ -23,6 +23,12 @@ import time
 import asyncio
 from decimal import Decimal
 from datetime import datetime, timezone
+
+
+def utc_now():
+    """Return naive UTC datetime (for TIMESTAMP WITHOUT TIME ZONE columns)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径 (兼容本地和 Docker)
@@ -192,7 +198,7 @@ class BinanceSpider:
                             'close_time': stmt.excluded.close_time,
                             'quote_volume': stmt.excluded.quote_volume,
                             'trades': stmt.excluded.trades,
-                            'updated_at': datetime.now(timezone.utc),
+                            'updated_at': utc_now(),
                         }
                     )
                 else:
@@ -209,7 +215,7 @@ class BinanceSpider:
                             'close_time': stmt.excluded.close_time,
                             'quote_volume': stmt.excluded.quote_volume,
                             'trades': stmt.excluded.trades,
-                            'updated_at': datetime.now(timezone.utc),
+                            'updated_at': utc_now(),
                         }
                     )
                 

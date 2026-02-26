@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.news import NewsArticle, NewsAlert, NewsThinking
 from app.db.session import AsyncSessionLocal
+from app.core.time_utils import utc_now
 
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,7 @@ class NewsMonitor:
         # 1. 检查触发间隔
         if alert.last_triggered_at:
             elapsed = (
-                datetime.now(timezone.utc)
+                utc_now()
                 - alert.last_triggered_at
             ).total_seconds()
             if elapsed < MIN_TRIGGER_INTERVAL:
@@ -162,7 +163,7 @@ class NewsMonitor:
             )
             db.add(thinking)
             alert.triggered_count += 1
-            alert.last_triggered_at = datetime.now(timezone.utc)
+            alert.last_triggered_at = utc_now()
             await db.flush()
             return thinking
 
@@ -198,7 +199,7 @@ class NewsMonitor:
                 )
                 db.add(thinking)
                 alert.triggered_count += 1
-                alert.last_triggered_at = datetime.now(timezone.utc)
+                alert.last_triggered_at = utc_now()
                 await db.flush()
                 return thinking
             step_analyze += f"\n🤖 自动方向判断: 情感={sentiment}(score={score}) → {side}"
@@ -269,7 +270,7 @@ class NewsMonitor:
             )
             db.add(thinking)
             alert.triggered_count += 1
-            alert.last_triggered_at = datetime.now(timezone.utc)
+            alert.last_triggered_at = utc_now()
             await db.flush()
             return thinking
 
@@ -286,7 +287,7 @@ class NewsMonitor:
             )
             db.add(thinking)
             alert.triggered_count += 1
-            alert.last_triggered_at = datetime.now(timezone.utc)
+            alert.last_triggered_at = utc_now()
             await db.flush()
             return thinking
 
@@ -427,7 +428,7 @@ class NewsMonitor:
 
         # 更新 Alert 统计
         alert.triggered_count += 1
-        alert.last_triggered_at = datetime.now(timezone.utc)
+        alert.last_triggered_at = utc_now()
 
         await db.flush()
 

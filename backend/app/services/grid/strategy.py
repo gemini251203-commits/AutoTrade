@@ -32,6 +32,7 @@ from app.models.order import Order, OrderSide, OrderType, OrderStatus
 from app.services.trading import OrderExecutor, OrderError
 from app.services.wallet import WalletManager
 from app.services.trade_journal import TradeJournal
+from app.core.time_utils import utc_now
 
 
 @dataclass
@@ -308,7 +309,7 @@ class GridStrategy:
                     logger.warning(f"[GridStrategy] Failed to place sell order: {e}")
         
         bot.status = GridStatus.RUNNING
-        bot.started_at = datetime.now(timezone.utc)
+        bot.started_at = utc_now()
         bot.grid_levels = grid_levels
         flag_modified(bot, "grid_levels")
         
@@ -361,7 +362,7 @@ class GridStrategy:
         # - 无需额外处理
         
         bot.status = GridStatus.STOPPED
-        bot.stopped_at = datetime.now(timezone.utc)
+        bot.stopped_at = utc_now()
         
         return bot
     
@@ -470,7 +471,7 @@ class GridStrategy:
                         self.size = order.quantity
                         self.leverage = bot.leverage
                         self.created_at = order.created_at
-                        self.closed_at = datetime.now(timezone.utc)
+                        self.closed_at = utc_now()
                         self.stop_loss = bot.stop_loss_price
                         self.take_profit = bot.take_profit_price
                         self.total_commission = Decimal("0")

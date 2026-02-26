@@ -25,6 +25,7 @@ from app.models.position import Position, PositionSide, PositionStatus, MarginMo
 from app.models.wallet import Wallet
 from app.models.market import Kline
 from app.models.strategy import TradeMemory, Strategy
+from app.core.time_utils import utc_now
 
 # ==================== 来源上下文 ====================
 # Autopilot 调用前设置此变量，tools 自动使用正确的 note 前缀
@@ -2235,7 +2236,7 @@ async def analyze_trend_now(
         # 缓存结果
         from datetime import datetime
         scheme.last_result = trend_result.to_dict()
-        scheme.last_run_at = datetime.now(timezone.utc)
+        scheme.last_run_at = utc_now()
         await db.commit()
 
         return json.dumps({
@@ -2693,7 +2694,7 @@ async def analyze_news_impact(
         if not windows:
             windows = [1, 4, 24]
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = utc_now() - timedelta(days=days)
 
         # 1. 查询有 currency 标签的新闻
         news_result = await db.execute(

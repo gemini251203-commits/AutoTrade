@@ -15,6 +15,7 @@ from app.db.session import get_db
 from app.api.deps import get_current_user, CurrentUser
 from app.models.trend_scheme import TrendScheme, TrendSnapshot
 from app.services.quant.trend_analyzer import TrendAnalyzer, PRESET_SCHEMES
+from app.core.time_utils import utc_now
 
 router = APIRouter()
 
@@ -234,7 +235,7 @@ async def run_analysis(
 
     # 保存结果
     scheme.last_result = trend_result.to_dict()
-    scheme.last_run_at = datetime.now(timezone.utc)
+    scheme.last_run_at = utc_now()
 
     snapshot = TrendSnapshot(
         scheme_id=scheme.id,

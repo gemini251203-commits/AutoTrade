@@ -29,6 +29,7 @@ from app.models.position import Position, PositionSide, PositionStatus
 from app.services.trading import PositionManager, InsufficientMarginError
 from app.services.wallet import WalletManager, InsufficientFundsError
 from app.services.trading.fee_calculator import FeeCalculator
+from app.core.time_utils import utc_now
 
 
 class OrderError(Exception):
@@ -295,7 +296,7 @@ class OrderExecutor:
         order.filled_quantity = order.quantity
         order.avg_fill_price = actual_price
         order.commission = commission
-        order.filled_at = datetime.now(timezone.utc)
+        order.filled_at = utc_now()
         
         return order
     

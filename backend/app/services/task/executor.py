@@ -20,6 +20,7 @@ from app.models.position import PositionSide
 from app.models.order import OrderSide, OrderType
 from app.services.trading import PositionManager, OrderExecutor
 from app.services.grid import GridStrategy
+from app.core.time_utils import utc_now
 
 
 @dataclass
@@ -87,7 +88,7 @@ class TaskExecutor:
             # 更新任务状态
             if result.success:
                 task.status = TaskStatus.COMPLETED
-                task.executed_at = datetime.now(timezone.utc)
+                task.executed_at = utc_now()
                 task.execution_result = {
                     "success": True,
                     "message": result.message,
