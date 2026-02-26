@@ -23,6 +23,7 @@ from enum import Enum
 from loguru import logger
 
 from .indicators import get_indicator, get_indicator_at, INDICATOR_REGISTRY
+from app.core.time_utils import utc_now
 
 
 # ============================================================
@@ -665,7 +666,7 @@ class StrategyEngine:
         """检查当前时间是否在交易时段内"""
         from datetime import datetime, timezone
         
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         
         # 跳过周末
         if time_filter.get("skip_weekends") and now.weekday() >= 5:

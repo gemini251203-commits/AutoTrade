@@ -21,6 +21,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
+from app.core.time_utils import utc_now
 
 
 # ============================================================
@@ -70,7 +71,7 @@ class Insight:
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     # 自动填充
-    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = field(default_factory=lambda: utc_now())
     
     # 风控参数建议 (可选, Portfolio 可以覆盖)
     suggested_stop_loss_pct: Optional[float] = None     # 建议止损 % (e.g. 2.0)
@@ -88,7 +89,7 @@ class Insight:
     @property
     def is_expired(self) -> bool:
         """是否已过期"""
-        return datetime.now(timezone.utc) > self.generated_at + self.period
+        return utc_now() > self.generated_at + self.period
     
     def summary(self) -> str:
         """可读摘要"""

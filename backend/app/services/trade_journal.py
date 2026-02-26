@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.position import Position
 from app.models.strategy import TradeMemory
+from app.core.time_utils import utc_now
 
 
 class TradeJournal:
@@ -61,7 +62,7 @@ class TradeJournal:
             # 计算持仓时长
             duration_minutes = None
             if position.created_at:
-                close_time = position.closed_at or datetime.now(timezone.utc)
+                close_time = position.closed_at or utc_now()
                 delta = close_time - position.created_at
                 duration_minutes = int(delta.total_seconds() / 60)
             

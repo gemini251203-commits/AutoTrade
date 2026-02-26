@@ -36,6 +36,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
 from loguru import logger
+from app.core.time_utils import utc_now
 
 
 # ============================================================
@@ -81,7 +82,7 @@ class Event:
     type: EventType
     data: Dict[str, Any]
     source: str = ""                          # 发布者标识
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: utc_now())
     
     # 元数据
     user_id: Optional[int] = None             # 关联用户

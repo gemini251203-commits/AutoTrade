@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 
 from app.services.alpha.base import Insight, InsightDirection
+from app.core.time_utils import utc_now
 
 
 # ============================================================
@@ -78,7 +79,7 @@ class PortfolioTarget:
     source: str = ""                        # 来源
     
     # 元数据
-    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = field(default_factory=lambda: utc_now())
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     @property

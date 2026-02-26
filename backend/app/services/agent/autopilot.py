@@ -178,7 +178,7 @@ class AgentAutopilot:
 
         self._configs[user_id] = config
         self._stats[user_id] = {
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": utc_now().isoformat(),
             "total_cycles": 0,
             "last_cycle_at": None,
             "actions_taken": 0,
@@ -698,7 +698,7 @@ class AgentAutopilot:
                         direction = "多头付费" if rate > 0 else "空头付费" if rate < 0 else "零费率"
                         next_ts = rate_info.get("nextFundingTime", 0)
                         if next_ts:
-                            remaining_min = max(0, (next_ts - int(datetime.now(timezone.utc).timestamp() * 1000)) // 60000)
+                            remaining_min = max(0, (next_ts - int(utc_now().timestamp() * 1000)) // 60000)
                             time_str = f"{remaining_min // 60}h{remaining_min % 60}m后"
                         else:
                             time_str = "未知"
@@ -712,7 +712,7 @@ class AgentAutopilot:
                     logger.debug(f"[Autopilot] Funding rate fetch failed: {e}")
 
                 # 构造分析指令 (直接注入指标数据 + 策略信号 + 交易记忆 + 趋势分析 + 资金费率)
-                now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+                now = utc_now().strftime("%Y-%m-%d %H:%M UTC")
                 prompt = (
                     f"[Autopilot {now}] {symbol} 决策周期\n\n"
                     f"=== 市场数据 ===\n{indicator_text}\n"

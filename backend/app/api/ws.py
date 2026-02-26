@@ -30,6 +30,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from loguru import logger
 
 from app.services.price_stream import price_stream
+from app.core.time_utils import utc_now
 
 
 router = APIRouter()
@@ -102,7 +103,7 @@ async def websocket_prices(websocket: WebSocket):
                 await websocket.send_json({
                     "type": "price_update",
                     "prices": prices,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_now().isoformat(),
                 })
             
             # 每秒推送一次

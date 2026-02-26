@@ -32,6 +32,7 @@ from sqlalchemy import select, desc
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.models.market import Kline
+from app.core.time_utils import utc_now
 
 
 class IndicatorService:
@@ -285,7 +286,7 @@ class IndicatorService:
                 "interval": interval,
                 "indicators": {},
                 "trend": "unknown",
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": utc_now().isoformat(),
             }
         
         # 提取收盘价和成交量
@@ -320,7 +321,7 @@ class IndicatorService:
                 "volume_ratio": volume_ratio,
             },
             "trend": trend,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": utc_now().isoformat(),
         }
         
         # 缓存到 Redis

@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.api.deps import DbSession, CurrentUser
+from app.core.time_utils import utc_now
 
 router = APIRouter(tags=["Pipeline"])
 
@@ -89,7 +90,7 @@ class RiskBypassResponse(BaseModel):
 
 # ==================== Helper: 获取真实 Pipeline 实例 ====================
 
-_startup_time = datetime.now(timezone.utc)
+_startup_time = utc_now()
 _recent_insights: list = []
 _recent_verdicts: list = []
 
@@ -114,7 +115,7 @@ def record_insight(data: dict):
     global _recent_insights
     _recent_insights.append({
         **data,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": utc_now().isoformat(),
     })
     if len(_recent_insights) > 50:
         _recent_insights = _recent_insights[-50:]
@@ -125,7 +126,7 @@ def record_verdict(data: dict):
     global _recent_verdicts
     _recent_verdicts.append({
         **data,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": utc_now().isoformat(),
     })
     if len(_recent_verdicts) > 50:
         _recent_verdicts = _recent_verdicts[-50:]
@@ -154,7 +155,7 @@ async def get_pipeline_status(
     risk_model = _get_risk_model()
 
     # 计算运行时间
-    uptime = (datetime.now(timezone.utc) - _startup_time).total_seconds()
+    uptime = (utc_now() - _startup_time).total_seconds()
 
     # 从 Pipeline 获取内存统计 (本次运行)
     mem_stats = {}

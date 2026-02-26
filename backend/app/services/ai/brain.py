@@ -25,6 +25,7 @@ from app.models.order import Order, OrderStatus
 from app.models.grid_bot import GridBot, GridStatus
 from app.core.encryption import decrypt_api_key
 from .providers import BaseProvider, DeepSeekProvider, OllamaProvider, ChatMessage, ChatResponse
+from app.core.time_utils import utc_now
 
 
 @dataclass
@@ -328,7 +329,7 @@ class AIBrain:
         
         收集用户的钱包、持仓、订单等信息
         """
-        context = AIContext(timestamp=datetime.now(timezone.utc).isoformat())
+        context = AIContext(timestamp=utc_now().isoformat())
         
         # 1. 获取市场数据
         try:

@@ -18,6 +18,7 @@ from loguru import logger
 from app.api.deps import DbSession, CurrentUser
 from app.models.wallet import Wallet
 from app.services.wallet import WalletManager
+from app.core.time_utils import utc_now
 
 
 router = APIRouter()
@@ -307,7 +308,7 @@ async def get_portfolio_stats(
     import calendar as cal_module
     from datetime import timedelta
 
-    now = datetime.now(timezone.utc)
+    now = utc_now()
 
     # ---------- 1. 总价值 ----------
     wallet = await WalletManager.get_wallet(db, current_user.id)

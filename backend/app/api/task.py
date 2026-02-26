@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from app.api.deps import get_db, get_current_user, DbSession, CurrentUser
 from app.models.user import User
 from app.models.task import (
+from app.core.time_utils import utc_now
     TaskTicket, TaskSource, TaskType, TaskStatus,
     TradingMode, TradeSide, ConfirmInterval, ConditionType
 )
@@ -137,7 +138,7 @@ async def create_task(
         # 计算过期时间 (右侧条件单)
         expires_at = None
         if task_in.trading_mode == TradingMode.RIGHT_SIDE:
-            expires_at = datetime.now(timezone.utc) + timedelta(hours=task_in.timeout_hours)
+            expires_at = utc_now() + timedelta(hours=task_in.timeout_hours)
         
         # 创建任务
         task = TaskTicket(
@@ -228,7 +229,7 @@ async def approve_task(
         )
     
     task.status = TaskStatus.APPROVED
-    task.approved_at = datetime.now(timezone.utc)
+    task.approved_at = utc_now()
     await db.commit()
     
     if auto_execute:

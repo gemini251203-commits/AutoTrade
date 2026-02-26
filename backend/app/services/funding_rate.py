@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.services.exchange import BinanceClient
+from app.core.time_utils import utc_now
 
 
 # ============================================================
@@ -100,7 +101,7 @@ class FundingRateService:
                 await self.fetch_all_rates()
 
                 # 检查是否 8h 结算时间 (00, 08, 16 UTC)
-                now_utc = datetime.now(timezone.utc)
+                now_utc = utc_now()
                 current_hour = now_utc.hour
                 if current_hour in (0, 8, 16) and current_hour != last_settle_hour:
                     # 在结算小时的前 5 分钟内触发
@@ -133,7 +134,7 @@ class FundingRateService:
         # 系统内的币种集合
         system_symbols = set(MarketCollector.SYMBOLS)
 
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = utc_now().isoformat()
 
         for rate_data in all_rates:
             symbol = rate_data.get("symbol", "")
@@ -297,7 +298,7 @@ class FundingRateService:
 
         next_time = data.get("nextFundingTime", 0)
         if next_time:
-            remaining_ms = next_time - int(datetime.now(timezone.utc).timestamp() * 1000)
+            remaining_ms = next_time - int(utc_now().timestamp() * 1000)
             remaining_min = max(0, remaining_ms // 60000)
         else:
             remaining_min = 0
