@@ -192,7 +192,7 @@ class BinanceSpider:
                             'close_time': stmt.excluded.close_time,
                             'quote_volume': stmt.excluded.quote_volume,
                             'trades': stmt.excluded.trades,
-                            'updated_at': datetime.utcnow(),
+                            'updated_at': datetime.now(timezone.utc),
                         }
                     )
                 else:
@@ -209,7 +209,7 @@ class BinanceSpider:
                             'close_time': stmt.excluded.close_time,
                             'quote_volume': stmt.excluded.quote_volume,
                             'trades': stmt.excluded.trades,
-                            'updated_at': datetime.utcnow(),
+                            'updated_at': datetime.now(timezone.utc),
                         }
                     )
                 

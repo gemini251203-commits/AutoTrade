@@ -17,7 +17,7 @@ LEAN 风格: Portfolio Model 负责将 Insight → PortfolioTarget (仓位目标
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, ROUND_DOWN
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -78,7 +78,7 @@ class PortfolioTarget:
     source: str = ""                        # 来源
     
     # 元数据
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     @property

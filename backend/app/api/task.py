@@ -6,7 +6,7 @@ AI 任务单相关端点
 
 from decimal import Decimal
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -137,7 +137,7 @@ async def create_task(
         # 计算过期时间 (右侧条件单)
         expires_at = None
         if task_in.trading_mode == TradingMode.RIGHT_SIDE:
-            expires_at = datetime.utcnow() + timedelta(hours=task_in.timeout_hours)
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=task_in.timeout_hours)
         
         # 创建任务
         task = TaskTicket(
@@ -228,7 +228,7 @@ async def approve_task(
         )
     
     task.status = TaskStatus.APPROVED
-    task.approved_at = datetime.utcnow()
+    task.approved_at = datetime.now(timezone.utc)
     await db.commit()
     
     if auto_execute:

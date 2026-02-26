@@ -15,7 +15,7 @@ Order Model
 PENDING → OPEN → (PARTIAL) → FILLED / CANCELLED / FAILED
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Optional
@@ -73,6 +73,7 @@ class InvalidTransitionError(Exception):
 
 # 仓位方向统一使用 position.py 中的 PositionSide
 from app.models.position import PositionSide
+from app.core.time_utils import utc_now
 PositionSideEnum = PositionSide  # 向后兼容别名
 
 
@@ -259,13 +260,13 @@ class Order(Base):
     
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 
-        default=datetime.utcnow,
+        default=utc_now,
     )
     
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, 
-        default=datetime.utcnow, 
-        onupdate=datetime.utcnow,
+        default=utc_now, 
+        onupdate=utc_now,
     )
     
     filled_at: Mapped[Optional[datetime]] = mapped_column(

@@ -15,7 +15,7 @@ LEAN 风格: Alpha Model 只负责产出 Insight (信号), 绝不直接下单
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -70,7 +70,7 @@ class Insight:
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     # 自动填充
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     # 风控参数建议 (可选, Portfolio 可以覆盖)
     suggested_stop_loss_pct: Optional[float] = None     # 建议止损 % (e.g. 2.0)
@@ -88,7 +88,7 @@ class Insight:
     @property
     def is_expired(self) -> bool:
         """是否已过期"""
-        return datetime.utcnow() > self.generated_at + self.period
+        return datetime.now(timezone.utc) > self.generated_at + self.period
     
     def summary(self) -> str:
         """可读摘要"""

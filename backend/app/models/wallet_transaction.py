@@ -11,7 +11,7 @@ WalletTransaction Model
 - pnl: 平仓盈亏结算
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 
@@ -19,6 +19,7 @@ from sqlalchemy import String, Numeric, DateTime, Text, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.core.time_utils import utc_now
 
 
 class TransactionType(str, Enum):
@@ -84,7 +85,7 @@ class WalletTransaction(Base):
     # 时间戳
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 
-        default=datetime.utcnow,
+        default=utc_now,
         index=True,
     )
     

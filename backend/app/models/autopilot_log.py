@@ -10,7 +10,7 @@ Autopilot Log Model
 - 执行操作
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from enum import Enum as PyEnum
 
@@ -21,6 +21,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.core.time_utils import utc_now
 
 
 class AutopilotDecision(str, PyEnum):
@@ -126,7 +127,7 @@ class AutopilotLog(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=utc_now,
     )
 
     __table_args__ = (

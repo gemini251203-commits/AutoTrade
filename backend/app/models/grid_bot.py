@@ -21,7 +21,7 @@ GridBot Model
 - COMPLETED: 已完成
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Optional, List
@@ -30,6 +30,7 @@ from sqlalchemy import String, Integer, Numeric, DateTime, Boolean, ForeignKey, 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.core.time_utils import utc_now
 
 
 class GridType(str, Enum):
@@ -239,7 +240,7 @@ class GridBot(Base):
     
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=utc_now,
     )
     
     started_at: Mapped[Optional[datetime]] = mapped_column(
@@ -256,8 +257,8 @@ class GridBot(Base):
     
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utc_now,
+        onupdate=utc_now,
     )
     
     # ============================================

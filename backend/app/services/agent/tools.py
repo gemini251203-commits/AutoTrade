@@ -366,7 +366,7 @@ async def place_order(
         if result.get("success"):
             result["message"] = "订单已通过 Pipeline 执行"
         
-        return json.dumps(result, ensure_ascii=False)
+        return json.dumps(result, ensure_ascii=False, default=str)
 
     except OrderError as e:
         return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
@@ -1208,6 +1208,118 @@ async def create_strategy(
         "interval": strategy.interval,
         "message": f"策略 '{name}' 已创建 (ID: {strategy.id})，默认未启用",
         "validation_report": report,
+    }, ensure_ascii=False)
+
+
+@register_tool
+async def update_strategy(
+    db: AsyncSession,
+    user_id: int,
+    strategy_id: int = 0,
+    config_yaml: str = "",
+    name: str = "",
+    interval: str = "",
+) -> str:
+    """
+    安全更新策略 (带 YAML 验证 + 干跑评估)
+
+    在保存前验证:
+    1. YAML 语法和结构是否正确
+    2. 使用的指标是否全部受支持
+    3. 干跑评估是否能正常执行 (不下单)
+
+    参数:
+        strategy_id: 策略 ID
+        config_yaml: 新的 YAML 配置 (可选, 不传则不修改配置)
+        name: 新的策略名称 (可选)
+        interval: 新的 K 线周期 (可选)
+    """
+    from app.services.quant.strategy import StrategyEngine
+
+    if not strategy_id:
+        return json.dumps({"error": "缺少 strategy_id"}, ensure_ascii=False)
+
+    result = await db.execute(
+        select(Strategy).where(
+            Strategy.id == int(strategy_id),
+            Strategy.user_id == user_id,
+        )
+    )
+    strategy = result.scalar_one_or_none()
+    if not strategy:
+        return json.dumps({"error": f"找不到策略 ID={strategy_id}"}, ensure_ascii=False)
+
+    # 保存旧配置用于回滚
+    old_yaml = strategy.config_yaml
+    old_name = strategy.name
+    old_interval = strategy.interval
+
+    engine = StrategyEngine()
+
+    # 如果提供了新 YAML, 验证它
+    if config_yaml:
+        # Step 1: 解析 YAML
+        try:
+            config = engine.parse_yaml(config_yaml)
+        except ValueError as e:
+            return json.dumps({
+                "error": f"YAML 解析失败: {str(e)}",
+                "hint": "请检查 YAML 语法是否正确",
+            }, ensure_ascii=False)
+
+        # Step 2: 验证指标和结构
+        report = _build_validation_report(config)
+        if not report.get("is_valid", False):
+            error_msgs = []
+            if report.get("unknown_indicators"):
+                error_msgs.append(f"不支持的指标: {', '.join(report['unknown_indicators'])}")
+            if report.get("syntax_errors"):
+                error_msgs.extend(report["syntax_errors"])
+            return json.dumps({
+                "error": f"策略配置无效: {'; '.join(error_msgs)}",
+                "old_config_preserved": True,
+            }, ensure_ascii=False)
+
+        # Step 3: 干跑评估 — 确保策略能正常运行
+        try:
+            target_symbol = config.get("symbol", strategy.symbol)
+            required_tfs = config.get("_required_timeframes", [config.get("interval", strategy.interval)])
+            klines_map = await _fetch_klines_map(target_symbol, required_tfs)
+            if klines_map:
+                engine.evaluate(config, klines_map=klines_map)
+        except Exception as e:
+            return json.dumps({
+                "error": f"干跑评估失败 (策略无法运行): {str(e)}",
+                "old_config_preserved": True,
+                "hint": "请检查 entry/exit 条件中的指标名称和参数是否正确",
+            }, ensure_ascii=False)
+
+        # 所有验证通过, 更新配置
+        strategy.config_yaml = config_yaml
+
+    # 更新其他字段
+    if name:
+        strategy.name = name
+    if interval:
+        strategy.interval = interval
+
+    await db.commit()
+    await db.refresh(strategy)
+
+    changes = []
+    if config_yaml:
+        changes.append("配置已更新")
+    if name:
+        changes.append(f"名称→{name}")
+    if interval:
+        changes.append(f"周期→{interval}")
+
+    return json.dumps({
+        "action": "updated",
+        "id": strategy.id,
+        "name": strategy.name,
+        "changes": changes,
+        "message": f"策略 '{strategy.name}' (ID:{strategy.id}) 更新成功: {', '.join(changes)}",
     }, ensure_ascii=False)
 
 
@@ -2123,7 +2235,7 @@ async def analyze_trend_now(
         # 缓存结果
         from datetime import datetime
         scheme.last_result = trend_result.to_dict()
-        scheme.last_run_at = datetime.utcnow()
+        scheme.last_run_at = datetime.now(timezone.utc)
         await db.commit()
 
         return json.dumps({
@@ -2573,7 +2685,7 @@ async def analyze_news_impact(
     from sqlalchemy import select as sa_select, and_
     from app.models.news import NewsArticle
     from app.models.market import Kline
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
 
     try:
         days = min(days, 90)
@@ -2581,7 +2693,7 @@ async def analyze_news_impact(
         if not windows:
             windows = [1, 4, 24]
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         # 1. 查询有 currency 标签的新闻
         news_result = await db.execute(

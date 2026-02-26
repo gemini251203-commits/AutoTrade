@@ -4,7 +4,7 @@ Trend Analysis API
 趋势分析方案 CRUD + 手动触发分析
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -234,7 +234,7 @@ async def run_analysis(
 
     # 保存结果
     scheme.last_result = trend_result.to_dict()
-    scheme.last_run_at = datetime.utcnow()
+    scheme.last_run_at = datetime.now(timezone.utc)
 
     snapshot = TrendSnapshot(
         scheme_id=scheme.id,

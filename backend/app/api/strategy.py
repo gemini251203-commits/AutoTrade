@@ -17,6 +17,7 @@ Strategy API
 
 from typing import Optional, List
 from datetime import datetime
+from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, status, Query
 from pydantic import BaseModel, Field
@@ -65,12 +66,11 @@ class StrategyResponse(BaseModel):
     last_signal: Optional[str] = None
     total_trades: int
     win_trades: int
-    total_pnl: float
+    total_pnl: Decimal
     created_at: str
     updated_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True, "json_encoders": {Decimal: str}}
 
 
 class StrategyLogResponse(BaseModel):
@@ -104,23 +104,9 @@ class TemplateResponse(BaseModel):
     modules: Optional[str] = None
 
 
-class MemoryResponse(BaseModel):
-    """交易记忆响应"""
-    id: int
-    symbol: str
-    source: Optional[str] = None
-    side: Optional[str] = None
-    leverage: Optional[int] = None
-    strategy_name: Optional[str] = None
-    trade_result: str
-    pnl_pct: float
-    pnl_usdt: Optional[float] = None
-    situation: Optional[str] = None
-    lesson: Optional[str] = None
-    created_at: str
-
-    class Config:
-        from_attributes = True
+# MemoryResponse 统一使用 journal.py 的 TradeMemoryResponse
+# 避免双重定义导致字段不一致
+from app.api.journal import TradeMemoryResponse as MemoryResponse
 
 
 # ==================== Helper ====================
@@ -141,7 +127,7 @@ def _strategy_to_response(s: Strategy) -> dict:
         "last_signal": s.last_signal,
         "total_trades": s.total_trades,
         "win_trades": s.win_trades,
-        "total_pnl": s.total_pnl,
+        "total_pnl": str(s.total_pnl),
         "created_at": s.created_at.isoformat() + "Z" if s.created_at else "",
         "updated_at": s.updated_at.isoformat() + "Z" if s.updated_at else "",
     }
@@ -468,19 +454,27 @@ async def get_memories(
     memories = result.scalars().all()
     
     return [
-        {
-            "id": m.id,
-            "symbol": m.symbol,
-            "source": m.source,
-            "side": m.side,
-            "leverage": m.leverage,
-            "strategy_name": m.strategy_name,
-            "trade_result": m.trade_result,
-            "pnl_pct": m.pnl_pct,
-            "pnl_usdt": m.pnl_usdt,
-            "situation": m.situation,
-            "lesson": m.lesson,
-            "created_at": m.created_at.isoformat() + "Z" if m.created_at else "",
-        }
+        MemoryResponse(
+            id=m.id,
+            symbol=m.symbol,
+            source=m.source,
+            side=m.side,
+            entry_price=m.entry_price,
+            exit_price=m.exit_price,
+            leverage=m.leverage,
+            margin_used=m.margin_used,
+            trade_result=m.trade_result,
+            pnl_pct=m.pnl_pct,
+            pnl_usdt=m.pnl_usdt,
+            duration_minutes=m.duration_minutes,
+            close_reason=m.close_reason,
+            had_stop_loss=m.had_stop_loss,
+            had_take_profit=m.had_take_profit,
+            open_reason=m.open_reason,
+            indicators_snapshot=m.indicators_snapshot,
+            lesson=m.lesson,
+            strategy_name=m.strategy_name,
+            created_at=m.created_at.isoformat() + "Z" if m.created_at else None,
+        )
         for m in memories
     ]

@@ -16,6 +16,8 @@ from .user_ai_config import UserAIConfig, AIProvider
 from .agent import ChatConversation, ChatMessage
 from .autopilot_log import AutopilotLog, AutopilotDecision
 from .news import NewsArticle, NewsAlert, NewsThinking
+from .strategy import Strategy, StrategyLog, TradeMemory
+from .trend_scheme import TrendScheme, TrendSnapshot
 
 
 __all__ = [
@@ -46,6 +48,11 @@ __all__ = [
     "NewsArticle",
     "NewsAlert",
     "NewsThinking",
+    "Strategy",
+    "StrategyLog",
+    "TradeMemory",
+    "TrendScheme",
+    "TrendSnapshot",
 ]
 
 

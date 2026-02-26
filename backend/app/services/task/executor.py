@@ -7,7 +7,7 @@ Task Executor
 """
 
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 
@@ -87,7 +87,7 @@ class TaskExecutor:
             # 更新任务状态
             if result.success:
                 task.status = TaskStatus.COMPLETED
-                task.executed_at = datetime.utcnow()
+                task.executed_at = datetime.now(timezone.utc)
                 task.execution_result = {
                     "success": True,
                     "message": result.message,

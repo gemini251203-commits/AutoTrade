@@ -12,7 +12,7 @@ import re
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -328,7 +328,7 @@ class AIBrain:
         
         收集用户的钱包、持仓、订单等信息
         """
-        context = AIContext(timestamp=datetime.utcnow().isoformat() + "Z")
+        context = AIContext(timestamp=datetime.now(timezone.utc).isoformat())
         
         # 1. 获取市场数据
         try:

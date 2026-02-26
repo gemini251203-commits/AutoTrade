@@ -19,7 +19,7 @@ Grid Strategy Service
 
 from decimal import Decimal
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass
 
 from sqlalchemy import select, and_
@@ -308,7 +308,7 @@ class GridStrategy:
                     logger.warning(f"[GridStrategy] Failed to place sell order: {e}")
         
         bot.status = GridStatus.RUNNING
-        bot.started_at = datetime.utcnow()
+        bot.started_at = datetime.now(timezone.utc)
         bot.grid_levels = grid_levels
         flag_modified(bot, "grid_levels")
         
@@ -361,7 +361,7 @@ class GridStrategy:
         # - 无需额外处理
         
         bot.status = GridStatus.STOPPED
-        bot.stopped_at = datetime.utcnow()
+        bot.stopped_at = datetime.now(timezone.utc)
         
         return bot
     
@@ -470,7 +470,7 @@ class GridStrategy:
                         self.size = order.quantity
                         self.leverage = bot.leverage
                         self.created_at = order.created_at
-                        self.closed_at = datetime.utcnow()
+                        self.closed_at = datetime.now(timezone.utc)
                         self.stop_loss = bot.stop_loss_price
                         self.take_profit = bot.take_profit_price
                         self.total_commission = Decimal("0")

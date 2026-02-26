@@ -8,7 +8,7 @@ Position Manager Service
 
 from decimal import Decimal
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -481,7 +481,7 @@ class PositionManager:
         
         if is_full_close:
             position.status = PositionStatus.CLOSED
-            position.closed_at = datetime.utcnow()
+            position.closed_at = datetime.now(timezone.utc)
             position.realized_pnl = pnl
             
             # 🔥 统一记忆: 平仓时自动生成交易记忆

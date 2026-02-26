@@ -107,7 +107,7 @@ async def get_market_sentiment(
             "by_category": {...},
         }
     """
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
     
     query = select(NewsArticle).where(
         NewsArticle.published_at >= since,

@@ -18,7 +18,7 @@ Order Executor Service
 
 from decimal import Decimal
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -295,7 +295,7 @@ class OrderExecutor:
         order.filled_quantity = order.quantity
         order.avg_fill_price = actual_price
         order.commission = commission
-        order.filled_at = datetime.utcnow()
+        order.filled_at = datetime.now(timezone.utc)
         
         return order
     

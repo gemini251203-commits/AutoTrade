@@ -9,7 +9,8 @@ Strategy Models
 - trade_memories: AI 交易反思记忆库
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
@@ -19,6 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.core.time_utils import utc_now
 
 
 class Strategy(Base):
@@ -91,21 +93,21 @@ class Strategy(Base):
         default=0,
         comment="盈利次数",
     )
-    total_pnl: Mapped[float] = mapped_column(
-        Float,
-        default=0.0,
+    total_pnl: Mapped[Decimal] = mapped_column(
+        Numeric(20, 8),
+        default=Decimal("0"),
         comment="累计盈亏 (USDT)",
     )
 
     # 时间
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=utc_now,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utc_now,
+        onupdate=utc_now,
     )
 
     __table_args__ = (
@@ -200,7 +202,7 @@ class StrategyLog(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=utc_now,
     )
 
     __table_args__ = (
@@ -348,7 +350,7 @@ class TradeMemory(Base):
     
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=utc_now,
     )
 
     __table_args__ = (

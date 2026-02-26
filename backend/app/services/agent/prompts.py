@@ -110,8 +110,12 @@ TOOLS_DESCRIPTION = """
     - YAML 必须包含 4 层: alphas + portfolio + risk + execution
     示例: [TOOL_CALL: create_pipeline_strategy(name=RSI固定仓位策略, symbol=BTCUSDT, interval=1h)]
 
-19. update_strategy(strategy_id, name, symbol, interval) - 修改已有策略
-    - config_yaml: 同样**不要放在TOOL_CALL参数里**，直接在正文写 ```yaml 代码块
+19. update_strategy(strategy_id, name, interval) - 安全修改已有策略 (带验证+干跑)
+    - strategy_id: 策略 ID (必填)
+    - config_yaml: **不要放在TOOL_CALL参数里**，直接在正文写 ```yaml 代码块
+    - name: 新名称 (可选)
+    - interval: 新K线周期 (可选)
+    - ⚠️ 系统会自动验证: YAML语法→指标白名单→干跑评估, 任一失败则保留旧配置
     示例: [TOOL_CALL: update_strategy(strategy_id=1)]
 
 ⚠️ **策略构建协议 (四步引导 — 必须遵守)**:

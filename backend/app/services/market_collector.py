@@ -14,7 +14,7 @@ MarketCollector - 市场数据采集服务
 
 import asyncio
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import redis.asyncio as redis
@@ -331,7 +331,7 @@ class MarketCollector:
                         "close_time": stmt.excluded.close_time,
                         "quote_volume": stmt.excluded.quote_volume,
                         "trades": stmt.excluded.trades,
-                        "updated_at": datetime.utcnow(),
+                        "updated_at": datetime.now(timezone.utc),
                     }
                 )
                 
@@ -368,7 +368,7 @@ class MarketCollector:
                 "high": ticker.get("highPrice", "0"),
                 "low": ticker.get("lowPrice", "0"),
                 "volume": ticker.get("volume", "0"),
-                "updated_at": datetime.utcnow().isoformat() + "Z",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             })
             
             # 设置过期时间 (5 分钟)，防止过期数据残留

@@ -9,7 +9,7 @@ Trade Journal Service
 挂载点: PositionManager.close_position()
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -61,7 +61,7 @@ class TradeJournal:
             # 计算持仓时长
             duration_minutes = None
             if position.created_at:
-                close_time = position.closed_at or datetime.utcnow()
+                close_time = position.closed_at or datetime.now(timezone.utc)
                 delta = close_time - position.created_at
                 duration_minutes = int(delta.total_seconds() / 60)
             

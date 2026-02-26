@@ -7,7 +7,7 @@ User AI Configuration Model
 API Key 使用 Fernet 对称加密存储
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -15,6 +15,7 @@ from sqlalchemy import String, Integer, Float, DateTime, ForeignKey, Text, Enum 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.core.time_utils import utc_now
 
 
 class AIProvider(str, Enum):
@@ -146,13 +147,13 @@ class UserAIConfig(Base):
     
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=utc_now,
     )
     
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utc_now,
+        onupdate=utc_now,
     )
     
     # ============================================

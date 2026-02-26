@@ -155,7 +155,7 @@ class TrendScheduler:
 
         # 更新缓存
         scheme.last_result = trend_result.to_dict()
-        scheme.last_run_at = datetime.utcnow()
+        scheme.last_run_at = datetime.now(timezone.utc)
 
         # 写入快照
         snapshot = TrendSnapshot(

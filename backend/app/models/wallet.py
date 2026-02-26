@@ -18,12 +18,13 @@ Wallet Model (简化版)
 - 使用 Decimal/Numeric 类型确保精度 (严禁 float)
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy import Numeric, DateTime, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.core.time_utils import utc_now
 
 
 class Wallet(Base):
@@ -82,12 +83,12 @@ class Wallet(Base):
     # 时间戳
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 
-        default=datetime.utcnow
+        default=utc_now
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, 
-        default=datetime.utcnow, 
-        onupdate=datetime.utcnow
+        default=utc_now, 
+        onupdate=utc_now
     )
     
     # 数据库级别约束: 防止余额和冻结变为负数

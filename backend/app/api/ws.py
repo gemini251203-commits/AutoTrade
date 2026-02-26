@@ -23,7 +23,7 @@ WebSocket Price Push API
 
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -102,7 +102,7 @@ async def websocket_prices(websocket: WebSocket):
                 await websocket.send_json({
                     "type": "price_update",
                     "prices": prices,
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
             
             # 每秒推送一次

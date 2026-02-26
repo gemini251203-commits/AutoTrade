@@ -6,13 +6,14 @@ AI 任务单模型
 指令流: User/AI -> Task Ticket (DB) -> Execution Engine -> Exchange
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from sqlalchemy import String, Numeric, DateTime, ForeignKey, Enum as SQLEnum, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.core.time_utils import utc_now
 
 
 class TaskSource(str, Enum):
@@ -175,9 +176,9 @@ class TaskTicket(Base):
     note: Mapped[str] = mapped_column(Text, nullable=True)
     
     # 时间戳
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=utc_now, onupdate=utc_now
     )
     approved_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     executed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)

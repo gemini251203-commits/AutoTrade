@@ -7,7 +7,7 @@ Position Model
 包含方向（多/空）、数量、开仓价格、杠杆、保证金等信息。
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Optional
@@ -27,13 +27,21 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
+from app.core.time_utils import utc_now
 
 
 class PositionSide(str, Enum):
-    """仓位方向"""
+    """
+    仓位方向
+    
+    ⚠️ 注意: BOTH 是币安 Hedge Mode 的标识，表示"双向持仓模式"。
+    它仅用于 API 配置层面（告知交易所当前账户的持仓模式），
+    实际仓位记录的 side 字段只应为 LONG 或 SHORT，
+    永远不应设为 BOTH，否则会导致盈亏计算错误。
+    """
     LONG = "long"    # 做多
     SHORT = "short"  # 做空
-    BOTH = "both"    # 双向持仓模式
+    BOTH = "both"    # 双向持仓模式标识 (仅用于 API 配置, 不可用于实际仓位)
 
 
 class PositionStatus(str, Enum):
@@ -197,14 +205,14 @@ class Position(Base):
     
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 
-        default=datetime.utcnow,
+        default=utc_now,
         nullable=False,
     )
     
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, 
-        default=datetime.utcnow, 
-        onupdate=datetime.utcnow,
+        default=utc_now, 
+        onupdate=utc_now,
         nullable=False,
     )
     

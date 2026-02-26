@@ -46,7 +46,7 @@ export interface StrategyResponse {
   last_signal: string | null
   total_trades: number
   win_trades: number
-  total_pnl: number
+  total_pnl: string        // Decimal → string
   created_at: string
   updated_at: string
 }

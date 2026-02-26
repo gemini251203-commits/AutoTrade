@@ -15,7 +15,8 @@ import asyncio
 import json
 import re
 from typing import Dict, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
+from app.core.time_utils import utc_now
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -177,7 +178,7 @@ class AgentAutopilot:
 
         self._configs[user_id] = config
         self._stats[user_id] = {
-            "started_at": datetime.utcnow().isoformat() + "Z",
+            "started_at": datetime.now(timezone.utc).isoformat(),
             "total_cycles": 0,
             "last_cycle_at": None,
             "actions_taken": 0,
@@ -444,8 +445,11 @@ class AgentAutopilot:
                     "\n请:\n"
                     "1. 查询交易记忆分析最近的盈亏情况\n"
                     "2. 查看当前活跃策略配置\n"
-                    "3. 如果发现策略参数需要调整 (如止损/止盈/指标阈值), 直接修改\n"
+                    "3. 如果发现策略参数需要调整 (如止损/止盈/指标阈值), "
+                    "使用 update_strategy 工具修改 (系统会自动验证YAML+干跑确保能运行)\n"
                     "4. 给出一句话总结当前策略表现\n"
+                    "\n⚠️ 修改策略时必须使用 [TOOL_CALL: update_strategy(strategy_id=ID)] "
+                    "并在正文写 ```yaml 代码块。系统会自动验证, 无效配置不会被保存。\n"
                     "\n最后写出: 策略优化建议: [无需调整/已优化参数/建议暂停]"
                 )
 
@@ -630,7 +634,10 @@ class AgentAutopilot:
                                     f"\n=== 策略: {strat.name} (ID={strat.id}, 周期={strat.interval}) ===\n"
                                     f"```yaml\n{strat.config_yaml}\n```"
                                 )
-                            strategy_text += "\n\n用户定义的策略详细配置 (供参考):\n" + "\n".join(strategy_configs)
+                            strategy_text += (
+                                "\n\n用户定义的策略详细配置 (⚠️ 修改请使用 update_strategy 工具):\n"
+                                + "\n".join(strategy_configs)
+                            )
                 except Exception as e:
                     logger.warning(f"[Autopilot] Strategy evaluation failed: {e}")
 
@@ -691,7 +698,7 @@ class AgentAutopilot:
                         direction = "多头付费" if rate > 0 else "空头付费" if rate < 0 else "零费率"
                         next_ts = rate_info.get("nextFundingTime", 0)
                         if next_ts:
-                            remaining_min = max(0, (next_ts - int(datetime.utcnow().timestamp() * 1000)) // 60000)
+                            remaining_min = max(0, (next_ts - int(datetime.now(timezone.utc).timestamp() * 1000)) // 60000)
                             time_str = f"{remaining_min // 60}h{remaining_min % 60}m后"
                         else:
                             time_str = "未知"
@@ -705,7 +712,7 @@ class AgentAutopilot:
                     logger.debug(f"[Autopilot] Funding rate fetch failed: {e}")
 
                 # 构造分析指令 (直接注入指标数据 + 策略信号 + 交易记忆 + 趋势分析 + 资金费率)
-                now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+                now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
                 prompt = (
                     f"[Autopilot {now}] {symbol} 决策周期\n\n"
                     f"=== 市场数据 ===\n{indicator_text}\n"
@@ -792,7 +799,7 @@ class AgentAutopilot:
 
                 # 更新策略的上次运行时间和信号
                 if matched_strat:
-                    matched_strat.last_run_at = datetime.utcnow()
+                    matched_strat.last_run_at = utc_now()
                     matched_strat.last_signal = decision.value
 
                 await db.commit()

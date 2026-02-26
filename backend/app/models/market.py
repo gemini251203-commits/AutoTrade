@@ -7,12 +7,13 @@ K 线 (Candlestick) 数据模型
 支持多币种、多时间周期，前端 K 线图和回测系统统一数据源。
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy import String, BigInteger, Numeric, DateTime, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.core.time_utils import utc_now
 
 
 class Kline(Base):
@@ -67,9 +68,9 @@ class Kline(Base):
     trades: Mapped[int] = mapped_column(BigInteger, nullable=True)
     
     # 创建/更新时间
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=utc_now, onupdate=utc_now
     )
     
     # 复合唯一约束: 同一币种、周期、时间只能有一条记录

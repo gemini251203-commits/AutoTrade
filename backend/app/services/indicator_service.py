@@ -22,7 +22,7 @@ Indicator Service - 技术指标计算服务
 import asyncio
 from decimal import Decimal
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import redis.asyncio as redis
 import json
@@ -285,7 +285,7 @@ class IndicatorService:
                 "interval": interval,
                 "indicators": {},
                 "trend": "unknown",
-                "updated_at": datetime.utcnow().isoformat() + "Z",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
         
         # 提取收盘价和成交量
@@ -320,7 +320,7 @@ class IndicatorService:
                 "volume_ratio": volume_ratio,
             },
             "trend": trend,
-            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         
         # 缓存到 Redis

@@ -8,7 +8,7 @@ Wallet API
 - GET 接口只做懒加载初始化，不会修改现有余额
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from decimal import Decimal
 from fastapi import APIRouter, HTTPException, status
@@ -307,7 +307,7 @@ async def get_portfolio_stats(
     import calendar as cal_module
     from datetime import timedelta
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # ---------- 1. 总价值 ----------
     wallet = await WalletManager.get_wallet(db, current_user.id)

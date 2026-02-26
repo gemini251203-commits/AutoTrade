@@ -169,7 +169,7 @@ const filteredDecisionLogs = computed(() => {
 // ==================== Computed ====================
 
 const activeCount = computed(() => strategies.value.filter(s => s.is_active).length)
-const totalPnl = computed(() => strategies.value.reduce((sum, s) => sum + s.total_pnl, 0))
+const totalPnl = computed(() => strategies.value.reduce((sum, s) => sum + parseFloat(s.total_pnl), 0))
 const totalTrades = computed(() => strategies.value.reduce((sum, s) => sum + s.total_trades, 0))
 const totalWins = computed(() => strategies.value.reduce((sum, s) => sum + s.win_trades, 0))
 const winRate = computed(() => totalTrades.value > 0 ? ((totalWins.value / totalTrades.value) * 100).toFixed(1) : '0.0')
@@ -695,8 +695,8 @@ onMounted(() => {
                   <div class="flex items-center gap-4 mt-1 text-xs text-gray-500">
                     <span>交易: {{ s.total_trades }}</span>
                     <span>胜: {{ s.win_trades }}</span>
-                    <span :style="{ color: pnlColor(s.total_pnl) }">
-                      PnL: {{ s.total_pnl >= 0 ? '+' : '' }}{{ s.total_pnl.toFixed(2) }}
+                    <span :style="{ color: pnlColor(parseFloat(s.total_pnl)) }">
+                      PnL: {{ parseFloat(s.total_pnl) >= 0 ? '+' : '' }}{{ parseFloat(s.total_pnl).toFixed(2) }}
                     </span>
                     <span class="flex items-center gap-1">
                       决策间隔:

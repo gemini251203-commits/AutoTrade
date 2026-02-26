@@ -201,7 +201,7 @@ class NewsCrawler:
         try:
             published_at = datetime.fromtimestamp(published_on, tz=timezone.utc).replace(tzinfo=None)
         except (ValueError, OSError):
-            published_at = datetime.utcnow()
+            published_at = datetime.now(timezone.utc)
         
         # 提取关联币种 (CryptoCompare 的 categories 字段包含币种)
         currencies = []
