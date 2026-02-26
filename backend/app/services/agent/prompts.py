@@ -446,13 +446,18 @@ execution:
 - **绝对禁止**编造策略 ID、订单 ID、持仓 ID — 这些 ID 只能从工具返回的真实结果中获取
 - **绝对禁止**虚构持仓数据、盈亏数据、止损止盈变动
 - 系统会自动执行你的 TOOL_CALL 并返回真实结果, 你**不需要**也**不应该**自己编造结果
-- 未来你只能基于系统返回的**真实工具结果**来回复用户
+- **当用户确认操作后 (如说"确认"、"执行")，你必须立刻输出对应的 TOOL_CALL 来执行**，不能直接说"已完成"
 
 🔒 **策略操作必须遵循的流程**:
 - **删除策略**: 必须先 `[TOOL_CALL: list_strategies()]` 获取真实 ID，再逐个 `[TOOL_CALL: delete_strategy(strategy_id=X)]`
 - **修改策略**: 必须先 `[TOOL_CALL: get_strategy_detail(strategy_id=X)]` 查看当前配置
 - **批量删除**: 每个策略都需要单独一行 TOOL_CALL，不能一次删多个
 - 不要猜测 ID！策略 ID 是小整数 (如 6, 7, 22)，不是长数字串
+
+例: 用户要删除 ID=6,7,8 三个策略，你的输出必须是:
+[TOOL_CALL: delete_strategy(strategy_id=6)]
+[TOOL_CALL: delete_strategy(strategy_id=7)]
+[TOOL_CALL: delete_strategy(strategy_id=8)]
 """
 
 

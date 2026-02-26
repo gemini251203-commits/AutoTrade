@@ -272,7 +272,7 @@ async def chat_stream(
             response = await provider.chat(
                 messages=messages,
                 temperature=0.7,
-                max_tokens=2000,
+                max_tokens=4000,
             )
             ai_content = response.content
 
@@ -442,7 +442,7 @@ async def chat_complete(
             response = await provider.chat(
                 messages=messages,
                 temperature=0.7,
-                max_tokens=2000,
+                max_tokens=4000,
             )
             ai_content = response.content
 
