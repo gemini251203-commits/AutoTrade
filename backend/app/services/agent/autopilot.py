@@ -120,11 +120,12 @@ def extract_summary(ai_reply: str) -> str:
 
 
 def check_action_taken(ai_reply: str) -> bool:
-    """检查 AI 是否实际执行了交易操作"""
+    """检查 AI 是否实际做出了交易决策 (非观望)"""
     action_keywords = [
-        "place_order", "close_position", 
+        "place_order", "close_position",
         "订单已创建", "下单成功", "开仓成功", "平仓成功",
         "order_id", "已执行",
+        "trade_signal",  # 新的信号格式
     ]
     text = ai_reply.lower()
     return any(kw.lower() in text for kw in action_keywords)
@@ -743,21 +744,26 @@ class AgentAutopilot:
                     f"=== 市场数据 ===\n{indicator_text}\n"
                     f"{strategy_text}\n{trend_text}\n{funding_text}\n{memory_text}\n{scratchpad_text}\n\n"
                     f"=== 你的任务 ===\n"
-                    f"你是独立交易员，必须基于上述数据做出决策并执行。\n\n"
-                    f"执行规则:\n"
-                    f"1. 先用上下文中的余额和价格计算参数，不需要调用 get_balance/get_price\n"
-                    f"2. 如果有明确信号(策略入场+趋势确认+指标支持)，必须下单:\n"
-                    f"   [TOOL_CALL: place_order(symbol={symbol}, side=buy/sell, order_type=market, "
-                    f"quantity=计算值, leverage=杠杆, stop_loss=止损价, take_profit=止盈价)]\n"
-                    f"3. 如果已有持仓，根据行情决定: 持有/移动止损/止盈/平仓\n"
-                    f"4. 信号不明确时才选择观望，但不要永远观望\n"
-                    f"5. 仓位不超过余额30%，必须设止损\n"
-                    f"6. 回复末尾用 [SCRATCHPAD]...[/SCRATCHPAD] 记录你的分析结论，供下次周期参考。"
-                    f"写下: 形态观察、关键价位、趋势判断、下次操作计划。\n\n"
-                    f"回复格式 (简洁≤200字):\n"
+                    f"你是量化分析师，基于上述数据做出交易决策。\n"
+                    f"你只负责分析与决策，系统会自动执行你的信号。\n\n"
+                    f"决策规则:\n"
+                    f"1. 结合策略信号+趋势+指标+记忆综合判断\n"
+                    f"2. 有明确做多/做空信号时，输出交易信号\n"
+                    f"3. 已有持仓时，判断是否平仓\n"
+                    f"4. 信号不明确才观望，不要永远观望\n"
+                    f"5. 建议仓位不超过余额30%，必须有止损\n\n"
+                    f"回复格式 (≤200字):\n"
                     f"**分析**: 一句话总结行情\n"
                     f"**决策**: 做多/做空/观望/平仓 (理由)\n"
-                    f"**执行**: [TOOL_CALL: ...] 或 无操作\n"
+                    f"**信号**: 如果不是观望，必须输出信号块:\n"
+                    f"[TRADE_SIGNAL]\n"
+                    f"direction=long 或 short 或 close\n"
+                    f"confidence=0.0~1.0\n"
+                    f"leverage=杠杆倍数\n"
+                    f"sl_pct=止损百分比\n"
+                    f"tp_pct=止盈百分比\n"
+                    f"reason=一句话理由\n"
+                    f"[/TRADE_SIGNAL]\n"
                     f"[SCRATCHPAD]你的分析记录[/SCRATCHPAD]"
                 )
 
@@ -862,6 +868,92 @@ class AgentAutopilot:
                             )
                 except Exception as e:
                     logger.debug(f"[Autopilot] Scratchpad save failed: {e}")
+
+                # ============================================================
+                # 解析 AI 决策 → TradingSignal → ExternalSignalAlpha → Pipeline
+                # ============================================================
+                signal_emitted = False
+                try:
+                    sig_match = re.search(
+                        r'\[TRADE_SIGNAL\](.*?)\[/TRADE_SIGNAL\]',
+                        reply, re.DOTALL,
+                    )
+                    if sig_match and decision in (
+                        AutopilotDecision.OPEN_LONG,
+                        AutopilotDecision.OPEN_SHORT,
+                        AutopilotDecision.CLOSE_LONG,
+                        AutopilotDecision.CLOSE_SHORT,
+                    ):
+                        sig_text = sig_match.group(1).strip()
+                        # 解析 key=value 对
+                        sig_data = {}
+                        for line in sig_text.split('\n'):
+                            if '=' in line:
+                                k, v = line.split('=', 1)
+                                sig_data[k.strip().lower()] = v.strip()
+
+                        direction = sig_data.get('direction', '')
+                        if not direction:
+                            # 从 decision 推断
+                            if decision == AutopilotDecision.OPEN_LONG:
+                                direction = 'long'
+                            elif decision == AutopilotDecision.OPEN_SHORT:
+                                direction = 'short'
+                            elif decision in (AutopilotDecision.CLOSE_LONG, AutopilotDecision.CLOSE_SHORT):
+                                direction = 'close'
+
+                        confidence = float(sig_data.get('confidence', '0.6'))
+                        leverage = int(float(sig_data.get('leverage', '3')))
+                        sl_pct = float(sig_data.get('sl_pct', '2.0'))
+                        tp_pct = float(sig_data.get('tp_pct', '6.0'))
+                        reason = sig_data.get('reason', summary[:80])
+
+                        from app.core.signal import TradingSignal
+                        from app.core.event_bus import event_bus, Event, EventType
+
+                        trading_signal = TradingSignal(
+                            symbol=symbol,
+                            direction=direction,
+                            source="autopilot",
+                            confidence=confidence,
+                            reason=reason,
+                            urgency="normal",
+                            suggested_leverage=leverage,
+                            suggested_sl_pct=sl_pct,
+                            suggested_tp_pct=tp_pct,
+                            metadata={
+                                "strategy_id": active_strategy_id,
+                                "strategy_name": active_strategy_name,
+                                "decision": decision.value,
+                            },
+                        )
+
+                        # 通过 EventBus 广播 (由 ExternalSignalAlpha 消费 → Pipeline 执行)
+                        await event_bus.emit(Event(
+                            type=EventType.EXTERNAL_SIGNAL,
+                            data=trading_signal.to_dict(),
+                            source="autopilot",
+                            user_id=user_id,
+                        ))
+
+                        # 同时直接提交给 ExternalSignalAlpha
+                        from app.services.alpha.external_signal import ExternalSignalAlpha
+                        from app.core.pipeline import get_pipeline
+                        pipeline = get_pipeline(user_id)
+                        for alpha in pipeline._alphas:
+                            if isinstance(alpha, ExternalSignalAlpha) and alpha._name == "autopilot":
+                                await alpha.submit_signal(trading_signal)
+                                break
+
+                        signal_emitted = True
+                        action_taken = True
+                        logger.info(
+                            f"[Autopilot] TradingSignal emitted: {symbol} "
+                            f"{direction} conf={confidence:.0%} lev={leverage}x"
+                        )
+
+                except Exception as e:
+                    logger.warning(f"[Autopilot] Signal emission failed: {e}")
 
                 # 更新统计
                 stats = self._stats.get(user_id)
