@@ -711,12 +711,37 @@ class AgentAutopilot:
                 except Exception as e:
                     logger.debug(f"[Autopilot] Funding rate fetch failed: {e}")
 
+                # 预取上次分析结论 (Scratchpad — AI 跨周期记忆)
+                scratchpad_text = ""
+                scratchpad_obj = None
+                try:
+                    from app.models.scratchpad import AnalysisScratchpad
+                    sp_result = await db.execute(
+                        select(AnalysisScratchpad).where(
+                            AnalysisScratchpad.user_id == user_id,
+                            AnalysisScratchpad.symbol == symbol,
+                            AnalysisScratchpad.source == "autopilot",
+                        ).limit(1)
+                    )
+                    scratchpad_obj = sp_result.scalar_one_or_none()
+                    if scratchpad_obj and scratchpad_obj.context:
+                        scratchpad_text = (
+                            f"\n\U0001f4dd 上次分析结论 (你自己上次写的, 第{scratchpad_obj.cycle_count}次):\n"
+                            f"{scratchpad_obj.context}\n"
+                        )
+                        if scratchpad_obj.key_levels:
+                            scratchpad_text += f"关键价位: {json.dumps(scratchpad_obj.key_levels, ensure_ascii=False)}\n"
+                        if scratchpad_obj.pattern_tracking:
+                            scratchpad_text += f"形态追踪: {json.dumps(scratchpad_obj.pattern_tracking, ensure_ascii=False)}\n"
+                except Exception as e:
+                    logger.debug(f"[Autopilot] Scratchpad fetch failed: {e}")
+
                 # 构造分析指令 (直接注入指标数据 + 策略信号 + 交易记忆 + 趋势分析 + 资金费率)
                 now = utc_now().strftime("%Y-%m-%d %H:%M UTC")
                 prompt = (
                     f"[Autopilot {now}] {symbol} 决策周期\n\n"
                     f"=== 市场数据 ===\n{indicator_text}\n"
-                    f"{strategy_text}\n{trend_text}\n{funding_text}\n{memory_text}\n\n"
+                    f"{strategy_text}\n{trend_text}\n{funding_text}\n{memory_text}\n{scratchpad_text}\n\n"
                     f"=== 你的任务 ===\n"
                     f"你是独立交易员，必须基于上述数据做出决策并执行。\n\n"
                     f"执行规则:\n"
@@ -726,11 +751,14 @@ class AgentAutopilot:
                     f"quantity=计算值, leverage=杠杆, stop_loss=止损价, take_profit=止盈价)]\n"
                     f"3. 如果已有持仓，根据行情决定: 持有/移动止损/止盈/平仓\n"
                     f"4. 信号不明确时才选择观望，但不要永远观望\n"
-                    f"5. 仓位不超过余额30%，必须设止损\n\n"
-                    f"回复格式 (简洁≤150字):\n"
+                    f"5. 仓位不超过余额30%，必须设止损\n"
+                    f"6. 回复末尾用 [SCRATCHPAD]...[/SCRATCHPAD] 记录你的分析结论，供下次周期参考。"
+                    f"写下: 形态观察、关键价位、趋势判断、下次操作计划。\n\n"
+                    f"回复格式 (简洁≤200字):\n"
                     f"**分析**: 一句话总结行情\n"
                     f"**决策**: 做多/做空/观望/平仓 (理由)\n"
-                    f"**执行**: [TOOL_CALL: ...] 或 无操作"
+                    f"**执行**: [TOOL_CALL: ...] 或 无操作\n"
+                    f"[SCRATCHPAD]你的分析记录[/SCRATCHPAD]"
                 )
 
                 # 调用 Agent (非流式) — 设置来源上下文
@@ -803,6 +831,37 @@ class AgentAutopilot:
                     matched_strat.last_signal = decision.value
 
                 await db.commit()
+
+                # 持久化 AI 的 Scratchpad
+                try:
+                    sp_match = re.search(
+                        r'\[SCRATCHPAD\](.*?)\[/SCRATCHPAD\]',
+                        reply, re.DOTALL,
+                    )
+                    if sp_match:
+                        new_context = sp_match.group(1).strip()
+                        if new_context:
+                            from app.models.scratchpad import AnalysisScratchpad
+                            if scratchpad_obj:
+                                scratchpad_obj.context = new_context
+                                scratchpad_obj.cycle_count += 1
+                                scratchpad_obj.updated_at = utc_now()
+                            else:
+                                scratchpad_obj = AnalysisScratchpad(
+                                    user_id=user_id,
+                                    symbol=symbol,
+                                    source="autopilot",
+                                    context=new_context,
+                                    cycle_count=1,
+                                )
+                                db.add(scratchpad_obj)
+                            await db.commit()
+                            logger.debug(
+                                f"[Autopilot] Scratchpad saved for {symbol} "
+                                f"(cycle #{scratchpad_obj.cycle_count})"
+                            )
+                except Exception as e:
+                    logger.debug(f"[Autopilot] Scratchpad save failed: {e}")
 
                 # 更新统计
                 stats = self._stats.get(user_id)

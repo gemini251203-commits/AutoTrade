@@ -291,125 +291,63 @@ class NewsMonitor:
             await db.flush()
             return thinking
 
-        # ============ 执行交易 ============
+        # ============ 发出标准 TradingSignal (不直接下单) ============
         step_decide = ""
         trade_action = None
         position_id = None
 
         try:
-            # 获取当前价格
-            from app.services.exchange import BinanceClient
-            client = BinanceClient()
-            ticker = await client.get_ticker(symbol)
-            current_price = float(ticker.get("lastPrice", 0)) if ticker else 0
+            from app.core.signal import TradingSignal
+            from app.core.event_bus import event_bus, Event, EventType
 
-            if current_price <= 0:
-                step_decide = "决策: 跳过 (无法获取当前价格)"
-                decision = "skip"
-            else:
-                # 计算下单数量
-                from app.models.wallet import Wallet
-                wallet_result = await db.execute(
-                    select(Wallet).where(Wallet.user_id == user_id)
-                )
-                wallet = wallet_result.scalar_one_or_none()
-                if not wallet or float(wallet.balance) < 10:
-                    step_decide = f"决策: 跳过 (余额不足: {float(wallet.balance) if wallet else 0})"
-                    decision = "skip"
-                else:
-                    available = float(wallet.balance)
-                    margin = available * (position_pct / 100)
-                    notional = margin * leverage
-                    quantity = notional / current_price
+            signal = TradingSignal(
+                symbol=symbol,
+                direction="long" if side == "buy" else "short",
+                source="news_monitor",
+                confidence=min(abs(article.sentiment_score or 0.5), 1.0),
+                reason=f"[{alert.name}] {article.title_zh or article.title[:80]}",
+                urgency="high",
+                suggested_leverage=leverage,
+                suggested_sl_pct=sl_pct,
+                suggested_tp_pct=tp_pct,
+                metadata={
+                    "alert_id": alert.id,
+                    "article_id": article.id,
+                    "sentiment": article.sentiment,
+                    "sentiment_score": article.sentiment_score,
+                    "trend_direction": trend_direction,
+                    "position_pct": position_pct,
+                },
+            )
 
-                    # 用品种管理器取整
-                    from app.core.security import security_manager
-                    quantity = float(security_manager.round_quantity_up(symbol, quantity))
+            trade_action = signal.to_dict()
 
-                    # 计算止损止盈价格
-                    if side == "buy":
-                        sl_price = round(current_price * (1 - sl_pct / 100), 2)
-                        tp_price = round(current_price * (1 + tp_pct / 100), 2)
-                    else:
-                        sl_price = round(current_price * (1 + sl_pct / 100), 2)
-                        tp_price = round(current_price * (1 - tp_pct / 100), 2)
+            # 通过 EventBus 广播信号 (由 ExternalSignalAlpha 消费 → Pipeline 执行)
+            await event_bus.emit(Event(
+                type=EventType.EXTERNAL_SIGNAL,
+                data=signal.to_dict(),
+                source="news_monitor",
+                user_id=user_id,
+            ))
 
-                    trade_action = {
-                        "symbol": symbol,
-                        "side": side,
-                        "quantity": quantity,
-                        "leverage": leverage,
-                        "price": current_price,
-                        "stop_loss": sl_price,
-                        "take_profit": tp_price,
-                        "margin": round(margin, 2),
-                        "notional": round(notional, 2),
-                    }
-
-                    step_decide = (
-                        f"决策: 交易\n"
-                        f"  方向: {side}, 交易对: {symbol}\n"
-                        f"  数量: {quantity}, 杠杆: {leverage}x\n"
-                        f"  保证金: ${margin:.2f} ({position_pct}% 仓位)\n"
-                        f"  止损: ${sl_price} ({sl_pct}%), 止盈: ${tp_price} ({tp_pct}%)\n"
-                        f"  触发新闻: {article.title_zh or article.title}"
-                    )
-
-                    # 通过 Pipeline 下单
-                    from app.core.pipeline import get_pipeline
-                    from app.models.position import Position, PositionStatus
-
-                    pipeline = get_pipeline(user_id)
-
-                    pos_result = await db.execute(
-                        select(Position).where(
-                            Position.user_id == user_id,
-                            Position.status == PositionStatus.OPEN,
-                        )
-                    )
-                    positions = pos_result.scalars().all()
-                    open_positions = [
-                        {"symbol": p.symbol, "side": p.side.value, "size": float(p.size)}
-                        for p in positions
-                    ]
-
-                    result = await pipeline.submit_order(
-                        db=db,
-                        symbol=symbol,
-                        side=side,
-                        quantity=Decimal(str(quantity)),
-                        leverage=leverage,
-                        price=Decimal(str(current_price)),
-                        stop_loss=Decimal(str(sl_price)),
-                        take_profit=Decimal(str(tp_price)),
-                        source="news",
-                        note=f"[新闻交易] {alert.name}: {article.title_zh or article.title[:50]}",
-                        available_balance=Decimal(str(available)),
-                        total_equity=Decimal(str(wallet.total_equity)),
-                        open_positions=open_positions,
-                    )
-
-                    if result.get("success"):
-                        position_id = result.get("position_id")
-                        decision = "trade"
-                        step_decide += f"\n✅ 下单成功, 仓位 #{position_id}"
-                        logger.info(
-                            "[NewsMonitor] 新闻交易执行: %s %s %s qty=%s pos=#%s",
-                            alert.name, side, symbol, quantity, position_id,
-                        )
-                    else:
-                        decision = "skip"
-                        error = result.get("error", "未知错误")
-                        step_decide += f"\n❌ 下单失败: {error}"
-                        logger.warning(
-                            "[NewsMonitor] 新闻交易下单失败: %s → %s",
-                            alert.name, error,
-                        )
+            decision = "signal_emitted"
+            step_decide = (
+                f"决策: 发出交易信号 (由 Pipeline 统一执行)\n"
+                f"  方向: {signal.direction}, 交易对: {symbol}\n"
+                f"  信心度: {signal.confidence:.0%}\n"
+                f"  建议杠杆: {leverage}x, 止损: {sl_pct}%, 止盈: {tp_pct}%\n"
+                f"  触发新闻: {article.title_zh or article.title[:80]}\n"
+                f"  ✅ TradingSignal 已广播至 EventBus"
+            )
+            logger.info(
+                "[NewsMonitor] Signal emitted: %s %s %s conf=%.0f%%",
+                alert.name, signal.direction, symbol, signal.confidence * 100,
+            )
 
         except Exception as e:
-            step_decide = f"决策: 交易异常 — {str(e)}"
+            step_decide = f"决策: 信号发射异常 — {str(e)}"
             decision = "skip"
-            logger.error("[NewsMonitor] trigger_alert trade error: %s", e)
+            logger.error("[NewsMonitor] trigger_alert signal error: %s", e)
 
         # 写入 NewsThinking
         thinking = NewsThinking(
