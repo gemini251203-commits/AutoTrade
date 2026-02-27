@@ -23,16 +23,119 @@ from app.db.session import AsyncSessionLocal
 from app.models.news import NewsArticle
 from app.core.config import settings
 
-from .sentiment import analyze_sentiment, translate_title, classify_category
 from app.core.time_utils import utc_now
 
 
 logger = logging.getLogger(__name__)
 
 
+# ============================================================
+# Inline sentiment / translation / classification
+# (Previously in sentiment.py, now inlined here)
+# ============================================================
+
+_POSITIVE_KEYWORDS = [
+    "approval", "approved", "bullish", "surge", "rally", "pump",
+    "breakout", "ath", "all-time high", "partnership", "launch",
+    "adoption", "upgrade", "etf approved", "rate cut", "inflow",
+]
+_NEGATIVE_KEYWORDS = [
+    "crash", "dump", "bearish", "hack", "exploit", "ban",
+    "lawsuit", "sec", "investigation", "fraud", "scam",
+    "liquidation", "outflow", "rate hike", "delisted",
+]
+
+_CATEGORY_KEYWORDS = {
+    "macro": [
+        "fed", "federal reserve", "interest rate", "rate cut", "rate hike",
+        "cpi", "inflation", "gdp", "employment", "fomc", "powell",
+        "treasury", "yield", "recession", "stimulus", "monetary policy",
+    ],
+    "etf": [
+        "etf", "blackrock", "grayscale", "fidelity", "ark invest",
+        "institutional", "fund", "inflow", "outflow", "spot etf",
+    ],
+    "regulation": [
+        "sec", "cftc", "regulation", "regulatory", "compliance",
+        "lawsuit", "court", "legal", "ban", "license", "framework",
+        "congress", "legislation", "enforcement",
+    ],
+    "exchange": [
+        "binance", "coinbase", "kraken", "listing", "delist",
+        "exchange", "trading pair", "launch", "ipo",
+    ],
+    "whale": [
+        "whale", "large transfer", "wallet", "dormant",
+        "moved", "accumulation", "distribution",
+    ],
+    "project": [
+        "upgrade", "fork", "mainnet", "testnet", "partnership",
+        "vulnerability", "exploit", "hack", "protocol", "defi",
+        "nft", "layer", "bridge", "airdrop",
+    ],
+}
+
+
+def analyze_sentiment(title: str, votes_positive: int, votes_negative: int):
+    """基于投票 + 关键词的情感分析"""
+    total = votes_positive + votes_negative
+    if total > 0:
+        score = max(-1.0, min(1.0, (votes_positive - votes_negative) / total))
+    else:
+        # 关键词
+        t = title.lower()
+        pos = sum(1 for kw in _POSITIVE_KEYWORDS if kw in t)
+        neg = sum(1 for kw in _NEGATIVE_KEYWORDS if kw in t)
+        if pos > neg:
+            score = min(0.5, pos * 0.2)
+        elif neg > pos:
+            score = max(-0.5, -neg * 0.2)
+        else:
+            score = 0.0
+    if score > 0.2:
+        return "positive", round(score, 3)
+    elif score < -0.2:
+        return "negative", round(score, 3)
+    return "neutral", round(score, 3)
+
+
+async def translate_title(title_en: str):
+    """使用 DeepSeek 翻译英文标题为中文"""
+    try:
+        from app.services.ai.providers import DeepSeekProvider, ChatMessage
+        provider = DeepSeekProvider(
+            api_key=settings.deepseek_api_key, model="deepseek-chat", timeout=15,
+        )
+        prompt = (
+            "将以下加密货币新闻标题翻译成简洁的中文，"
+            "只返回翻译结果，不要添加任何解释：\n\n"
+            f"{title_en}"
+        )
+        response = await provider.chat(
+            messages=[ChatMessage(role="user", content=prompt)],
+            max_tokens=200, temperature=0.1,
+        )
+        if response and response.content:
+            return response.content.strip().strip('"').strip("'")
+    except Exception as e:
+        logger.warning("[Crawler] 翻译失败: %s", e)
+    return None
+
+
+async def classify_category(title: str):
+    """关键词匹配分类"""
+    t = title.lower()
+    scores = {}
+    for cat, keywords in _CATEGORY_KEYWORDS.items():
+        cnt = sum(1 for kw in keywords if kw in t)
+        if cnt > 0:
+            scores[cat] = cnt
+    return max(scores, key=scores.get) if scores else None
+
+
 # CryptoCompare News API 配置
 CRYPTOCOMPARE_NEWS_URL = "https://min-api.cryptocompare.com/data/v2/news/"
-POLL_INTERVAL = 300  # 5 分钟 (免费版 100k 请求/月, 5min 间隔 ≈ 8640/月)
+POLL_INTERVAL = 300  # 5 分钟
 
 
 class NewsCrawler:
