@@ -14,6 +14,7 @@ import {
   ChatboxEllipsesOutline,
   BookOutline,
   NewspaperOutline,
+  ShieldCheckmarkOutline,
 } from '@vicons/ionicons5'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
@@ -34,6 +35,7 @@ const navItems = [
   { key: 'news', label: '新闻', icon: NewspaperOutline, route: '/news' },
 
   { key: 'wallet', label: '钱包', icon: WalletOutline, route: '/wallet' },
+  { key: 'risk-config', label: '风控', icon: ShieldCheckmarkOutline, route: '/risk-config' },
   { key: 'settings', label: 'Settings', icon: SettingsOutline, route: '/settings' },
 ]
 
@@ -47,6 +49,7 @@ const activeNavKey = computed(() => {
   if (path === '/news') return 'news'
   if (path === '/settings') return 'settings'
   if (path === '/wallet') return 'wallet'
+  if (path === '/risk-config') return 'risk-config'
   return 'dashboard'
 })
 

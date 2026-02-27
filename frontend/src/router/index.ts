@@ -21,6 +21,7 @@ const AutopilotDashboard = () => import('@/views/AutopilotDashboard.vue')
 const NewsCenter = () => import('@/views/NewsCenter.vue')
 const PipelineMonitor = () => import('@/views/PipelineMonitor.vue')
 const GridDashboard = () => import('@/views/GridDashboard.vue')
+const RiskDashboard = () => import('@/views/RiskDashboard.vue')
 
 
 // Route definitions
@@ -101,6 +102,12 @@ const routes: RouteRecordRaw[] = [
     path: '/grid',
     name: 'GridDashboard',
     component: GridDashboard,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/risk-config',
+    name: 'RiskDashboard',
+    component: RiskDashboard,
     meta: { requiresAuth: true },
   },
 
