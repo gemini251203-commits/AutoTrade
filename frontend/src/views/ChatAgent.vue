@@ -585,7 +585,7 @@ const formatTime = formatTimeBJ
             </div>
           </div>
 
-          <!-- R1 深度思考状态 -->
+          <!-- AI 思考状态 (R1 深度推理 或 普通模式等待) -->
           <div v-if="deepThinkActive" class="message assistant">
             <div class="msg-avatar avatar-ai">AI</div>
             <div class="msg-bubble thinking-bubble">
@@ -598,6 +598,22 @@ const formatTime = formatTimeBJ
                   <span class="thinking-timer">{{ deepThinkElapsed }}s</span>
                 </div>
                 <div class="thinking-hint">正在分析市场数据，请耐心等待...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 普通模式等待 (非 R1, 无流式文本, 无工具) -->
+          <div v-else-if="isStreaming && !streamingText && !toolStatus" class="message assistant">
+            <div class="msg-avatar avatar-ai">AI</div>
+            <div class="msg-bubble thinking-bubble">
+              <div class="thinking-indicator">
+                <div class="thinking-dots">
+                  <span></span><span></span><span></span>
+                </div>
+                <div class="thinking-text">
+                  <span class="thinking-label">💬 AI 思考中</span>
+                </div>
+                <div class="thinking-hint">正在组织回答...</div>
               </div>
             </div>
           </div>
