@@ -36,10 +36,8 @@ export interface PipelineConfigResponse {
   portfolio_model: string
   risk_percent: number
   default_leverage: number
-  max_positions: number
   max_leverage: number
   max_daily_loss_pct: number
-  max_total_exposure_pct: number
   blacklist: string[]
 }
 

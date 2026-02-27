@@ -62,7 +62,7 @@ const layerGradients: Record<string, string> = {
 const layerDescriptions: Record<string, string> = {
   Alpha: '信号产出 — 分析市场数据, 生成交易信号 (Insight)',
   Portfolio: '仓位计算 — 将信号转换为具体的交易目标 (Target)',
-  Risk: '风控审批 — 8项检查, 保护资金安全',
+  Risk: '风控审批 — 保证金 + 回撤熔断, 账户级防爆',
   Execution: '订单执行 — 将审批通过的目标生成模拟订单',
 }
 
@@ -335,16 +335,8 @@ onUnmounted(() => {
                 <span class="config-value mono">{{ config.max_leverage }}x</span>
               </div>
               <div class="config-item">
-                <span class="config-label">最大持仓</span>
-                <span class="config-value mono">{{ config.max_positions }}</span>
-              </div>
-              <div class="config-item">
                 <span class="config-label">日亏损限额</span>
                 <span class="config-value mono text-red">{{ config.max_daily_loss_pct }}%</span>
-              </div>
-              <div class="config-item">
-                <span class="config-label">最大敞口</span>
-                <span class="config-value mono">{{ config.max_total_exposure_pct }}%</span>
               </div>
               <div class="config-item">
                 <span class="config-label">黑名单</span>
