@@ -126,12 +126,6 @@ def build_pipeline_from_yaml(config: Dict[str, Any], user_id: int) -> TradingPip
         risk_config_obj.max_daily_loss_pct = float(risk_params["max_daily_loss_pct"])
     if "max_drawdown_pct" in risk_params:
         risk_config_obj.max_daily_loss_pct = float(risk_params["max_drawdown_pct"])
-    if "max_positions" in risk_params:
-        risk_config_obj.max_positions = int(risk_params["max_positions"])
-    if "max_daily_trades" in risk_params:
-        risk_config_obj.max_daily_trades = int(risk_params["max_daily_trades"])
-    if "max_single_margin_pct" in risk_params:
-        risk_config_obj.max_single_margin_pct = float(risk_params["max_single_margin_pct"])
         
     risk_model = RiskModel(config=risk_config_obj)
 

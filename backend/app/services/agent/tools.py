@@ -281,35 +281,6 @@ async def place_order(
                     "suggestion": validation["suggestion"],
                 }, ensure_ascii=False, default=str)
 
-            # 检查保证金是否够
-            notional = quantity * current_price
-            margin = notional / leverage if leverage > 0 else notional
-            wallet_result = await db.execute(
-                select(Wallet).where(Wallet.user_id == user_id)
-            )
-            wallet = wallet_result.scalar_one_or_none()
-            if wallet and margin > float(wallet.balance):
-                available = float(wallet.balance)
-                # 计算建议的修正参数
-                safe_margin = available * 0.3  # 使用30%可用余额
-                safe_notional = safe_margin * leverage
-                safe_qty = safe_notional / current_price
-                # 按步长取整
-                safe_qty = float(security_manager.round_quantity_up(symbol, safe_qty))
-                return json.dumps({
-                    "success": False, 
-                    "error": (
-                        f"保证金不足: 需要 ${margin:,.2f} (名义${notional:,.2f} / {leverage}x), "
-                        f"但可用余额仅 ${available:,.2f}。"
-                    ),
-                    "suggested_fix": {
-                        "quantity": safe_qty,
-                        "leverage": leverage,
-                        "margin": round(safe_margin, 2),
-                        "notional": round(safe_notional, 2),
-                    },
-                    "hint": f"建议使用 quantity={safe_qty}, leverage={leverage} 重试下单。",
-                }, ensure_ascii=False, default=str)
 
         # ==================== 通过预检验, 执行下单 ====================
         order_side = OrderSide(side.lower())

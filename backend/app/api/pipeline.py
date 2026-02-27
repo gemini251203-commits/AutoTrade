@@ -48,10 +48,8 @@ class PipelineConfigResponse(BaseModel):
     portfolio_model: str            # "fixed_percent" | "kelly"
     risk_percent: float             # 仓位百分比
     default_leverage: int
-    max_positions: int
     max_leverage: int
     max_daily_loss_pct: float
-    max_total_exposure_pct: float
     blacklist: List[str]
 
 
@@ -60,10 +58,8 @@ class PipelineConfigUpdate(BaseModel):
     portfolio_model: Optional[str] = None
     risk_percent: Optional[float] = None
     default_leverage: Optional[int] = None
-    max_positions: Optional[int] = None
     max_leverage: Optional[int] = None
     max_daily_loss_pct: Optional[float] = None
-    max_total_exposure_pct: Optional[float] = None
     blacklist: Optional[List[str]] = None
 
 
@@ -331,10 +327,8 @@ async def get_pipeline_config(
         portfolio_model="fixed_percent",
         risk_percent=10.0,
         default_leverage=5,
-        max_positions=5,
         max_leverage=20,
         max_daily_loss_pct=10.0,
-        max_total_exposure_pct=200.0,
         blacklist=[],
     )
 
@@ -345,16 +339,13 @@ async def get_pipeline_config(
             config.portfolio_model = "fixed_percent"
             config.risk_percent = portfolio_model._risk_percent
             config.default_leverage = portfolio_model._default_leverage
-            config.max_positions = portfolio_model._max_positions
         elif isinstance(portfolio_model, KellyPortfolioModel):
             config.portfolio_model = "kelly"
             config.default_leverage = portfolio_model._default_leverage
-            config.max_positions = portfolio_model._max_positions
 
     if risk_model:
         config.max_leverage = risk_model._config.max_leverage
         config.max_daily_loss_pct = risk_model._config.max_daily_loss_pct
-        config.max_total_exposure_pct = risk_model._config.max_total_exposure_pct
         config.blacklist = risk_model._config.blacklist
 
     return config
