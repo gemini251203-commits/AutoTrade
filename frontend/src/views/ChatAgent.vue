@@ -664,6 +664,10 @@ function renderMarkdown(text: string): string {
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     // 换行
     .replace(/\n/g, '<br>')
+    // 清理: 3个以上连续 br 合并为 2 个
+    .replace(/(<br\s*\/?>){3,}/gi, '<br><br>')
+    // 清理: 空代码块
+    .replace(/<pre><code[^>]*>\s*<\/code><\/pre>/g, '')
 }
 </script>
 

@@ -374,13 +374,15 @@ async def chat_stream(
             )
 
         # 9. 保存 AI 最终回复 (在流式输出前保存, 防止断连丢失)
+        if final_content:
+            final_content = TOOL_CALL_PATTERN.sub("", final_content).strip()
+            # 清理工具标记后的多余空行 (避免空白灰色框)
+            final_content = re.sub(r'\n{3,}', '\n\n', final_content)
         await memory.save_message(db, conversation_id, "assistant", final_content)
         await db.commit()
 
         # 10. 流式输出最终回复
         if final_content:
-            # 清理可能残留的工具标记
-            final_content = TOOL_CALL_PATTERN.sub("", final_content).strip()
             # 已有内容，真流式逐段发送
             chunk_size = 10
             for i in range(0, len(final_content), chunk_size):
@@ -517,8 +519,9 @@ async def chat_complete(
                 ),
             ))
 
-        # 清理残留工具标记
+        # 清理残留工具标记 + 多余空行
         final_content = TOOL_CALL_PATTERN.sub("", final_content).strip()
+        final_content = re.sub(r'\n{3,}', '\n\n', final_content)
 
         # 保存工具调用记录
         if tool_calls_log:
