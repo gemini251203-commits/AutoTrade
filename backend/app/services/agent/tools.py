@@ -1239,6 +1239,7 @@ async def update_strategy(
     strategy_id: int = 0,
     config_yaml: str = "",
     name: str = "",
+    symbol: str = "",
     interval: str = "",
 ) -> str:
     """
@@ -1321,6 +1322,8 @@ async def update_strategy(
     # 更新其他字段
     if name:
         strategy.name = name
+    if symbol:
+        strategy.symbol = symbol.upper()
     if interval:
         strategy.interval = interval
 
@@ -1332,6 +1335,8 @@ async def update_strategy(
         changes.append("配置已更新")
     if name:
         changes.append(f"名称→{name}")
+    if symbol:
+        changes.append(f"交易对→{symbol.upper()}")
     if interval:
         changes.append(f"周期→{interval}")
 
@@ -1435,94 +1440,6 @@ async def create_pipeline_strategy(
         "message": f"流水线策略 '{name}' 已创建 (ID: {strategy.id})，默认未启用",
         "validation_report": report,
     }, ensure_ascii=False, default=str)
-
-
-@register_tool
-async def update_strategy(
-    db: AsyncSession,
-    user_id: int,
-    strategy_id: str = "",
-    name: str = "",
-    symbol: str = "",
-    interval: str = "",
-    config_yaml: str = "",
-) -> str:
-    """
-    修改已有策略配置
-
-    参数:
-        strategy_id: 策略 ID (数字)
-        name/symbol/interval/config_yaml: 要更新的字段 (空字符串表示不修改)
-    """
-    from app.services.quant.strategy import StrategyEngine
-
-    if not str(strategy_id).isdigit():
-        return json.dumps({"error": f"无效的策略 ID: {strategy_id}"}, ensure_ascii=False, default=str)
-
-    result = await db.execute(
-        select(Strategy).where(
-            Strategy.id == int(strategy_id),
-            Strategy.user_id == user_id,
-        )
-    )
-    strategy = result.scalar_one_or_none()
-    if not strategy:
-        return json.dumps({"error": f"找不到策略 ID: {strategy_id}"}, ensure_ascii=False, default=str)
-
-    # 验证新的 YAML (如果提供了)
-    report = {}
-    if config_yaml:
-        engine = StrategyEngine()
-        try:
-            config = engine.parse_yaml(config_yaml)
-        except ValueError as e:
-            return json.dumps({"error": f"YAML 配置解析失败: {str(e)}"}, ensure_ascii=False, default=str)
-        
-        # 强校验新的 YAML
-        report = _build_validation_report(config)
-        if not report.get("is_valid", False):
-            error_msgs = []
-            if report.get("unknown_indicators"):
-                error_msgs.append(f"使用了系统不支持的指标: {', '.join(report['unknown_indicators'])}")
-            if report.get("syntax_errors"):
-                error_msgs.extend(report["syntax_errors"])
-            if error_msgs:
-                return json.dumps({"error": f"策略配置无效无法更新: {'; '.join(error_msgs)}"}, ensure_ascii=False, default=str)
-                
-        strategy.config_yaml = config_yaml
-
-    if name:
-        strategy.name = name
-    if symbol:
-        strategy.symbol = symbol.upper()
-    if interval:
-        strategy.interval = interval
-
-    await db.commit()
-
-    await db.commit()
-
-    # 如果没提供新的 YAML，生成旧 YAML 的验证报告
-    if not config_yaml:
-        try:
-            engine = StrategyEngine()
-            final_config = engine.parse_yaml(strategy.config_yaml)
-            report = _build_validation_report(final_config)
-        except Exception:
-            pass
-
-    result = {
-        "action": "updated",
-        "id": strategy.id,
-        "name": strategy.name,
-        "symbol": strategy.symbol,
-        "interval": strategy.interval,
-        "message": f"策略 '{strategy.name}' (ID: {strategy.id}) 已更新",
-    }
-    if report:
-        result["validation_report"] = report
-    return json.dumps(result, ensure_ascii=False, default=str)
-
 
 @register_tool
 async def analyze_trend(
