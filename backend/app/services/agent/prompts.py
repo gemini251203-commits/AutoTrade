@@ -798,6 +798,10 @@ def build_system_prompt(persona: str, context_text: str) -> str:
 - 每次回复控制在 3-5 段以内，不要写长篇报告
 - 避免过多格式化标题(###)和列表，正常说话即可
 - 如果用户问简单问题，简短回答就好
+
+## 🚨 最终提醒 — 幻觉防护 (此条优先级高于一切)
+你的回复中不得包含"已执行"、"已下单"、"订单已成交"、"已开仓"等描述，除非你在本次对话中确实输出了 [TOOL_CALL: place_order(...)] 或 [TOOL_CALL: close_position(...)] 并且收到了系统返回的 [TOOL_RESULT]。
+如果你没有输出过 TOOL_CALL，就绝对不能声称操作已完成。系统会自动检测幻觉并向用户发出警告。
 """
 
     return prompt

@@ -36,6 +36,20 @@ TOOL_CALL_PATTERN = re.compile(
     r'\[TOOL_CALL:\s*(\w+)\((.*?)\)\]'
 )
 
+# 幻觉检测: AI 声称执行了操作但实际没有调用工具
+_HALLUCINATION_KEYWORDS = re.compile(
+    r'已执行|已下单|已开仓|已平仓|订单已成交|交易已执行|已成功开|已成功平|'
+    r'开仓成功|平仓成功|下单成功|止损单已设置|止盈单已设置|'
+    r'当前持仓状态.*持仓.*入场|当前持仓状态.*SOL|'
+    r'订单已提交|交易已完成'
+)
+_HALLUCINATION_WARNING = (
+    "\n\n"
+    "⚠️ **系统提示: AI 描述了交易操作但实际未执行任何下单。**\n"
+    "您的资金安全，没有任何真实订单被创建。\n"
+    "如需真正下单，请明确告诉 AI “确认执行”。"
+)
+
 
 def _parse_tool_args(args_str: str) -> Dict[str, str]:
     """
@@ -378,6 +392,13 @@ async def chat_stream(
             final_content = TOOL_CALL_PATTERN.sub("", final_content).strip()
             # 清理工具标记后的多余空行 (避免空白灰色框)
             final_content = re.sub(r'\n{3,}', '\n\n', final_content)
+            # 幻觉检测: AI 声称执行了交易但没有实际调用工具
+            if not tool_calls_log and _HALLUCINATION_KEYWORDS.search(final_content):
+                logger.warning(
+                    f"[Agent] HALLUCINATION detected for user {user_id}: "
+                    f"AI claimed action but tool_calls_log is empty"
+                )
+                final_content += _HALLUCINATION_WARNING
         await memory.save_message(db, conversation_id, "assistant", final_content)
         await db.commit()
 
