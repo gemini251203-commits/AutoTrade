@@ -278,6 +278,16 @@ class MarketCollector:
                                 logger.info(
                                     f"[MarketCollector] {len(triggered)} conditional orders triggered for {symbol}"
                                 )
+                            
+                            # 🔥 WebSocket 断连兜底: 检查仓位止损/止盈
+                            sl_tp_closed = await OrderExecutor.check_position_sl_tp(
+                                db, symbol, current_price
+                            )
+                            if sl_tp_closed:
+                                await db.commit()
+                                logger.info(
+                                    f"[MarketCollector] ⚡ SL/TP failover: {len(sl_tp_closed)} positions closed for {symbol}"
+                                )
                 
                 # 获取最新 K 线 (只取最新 2 条，确保覆盖当前和上一根)
                 for interval in self.INTERVALS:

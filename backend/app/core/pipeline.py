@@ -42,6 +42,7 @@ Trading Pipeline — LEAN 四层流水线编排器
     pipeline.start_listening()
 """
 
+import asyncio
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -79,6 +80,9 @@ class TradingPipeline:
         self._execution = execution
         self._user_id = user_id
         
+        # 并发锁: 防止多个 Agent 同时提交订单时的资金校验踩踏
+        self._order_lock = asyncio.Lock()
+        
         # 统计
         self._stats = {
             "ticks_processed": 0,
@@ -113,6 +117,17 @@ class TradingPipeline:
         if open_positions is None:
             open_positions = []
         
+        async with self._order_lock:
+            return await self._process_locked(
+                symbol, price, db, available_balance,
+                total_equity, open_positions, **kwargs,
+            )
+    
+    async def _process_locked(
+        self, symbol, price, db, available_balance,
+        total_equity, open_positions, **kwargs,
+    ) -> List[dict]:
+        """内部方法: 在锁保护下执行四层流水线"""
         results = []
         self._stats["ticks_processed"] += 1
         
@@ -266,6 +281,22 @@ class TradingPipeline:
         """
         if open_positions is None:
             open_positions = []
+        
+        async with self._order_lock:
+            return await self._submit_order_locked(
+                db, symbol, side, quantity, leverage, order_type,
+                price, trigger_price, position_side, reduce_only,
+                stop_loss, take_profit, source, note,
+                available_balance, total_equity, open_positions,
+            )
+    
+    async def _submit_order_locked(
+        self, db, symbol, side, quantity, leverage, order_type,
+        price, trigger_price, position_side, reduce_only,
+        stop_loss, take_profit, source, note,
+        available_balance, total_equity, open_positions,
+    ) -> dict:
+        """内部方法: 在锁保护下执行 Risk → Execution"""
         
         # 构建 PortfolioTarget
         action = TargetAction.OPEN_LONG if side.lower() == "buy" else TargetAction.OPEN_SHORT
