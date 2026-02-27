@@ -43,13 +43,16 @@ export interface ChatMessage {
 
 /** SSE 事件 */
 export interface SSEEvent {
-  type: 'text' | 'tool_call' | 'tool_result' | 'done' | 'error'
+  type: 'text' | 'tool_call' | 'tool_result' | 'done' | 'error' | 'deep_think'
   content?: string
   tool?: string
   args?: Record<string, unknown>
   result?: string
   full_reply?: string
   message?: string
+  status?: string
+  elapsed_seconds?: number
+  report?: string
 }
 
 // ==================== API Functions ====================

@@ -12,7 +12,7 @@
  * - Markdown 渲染
  */
 
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted, nextTick, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import {
   ChatboxEllipsesOutline,
@@ -61,6 +61,11 @@ const streamingText = ref('')
 const isStreaming = ref(false)
 const toolStatus = ref<string | null>(null)
 
+// Deep Think 状态
+const deepThinkActive = ref(false)
+const deepThinkElapsed = ref(0)
+const deepThinkStatus = ref('')  // 'thinking' | 'done' | 'timeout' | 'skipped'
+
 // UI
 const inputText = ref('')
 const chatContainerRef = ref<HTMLElement | null>(null)
@@ -106,6 +111,20 @@ onMounted(async () => {
   await loadDeepThinkingState()
   // 每 10 秒检查一次状态
   autopilotPollTimer = setInterval(pollAutopilotStatus, 10000)
+})
+
+// 页面切换回来时，刷新消息列表（防止断连期间丢失的回复）
+onActivated(async () => {
+  if (activeConversationId.value && !isStreaming.value) {
+    await loadMessages(activeConversationId.value)
+  }
+})
+
+onUnmounted(() => {
+  if (autopilotPollTimer) {
+    clearInterval(autopilotPollTimer)
+    autopilotPollTimer = null
+  }
 })
 
 // 自动滚动到底部
@@ -284,6 +303,9 @@ async function handleSendMessage() {
   isStreaming.value = true
   streamingText.value = ''
   toolStatus.value = null
+  deepThinkActive.value = false
+  deepThinkElapsed.value = 0
+  deepThinkStatus.value = ''
 
   // 发送 SSE 请求
   abortController = sendMessage(
@@ -292,10 +314,29 @@ async function handleSendMessage() {
     token,
     (event: SSEEvent) => {
       switch (event.type) {
+        case 'deep_think':
+          if (event.status === 'thinking') {
+            deepThinkActive.value = true
+            deepThinkElapsed.value = event.elapsed_seconds || 0
+            deepThinkStatus.value = 'thinking'
+          } else if (event.status === 'done') {
+            deepThinkActive.value = false
+            deepThinkStatus.value = 'done'
+          } else if (event.status === 'timeout') {
+            deepThinkActive.value = false
+            deepThinkStatus.value = 'timeout'
+            message.warning('R1 深度思考超时 (120s)，使用普通模式继续')
+          } else if (event.status === 'skipped') {
+            deepThinkActive.value = false
+            deepThinkStatus.value = 'skipped'
+          }
+          break
         case 'text':
+          deepThinkActive.value = false
           streamingText.value += event.content || ''
           break
         case 'tool_call':
+          deepThinkActive.value = false
           toolStatus.value = `正在执行: ${event.tool}...`
           break
         case 'tool_result':
@@ -317,6 +358,7 @@ async function handleSendMessage() {
           streamingText.value = ''
           isStreaming.value = false
           toolStatus.value = null
+          deepThinkActive.value = false
           // 更新会话列表标题
           loadConversations()
           break
@@ -325,6 +367,7 @@ async function handleSendMessage() {
           isStreaming.value = false
           toolStatus.value = null
           streamingText.value = ''
+          deepThinkActive.value = false
           break
       }
     },
@@ -344,6 +387,11 @@ function stopStreaming() {
     isStreaming.value = false
     streamingText.value = ''
     toolStatus.value = null
+    deepThinkActive.value = false
+    // 停止后刷新消息（后端可能已保存了部分回复）
+    if (activeConversationId.value) {
+      loadMessages(activeConversationId.value)
+    }
   }
 }
 
@@ -534,6 +582,23 @@ const formatTime = formatTimeBJ
             <div class="msg-bubble streaming">
               <div class="msg-content" v-html="renderMarkdown(streamingText)"></div>
               <div class="cursor-blink">|</div>
+            </div>
+          </div>
+
+          <!-- R1 深度思考状态 -->
+          <div v-if="deepThinkActive" class="message assistant">
+            <div class="msg-avatar avatar-ai">AI</div>
+            <div class="msg-bubble thinking-bubble">
+              <div class="thinking-indicator">
+                <div class="thinking-dots">
+                  <span></span><span></span><span></span>
+                </div>
+                <div class="thinking-text">
+                  <span class="thinking-label">🧠 R1 深度推理中</span>
+                  <span class="thinking-timer">{{ deepThinkElapsed }}s</span>
+                </div>
+                <div class="thinking-hint">正在分析市场数据，请耐心等待...</div>
+              </div>
             </div>
           </div>
 
@@ -1476,6 +1541,75 @@ function renderMarkdown(text: string): string {
   color: #52c41a !important;
   font-weight: 600;
   font-size: 11px !important;
+}
+
+/* ==================== Thinking Indicator ==================== */
+.thinking-bubble {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(59, 130, 246, 0.08)) !important;
+  border: 1px solid rgba(139, 92, 246, 0.25) !important;
+  animation: thinking-pulse 2s ease-in-out infinite;
+}
+
+@keyframes thinking-pulse {
+  0%, 100% { border-color: rgba(139, 92, 246, 0.25); }
+  50% { border-color: rgba(139, 92, 246, 0.5); }
+}
+
+.thinking-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.thinking-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.thinking-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a78bfa;
+  animation: thinking-dot 1.4s ease-in-out infinite;
+}
+
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes thinking-dot {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1.2); }
+}
+
+.thinking-text {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.thinking-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #c4b5fd;
+}
+
+.thinking-timer {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #a78bfa;
+  background: rgba(139, 92, 246, 0.15);
+  padding: 2px 8px;
+  border-radius: 6px;
+  min-width: 40px;
+  text-align: center;
+}
+
+.thinking-hint {
+  font-size: 11px;
+  color: #9ca3af;
 }
 
 </style>

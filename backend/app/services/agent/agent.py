@@ -16,6 +16,8 @@ AI 交易代理核心引擎
 
 import re
 import json
+import asyncio
+import time
 from typing import AsyncGenerator, Optional, Dict, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -238,13 +240,38 @@ async def chat_stream(
         for msg in history:
             messages.append(ProviderMessage(role=msg["role"], content=msg["content"]))
 
-        # 6. 深度思考模式: R1 先分析 → 注入分析报告
+        # 6. 深度思考模式: R1 先分析 → 注入分析报告 (带心跳)
         try:
             if await AIBrain.is_deep_thinking_enabled(db, user_id):
-                yield {"type": "deep_think", "status": "thinking"}
-                deep_think_report = await _deep_think(
-                    db, user_id, system_prompt, messages
+                yield {"type": "deep_think", "status": "thinking", "elapsed_seconds": 0}
+                
+                # 启动 R1 推理任务
+                think_task = asyncio.create_task(
+                    _deep_think(db, user_id, system_prompt, messages)
                 )
+                start_time = time.monotonic()
+                TIMEOUT = 120  # R1 最多等 120 秒
+                
+                # 心跳循环: 每 3 秒告知前端 "还活着"
+                while not think_task.done():
+                    await asyncio.sleep(3)
+                    elapsed = int(time.monotonic() - start_time)
+                    if elapsed > TIMEOUT:
+                        think_task.cancel()
+                        yield {"type": "deep_think", "status": "timeout", "elapsed_seconds": elapsed}
+                        logger.warning(f"[DeepThink] Timeout after {elapsed}s for user {user_id}")
+                        break
+                    yield {"type": "deep_think", "status": "thinking", "elapsed_seconds": elapsed}
+                
+                # 获取结果
+                deep_think_report = ""
+                if think_task.done() and not think_task.cancelled():
+                    try:
+                        deep_think_report = think_task.result()
+                    except Exception as e:
+                        logger.warning(f"[DeepThink] Task error: {e}")
+                
+                elapsed = int(time.monotonic() - start_time)
                 if deep_think_report:
                     messages.append(ProviderMessage(
                         role="user",
@@ -256,9 +283,9 @@ async def chat_stream(
                             "如果需要执行操作，使用 [TOOL_CALL: ...] 调用工具。"
                         ),
                     ))
-                    yield {"type": "deep_think", "status": "done", "report": deep_think_report}
-                else:
-                    yield {"type": "deep_think", "status": "skipped"}
+                    yield {"type": "deep_think", "status": "done", "elapsed_seconds": elapsed, "report": deep_think_report}
+                elif not think_task.cancelled():
+                    yield {"type": "deep_think", "status": "skipped", "elapsed_seconds": elapsed}
         except Exception as e:
             logger.warning(f"[DeepThink] Skipped in stream: {e}")
 
@@ -346,8 +373,11 @@ async def chat_stream(
                 tool_result=first["result"],
             )
 
-        # 8. 流式输出最终回复
-        # 如果最终回复已经有了(工具调用循环中), 判断是否需要再次流式请求
+        # 9. 保存 AI 最终回复 (在流式输出前保存, 防止断连丢失)
+        await memory.save_message(db, conversation_id, "assistant", final_content)
+        await db.commit()
+
+        # 10. 流式输出最终回复
         if final_content:
             # 清理可能残留的工具标记
             final_content = TOOL_CALL_PATTERN.sub("", final_content).strip()
@@ -357,15 +387,10 @@ async def chat_stream(
                 chunk = final_content[i:i + chunk_size]
                 yield {"type": "text", "content": chunk}
         else:
-            # 没有最终内容 (不太可能到这里)
             final_content = "（无回复）"
             yield {"type": "text", "content": final_content}
 
-        # 9. 保存 AI 最终回复
-        await memory.save_message(db, conversation_id, "assistant", final_content)
-        await db.commit()
-
-        # 10. 完成
+        # 11. 完成
         yield {"type": "done", "full_reply": final_content}
 
     except Exception as e:
