@@ -70,6 +70,9 @@ class EventType(str, Enum):
     # --- 系统 ---
     SYSTEM_START  = "system_start"  # 系统启动
     SYSTEM_STOP   = "system_stop"   # 系统关闭
+    
+    # --- 外部信号 ---
+    EXTERNAL_SIGNAL = "external_signal"  # 外部 AI 模块信号 {TradingSignal}
 
 
 # ============================================================
