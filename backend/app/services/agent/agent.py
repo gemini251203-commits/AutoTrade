@@ -255,8 +255,18 @@ async def chat_stream(
             messages.append(ProviderMessage(role=msg["role"], content=msg["content"]))
 
         # 6. 深度思考模式: R1 先分析 → 注入分析报告 (带心跳)
+        #    智能跳过: 操作类消息 (确认/下单/执行) 不需要 R1 分析
+        _ACTION_TRIGGERS = re.compile(
+            r'^(确认|执行|下单|开仓|平仓|好的|可以|买|卖|做多|做空|'
+            r'是的|对|行|OK|ok|yes|YES|go|Go|开|关|停|删|'
+            r'确认执行|马上执行|立即执行|帮我下|帮我买|帮我卖)$'
+            r'|^(确认|执行|下单|开仓|平仓).{0,10}$',
+            re.IGNORECASE,
+        )
+        is_action_msg = bool(_ACTION_TRIGGERS.search(user_message.strip()))
+        
         try:
-            if await AIBrain.is_deep_thinking_enabled(db, user_id):
+            if await AIBrain.is_deep_thinking_enabled(db, user_id) and not is_action_msg:
                 yield {"type": "deep_think", "status": "thinking", "elapsed_seconds": 0}
                 
                 # 启动 R1 推理任务
