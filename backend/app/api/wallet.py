@@ -545,8 +545,8 @@ async def reset_wallet(
     
     将账户完全重置到初始化状态:
     - 删除所有订单、仓位、网格机器人
-    - 删除所有策略、策略日志、自动交易日志
-    - 删除所有AI对话、新闻监控规则
+    - 删除策略日志 (保留策略定义)、自动交易日志
+    - 删除所有AI对话、新闻监控规则、AI分析记事本
     - 删除所有趋势分析快照
     - 重置钱包余额
     """
@@ -561,6 +561,7 @@ async def reset_wallet(
     from app.models.news import NewsAlert, NewsThinking
     from app.models.agent import ChatConversation, ChatMessage
     from app.models.trend_scheme import TrendScheme, TrendSnapshot
+    from app.models.scratchpad import AnalysisScratchpad
     import os
     
     user_id = current_user.id
@@ -606,9 +607,9 @@ async def reset_wallet(
         )
     logger.info(f"[Wallet] Deleted all strategy logs")
     
-    # 8. 策略
-    await db.execute(delete(Strategy).where(Strategy.user_id == user_id))
-    logger.info(f"[Wallet] Deleted all strategies")
+    # 8. 策略 → 保留定义, 只清日志
+    # (Strategy 不删除, 保留用户创建的策略配置)
+    logger.info(f"[Wallet] Strategies preserved (only logs cleared)")
     
     # 9. 自动交易日志
     await db.execute(delete(AutopilotLog).where(AutopilotLog.user_id == user_id))
@@ -656,6 +657,10 @@ async def reset_wallet(
     )
     logger.info(f"[Wallet] Reset all trend scheme results")
     
+    # 15. AI 分析记事本 (Autopilot / AI Reviewer 的跨周期记忆)
+    await db.execute(delete(AnalysisScratchpad).where(AnalysisScratchpad.user_id == user_id))
+    logger.info(f"[Wallet] Deleted all analysis scratchpads")
+    
     # ==================== 重置钱包 ====================
     initial = req.initial_balance if (req and req.initial_balance) else Decimal(
         os.getenv("SIMULATION_INITIAL_BALANCE", "100")
@@ -687,7 +692,7 @@ async def reset_wallet(
     await db.commit()
     await db.refresh(wallet)
     
-    logger.info(f"[Wallet] User {user_id} account fully reset to {initial} USDT (cleared 14 tables)")
+    logger.info(f"[Wallet] User {user_id} account fully reset to {initial} USDT (cleared 15 tables, strategies preserved)")
     return wallet
 
 
