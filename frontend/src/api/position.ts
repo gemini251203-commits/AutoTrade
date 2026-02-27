@@ -53,6 +53,12 @@ export async function setPositionTpSl(
   return resp.data
 }
 
+/** 平仓响应 (对应后端 ClosePositionResponse) */
+export interface ClosePositionResponse {
+  position: PositionResponse
+  realized_pnl: string
+}
+
 /**
  * 平仓 (支持部分平仓)
  * 
@@ -66,8 +72,8 @@ export async function closePosition(
     close_price: string
     quantity?: string  // 不传则全平
   }
-) {
-  const resp = await request.post(`/position/${positionId}/close`, params)
+): Promise<ClosePositionResponse> {
+  const resp = await request.post<ClosePositionResponse>(`/position/${positionId}/close`, params)
   return resp.data
 }
 
