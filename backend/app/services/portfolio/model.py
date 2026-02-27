@@ -26,6 +26,7 @@ from loguru import logger
 
 from app.services.alpha.base import Insight, InsightDirection
 from app.core.time_utils import utc_now
+from app.core.risk_config import risk_config
 
 
 # ============================================================
@@ -168,17 +169,19 @@ class FixedPercentModel(PortfolioModel):
     
     def __init__(
         self,
-        risk_percent: float = 10.0,     # 每次使用余额的 10%
-        default_leverage: int = 5,      # 默认杠杆
-        max_positions: int = 5,         # 最大持仓数
-        default_sl_pct: float = 2.0,    # 默认止损 2%
-        default_tp_pct: float = 4.0,    # 默认止盈 4%
+        risk_percent: float = None,
+        default_leverage: int = None,
+        max_positions: int = None,
+        default_sl_pct: float = None,
+        default_tp_pct: float = None,
     ):
-        self._risk_percent = risk_percent
-        self._default_leverage = default_leverage
-        self._max_positions = max_positions
-        self._default_sl_pct = default_sl_pct
-        self._default_tp_pct = default_tp_pct
+        # 从 YAML 读取默认值，构造参数优先
+        cfg = risk_config.load()
+        self._risk_percent = risk_percent if risk_percent is not None else cfg["risk_percent"]
+        self._default_leverage = default_leverage if default_leverage is not None else cfg["default_leverage"]
+        self._max_positions = max_positions if max_positions is not None else cfg["max_positions"]
+        self._default_sl_pct = default_sl_pct if default_sl_pct is not None else cfg["default_sl_pct"]
+        self._default_tp_pct = default_tp_pct if default_tp_pct is not None else cfg["default_tp_pct"]
     
     async def calculate_target(
         self,
@@ -294,21 +297,23 @@ class KellyPortfolioModel(PortfolioModel):
     
     def __init__(
         self,
-        kelly_fraction: float = 0.5,    # Half-Kelly
-        max_risk_percent: float = 25.0, # 最大不超过余额的 25%
-        default_leverage: int = 5,
-        odds_ratio: float = 2.0,        # 默认赔率 (TP 是 SL 的 2 倍)
-        max_positions: int = 5,
-        default_sl_pct: float = 2.0,
-        default_tp_pct: float = 4.0,
+        kelly_fraction: float = None,
+        max_risk_percent: float = None,
+        default_leverage: int = None,
+        odds_ratio: float = 2.0,
+        max_positions: int = None,
+        default_sl_pct: float = None,
+        default_tp_pct: float = None,
     ):
-        self._kelly_fraction = kelly_fraction
-        self._max_risk_percent = max_risk_percent
-        self._default_leverage = default_leverage
+        # 从 YAML 读取默认值，构造参数优先
+        cfg = risk_config.load()
+        self._kelly_fraction = kelly_fraction if kelly_fraction is not None else cfg["kelly_fraction"]
+        self._max_risk_percent = max_risk_percent if max_risk_percent is not None else cfg["max_risk_percent"]
+        self._default_leverage = default_leverage if default_leverage is not None else cfg["default_leverage"]
         self._odds_ratio = odds_ratio
-        self._max_positions = max_positions
-        self._default_sl_pct = default_sl_pct
-        self._default_tp_pct = default_tp_pct
+        self._max_positions = max_positions if max_positions is not None else cfg["max_positions"]
+        self._default_sl_pct = default_sl_pct if default_sl_pct is not None else cfg["default_sl_pct"]
+        self._default_tp_pct = default_tp_pct if default_tp_pct is not None else cfg["default_tp_pct"]
     
     async def calculate_target(
         self,

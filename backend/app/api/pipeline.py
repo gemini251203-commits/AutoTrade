@@ -317,22 +317,24 @@ async def get_pipeline_status(
 async def get_pipeline_config(
     current_user: CurrentUser,
 ):
-    """获取当前 Pipeline 配置 (从真实实例读取)"""
+    """获取当前 Pipeline 配置 (从 YAML + 实例读取)"""
+    from app.core.risk_config import risk_config as rc
+    cfg = rc.load()
+    
     pipeline = _get_pipeline()
     portfolio_model = pipeline._portfolio if pipeline else None
-    risk_model = _get_risk_model()
 
-    # 默认值
+    # 从 YAML 读取真实配置
     config = PipelineConfigResponse(
         portfolio_model="fixed_percent",
-        risk_percent=10.0,
-        default_leverage=5,
-        max_leverage=20,
-        max_daily_loss_pct=10.0,
-        blacklist=[],
+        risk_percent=cfg["risk_percent"],
+        default_leverage=cfg["default_leverage"],
+        max_leverage=cfg["max_leverage"],
+        max_daily_loss_pct=cfg["max_daily_loss_pct"],
+        blacklist=cfg["blacklist"],
     )
 
-    # 从实际模型读取
+    # 从实际模型覆盖 (如果已实例化)
     if portfolio_model:
         from app.services.portfolio.model import FixedPercentModel, KellyPortfolioModel
         if isinstance(portfolio_model, FixedPercentModel):
@@ -342,11 +344,6 @@ async def get_pipeline_config(
         elif isinstance(portfolio_model, KellyPortfolioModel):
             config.portfolio_model = "kelly"
             config.default_leverage = portfolio_model._default_leverage
-
-    if risk_model:
-        config.max_leverage = risk_model._config.max_leverage
-        config.max_daily_loss_pct = risk_model._config.max_daily_loss_pct
-        config.blacklist = risk_model._config.blacklist
 
     return config
 

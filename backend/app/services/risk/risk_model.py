@@ -24,6 +24,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from loguru import logger
 
 from app.services.portfolio.model import PortfolioTarget, TargetAction
+from app.core.risk_config import risk_config
 
 
 # ============================================================
@@ -32,11 +33,11 @@ from app.services.portfolio.model import PortfolioTarget, TargetAction
 
 @dataclass
 class RiskConfig:
-    """全局防爆参数"""
+    """全局防爆参数 — 从 risk_config.yaml 热加载"""
     
     # 账户级防爆
-    max_leverage: int = 20                      # Binance 最大杠杆 (交易所限制)
-    max_daily_loss_pct: float = 10.0            # 日最大亏损 → 触发停止新开仓
+    max_leverage: int = 20
+    max_daily_loss_pct: float = 10.0
     
     # 品种限制
     blacklist: list = None
@@ -44,7 +45,16 @@ class RiskConfig:
     def __post_init__(self):
         if self.blacklist is None:
             self.blacklist = []
-
+    
+    @classmethod
+    def from_yaml(cls) -> "RiskConfig":
+        """从 YAML 配置文件动态加载"""
+        cfg = risk_config.load()
+        return cls(
+            max_leverage=cfg["max_leverage"],
+            max_daily_loss_pct=cfg["max_daily_loss_pct"],
+            blacklist=cfg["blacklist"],
+        )
 
 # ============================================================
 # 审批结果 (Pipeline 接口)
@@ -102,6 +112,10 @@ class RiskModel:
         self._circuit_breaker: bool = False
         self._risk_bypass: bool = False
     
+    def _get_config(self) -> RiskConfig:
+        """每次审批时从 YAML 热加载最新配置"""
+        return RiskConfig.from_yaml()
+    
     @property
     def config(self) -> RiskConfig:
         return self._config
@@ -143,6 +157,9 @@ class RiskModel:
         """
         warnings = []
         
+        # 每次审批时从 YAML 热加载最新配置
+        config = self._get_config()
+        
         # — 紧急熔断 (永远生效, 不受旁路影响) —
         if self._circuit_breaker:
             return RiskVerdict(
@@ -156,19 +173,19 @@ class RiskModel:
             return RiskVerdict(approved=True, warnings=["⚠️ 系统风控已关闭"])
         
         # — 黑名单 —
-        if target.symbol in self._config.blacklist:
+        if target.symbol in config.blacklist:
             return RiskVerdict(
                 approved=False,
                 reason=f"{target.symbol} 在黑名单中"
             )
         
         # — 杠杆上限 (交易所级限制) —
-        if target.leverage > self._config.max_leverage:
+        if target.leverage > config.max_leverage:
             return RiskVerdict(
                 approved=False,
                 reason=(
                     f"杠杆 {target.leverage}x 超过交易所限制 "
-                    f"{self._config.max_leverage}x"
+                    f"{config.max_leverage}x"
                 )
             )
         
@@ -187,15 +204,15 @@ class RiskModel:
         daily_loss = self._daily_pnl.get(user_id, Decimal("0"))
         if total_equity > 0 and daily_loss < 0:
             loss_pct = float(abs(daily_loss) / total_equity * 100)
-            if loss_pct >= self._config.max_daily_loss_pct:
+            if loss_pct >= config.max_daily_loss_pct:
                 return RiskVerdict(
                     approved=False,
                     reason=(
                         f"日亏损 {loss_pct:.1f}% 已达限制 "
-                        f"{self._config.max_daily_loss_pct}%, 停止新开仓"
+                        f"{config.max_daily_loss_pct}%, 停止新开仓"
                     )
                 )
-            if loss_pct >= self._config.max_daily_loss_pct * 0.8:
+            if loss_pct >= config.max_daily_loss_pct * 0.8:
                 warnings.append(
                     f"⚠️ 日亏损已达 {loss_pct:.1f}%, 接近限制"
                 )
