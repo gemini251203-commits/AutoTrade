@@ -328,6 +328,29 @@ async def chat_stream(
             )
 
             if not tool_matches:
+                # 幻觉检测: AI 声称执行了操作但没有输出 TOOL_CALL
+                if (round_i == 0 and not tool_calls_log and
+                        _HALLUCINATION_KEYWORDS.search(ai_content)):
+                    logger.warning(
+                        f"[Agent] HALLUCINATION in-loop for user {user_id}, retrying. "
+                        f"preview={ai_content[:150]!r}"
+                    )
+                    # 把幻觉回复反馈给 AI，强制要求输出 TOOL_CALL
+                    messages.append(ProviderMessage(role="assistant", content=ai_content))
+                    messages.append(ProviderMessage(
+                        role="user",
+                        content=(
+                            "⚠️ 系统检测到你的回复中声称执行了交易操作，但你没有输出任何 "
+                            "[TOOL_CALL: ...] 指令。操作并未真正执行。\n\n"
+                            "如果你要下单，必须输出如下格式:\n"
+                            "[TOOL_CALL: place_order(symbol=SOLUSDT, side=buy, order_type=market, "
+                            "quantity=5, leverage=5, stop_loss=80, take_profit=84.5)]\n\n"
+                            "请现在输出正确的 TOOL_CALL 指令来执行你刚才描述的操作。"
+                            "如果你判断不应该下单，直接说明原因即可，不要假装已执行。"
+                        ),
+                    ))
+                    continue  # 重新让 AI 回答
+                
                 # 没有工具调用 → 这就是最终回复
                 final_content = ai_content
                 break
