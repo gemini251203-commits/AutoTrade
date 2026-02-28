@@ -320,7 +320,24 @@ async def control_agent(
         await hub_daemon.stop_agent(user_id, agent_id)
         
     elif body.action == "run_once":
-        await hub_daemon.run_agent_once(user_id, agent, db)
+        import asyncio
+        
+        async def _bg_run_once():
+            """后台单次执行 (独立 DB session)"""
+            try:
+                from app.db.session import AsyncSessionLocal
+                async with AsyncSessionLocal() as bg_db:
+                    result = await bg_db.execute(
+                        select(HubAgent).where(HubAgent.id == agent_id)
+                    )
+                    bg_agent = result.scalar_one_or_none()
+                    if bg_agent:
+                        await hub_daemon.run_agent_once(user_id, bg_agent, bg_db)
+                        await bg_db.commit()
+            except Exception as e:
+                print(f"[Hub] run_once background error: {e}")
+        
+        asyncio.create_task(_bg_run_once())
         await db.refresh(agent)
         
     else:
