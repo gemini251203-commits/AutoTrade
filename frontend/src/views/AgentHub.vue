@@ -219,7 +219,7 @@ async function sendGlobalCommand() {
             })
           }
         } else if (event.type === 'tool_call') {
-          warRoomMessages.value.push(wrMsg('system', `正在调用 ${event.tool} ...`))
+          // AI 用人话描述工具调用，这里不显示
         } else if (event.type === 'tool_result') {
           // AI 会用人话描述工具结果，这里不再显示原始 JSON
         } else if (event.type === 'error') {
@@ -343,7 +343,7 @@ async function handleControl(id: number, action: string) {
               })
             }
           } else if (event.type === 'tool_call') {
-            warRoomMessages.value.push(wrMsg('system', `正在调用 ${event.tool} ...`))
+            // AI 用人话描述工具调用，这里不显示
           } else if (event.type === 'tool_result') {
             // AI 会用人话描述工具结果，这里不再显示原始 JSON
           } else if (event.type === 'error') {
