@@ -18,13 +18,12 @@ Agent Hub API
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user_id, get_db
+from app.api.deps import CurrentUser, DbSession
 from app.models.hub_agent import HubAgent, HubAgentStatus
 from app.core.time_utils import utc_now
 
@@ -171,13 +170,13 @@ def _decrypt_key(encrypted: str) -> str:
 
 @router.get("/agents", response_model=HubAgentListResponse)
 async def list_agents(
-    db: AsyncSession = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """列出当前用户的所有智能体"""
     result = await db.execute(
         select(HubAgent)
-        .where(HubAgent.user_id == user_id)
+        .where(HubAgent.user_id == current_user.id)
         .order_by(HubAgent.created_at.desc())
     )
     agents = result.scalars().all()
@@ -189,12 +188,12 @@ async def list_agents(
 @router.post("/agents", response_model=HubAgentResponse, status_code=201)
 async def create_agent(
     body: HubAgentCreateRequest,
-    db: AsyncSession = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """创建新智能体"""
     agent = HubAgent(
-        user_id=user_id,
+        user_id=current_user.id,
         name=body.name,
         role=body.role,
         avatar=body.avatar,
@@ -215,14 +214,14 @@ async def create_agent(
 async def update_agent(
     agent_id: int,
     body: HubAgentUpdateRequest,
-    db: AsyncSession = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """更新智能体配置"""
     result = await db.execute(
         select(HubAgent).where(
             HubAgent.id == agent_id,
-            HubAgent.user_id == user_id,
+            HubAgent.user_id == current_user.id,
         )
     )
     agent = result.scalar_one_or_none()
@@ -251,10 +250,11 @@ async def update_agent(
 @router.delete("/agents/{agent_id}")
 async def delete_agent(
     agent_id: int,
-    db: AsyncSession = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """删除智能体"""
+    user_id = current_user.id
     result = await db.execute(
         select(HubAgent).where(
             HubAgent.id == agent_id,
@@ -286,10 +286,11 @@ async def delete_agent(
 async def control_agent(
     agent_id: int,
     body: HubAgentActionRequest,
-    db: AsyncSession = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """激活/停止/单次执行智能体"""
+    user_id = current_user.id
     result = await db.execute(
         select(HubAgent).where(
             HubAgent.id == agent_id,
@@ -330,10 +331,12 @@ async def control_agent(
 
 @router.get("/status", response_model=HubStatusResponse)
 async def get_hub_status(
-    db: AsyncSession = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """获取 Hub 全局状态"""
+    user_id = current_user.id
+    
     # 总数
     total_result = await db.execute(
         select(func.count(HubAgent.id)).where(HubAgent.user_id == user_id)
@@ -374,10 +377,11 @@ async def get_hub_status(
 async def chat_with_agent(
     agent_id: int,
     body: HubChatRequest,
-    db: AsyncSession = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """与智能体 SSE 对话 (独裁者模式)"""
+    user_id = current_user.id
     result = await db.execute(
         select(HubAgent).where(
             HubAgent.id == agent_id,
@@ -422,10 +426,12 @@ async def chat_with_agent(
 @router.post("/board/deliberate")
 async def board_deliberate(
     body: HubBoardRequest,
-    db: AsyncSession = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """多 AI 董事会辩论"""
+    user_id = current_user.id
+    
     # 获取所有 active 智能体
     result = await db.execute(
         select(HubAgent).where(
