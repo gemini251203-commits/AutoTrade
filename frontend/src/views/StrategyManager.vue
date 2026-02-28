@@ -111,6 +111,10 @@ const alphaExitIndicator = ref('rsi')
 const alphaExitCompare = ref('>')
 const alphaExitValue = ref(70)
 
+// Chanlun params
+const chanlunKlineCount = ref(100)
+const chanlunDivThreshold = ref(0.8)
+
 // Portfolio params
 const portRiskPercent = ref(10)
 const portLeverage = ref(5)
@@ -252,6 +256,12 @@ function buildPipelineYaml(): string {
     lines.push(`        - indicator: ${alphaExitIndicator.value}`)
     lines.push(`          compare: "${alphaExitCompare.value}"`)
     lines.push(`          value: ${alphaExitValue.value}`)
+  } else if (selectedAlpha.value === 'chanlun_ai') {
+    lines.push('  - type: "chanlun_ai"')
+    lines.push('    name: "AI缠论研判"')
+    lines.push(`    confidence_threshold: ${alphaConfidence.value}`)
+    lines.push(`    kline_count: ${chanlunKlineCount.value}`)
+    lines.push(`    divergence_threshold: ${chanlunDivThreshold.value}`)
   } else {
     lines.push('  - type: "ai_agent"')
     lines.push('    name: "AI智能研判"')
@@ -1087,7 +1097,7 @@ onMounted(() => {
         <!-- Step 1: Alpha (Pipeline mode) -->
         <template v-if="wizardStep === 1 && !editingStrategy && createMode === 'pipeline'">
           <div class="text-sm text-gray-300 mb-3">选择信号源模块：AI 根据什么来判断买卖时机？</div>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-3 gap-3">
             <button
               @click="selectedAlpha = 'yaml_condition'"
               class="p-4 rounded-lg text-left transition-all"
@@ -1096,8 +1106,8 @@ onMounted(() => {
                 border: selectedAlpha === 'yaml_condition' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
               }"
             >
-              <div class="text-sm text-white font-medium">技术指标条件</div>
-              <div class="text-xs text-gray-500 mt-1">RSI, MACD, EMA 等指标组合</div>
+              <div class="text-sm text-white font-medium">🔢 技术指标条件</div>
+              <div class="text-xs text-gray-500 mt-1">RSI, MACD, EMA 等</div>
             </button>
             <button
               @click="selectedAlpha = 'ai_agent'"
@@ -1107,8 +1117,19 @@ onMounted(() => {
                 border: selectedAlpha === 'ai_agent' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
               }"
             >
-              <div class="text-sm text-white font-medium">AI 智能判断</div>
-              <div class="text-xs text-gray-500 mt-1">AI 大模型综合分析行情</div>
+              <div class="text-sm text-white font-medium">🤖 AI 智能判断</div>
+              <div class="text-xs text-gray-500 mt-1">AI 大模型综合分析</div>
+            </button>
+            <button
+              @click="selectedAlpha = 'chanlun_ai'"
+              class="p-4 rounded-lg text-left transition-all"
+              :style="{
+                background: selectedAlpha === 'chanlun_ai' ? 'rgba(138,43,226,0.15)' : 'rgba(255,255,255,0.03)',
+                border: selectedAlpha === 'chanlun_ai' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
+              }"
+            >
+              <div class="text-sm text-white font-medium">🔮 AI 缠论研判</div>
+              <div class="text-xs text-gray-500 mt-1">分型+背驰+AI推理</div>
             </button>
           </div>
           <!-- Alpha params -->
@@ -1124,6 +1145,23 @@ onMounted(() => {
               <NSelect v-model:value="alphaExitIndicator" :options="indicatorOptions" size="small" />
               <NSelect v-model:value="alphaExitCompare" :options="compareOptions" size="small" />
               <NInputNumber v-model:value="alphaExitValue" size="small" />
+            </div>
+          </div>
+          <div v-else-if="selectedAlpha === 'chanlun_ai'" class="space-y-3 mt-3 p-3 rounded-lg" style="background: rgba(255,255,255,0.02);">
+            <div class="text-xs text-purple-400 mb-2">缠论参数</div>
+            <div>
+              <label class="text-xs text-gray-500">分析K线数量</label>
+              <NSlider v-model:value="chanlunKlineCount" :min="50" :max="300" :step="10" class="mt-1" />
+              <div class="text-right text-xs text-purple-400 mt-0.5">{{ chanlunKlineCount }} 根</div>
+            </div>
+            <div>
+              <label class="text-xs text-gray-500">背驰灵敏度 (越低越严格)</label>
+              <NSlider v-model:value="chanlunDivThreshold" :min="0.5" :max="1.0" :step="0.05" class="mt-1" />
+              <div class="text-right text-xs text-purple-400 mt-0.5">{{ chanlunDivThreshold }}</div>
+            </div>
+            <div>
+              <label class="text-xs text-gray-500">最低信心阈值</label>
+              <NSlider v-model:value="alphaConfidence" :min="0.1" :max="1.0" :step="0.1" :format-tooltip="(v: number) => `${(v * 100).toFixed(0)}%`" class="mt-1" />
             </div>
           </div>
           <div v-else class="p-3 rounded-lg" style="background: rgba(255,255,255,0.02);">
@@ -1311,7 +1349,7 @@ onMounted(() => {
           <div v-else class="p-3 rounded-lg" style="background: rgba(255,255,255,0.02);">
             <div class="text-xs text-gray-500 mb-2">策略组合预览</div>
             <div class="flex items-center gap-2 text-xs">
-              <span class="px-2 py-1 rounded" style="background: rgba(138,43,226,0.15); color: #a855f7;">{{ selectedAlpha === 'yaml_condition' ? '技术指标' : 'AI研判' }}</span>
+              <span class="px-2 py-1 rounded" style="background: rgba(138,43,226,0.15); color: #a855f7;">{{ selectedAlpha === 'yaml_condition' ? '技术指标' : selectedAlpha === 'chanlun_ai' ? 'AI缠论' : 'AI研判' }}</span>
               <span class="text-gray-600">→</span>
               <span class="px-2 py-1 rounded" style="background: rgba(34,197,94,0.1); color: #22c55e;">{{ selectedPortfolio === 'fixed_percent' ? '固定比例' : '凯利公式' }}</span>
               <span class="text-gray-600">→</span>
