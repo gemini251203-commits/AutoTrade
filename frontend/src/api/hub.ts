@@ -150,13 +150,33 @@ export function chatWithAgent(agentId: number, message: string): EventSource {
 }
 
 /**
+ * 从 localStorage 获取 auth token (兼容多账户模式)
+ * 与 request.ts 中 getAuthToken() 保持一致
+ */
+function getHubAuthToken(): string | null {
+  try {
+    const sessions = localStorage.getItem('auth_sessions')
+    const activeIndex = localStorage.getItem('auth_active_index')
+    if (sessions) {
+      const parsed = JSON.parse(sessions)
+      const index = activeIndex ? parseInt(activeIndex, 10) : 0
+      const token = parsed[index]?.token
+      if (token) return token
+    }
+    return localStorage.getItem('token')
+  } catch {
+    return null
+  }
+}
+
+/**
  * SSE 对话 (fetch 方式, 支持 POST body)
  */
 export async function* streamChatWithAgent(
   agentId: number,
   message: string
 ): AsyncGenerator<{ type: string; content?: string; tool?: string; args?: any; result?: string }> {
-  const token = localStorage.getItem('token')
+  const token = getHubAuthToken()
   const baseUrl = import.meta.env.VITE_API_BASE || ''
   
   const response = await fetch(`${baseUrl}/api/hub/agents/${agentId}/chat`, {

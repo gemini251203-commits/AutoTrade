@@ -170,13 +170,13 @@ async function sendGlobalCommand() {
           }
         } else if (event.type === 'tool_call') {
           warRoomMessages.value.push(wrMsg('tool_call', `调用 ${event.tool}(${JSON.stringify(event.args || {}).slice(0, 80)})`, {
-            avatar: '🔧',
+            avatar: 'TOOL',
             name: event.tool || 'Tool',
           }))
         } else if (event.type === 'tool_result') {
           const preview = (event.result || '').slice(0, 150)
           warRoomMessages.value.push(wrMsg('tool_result', `${event.tool} → ${preview}`, {
-            avatar: '✅',
+            avatar: 'OK',
             name: event.tool || 'Result',
           }))
         } else if (event.type === 'error') {
