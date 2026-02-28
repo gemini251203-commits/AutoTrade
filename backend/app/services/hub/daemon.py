@@ -155,10 +155,9 @@ class HubDaemon:
         )
     
     def _build_cycle_prompt(self, agent: HubAgent) -> str:
-        """构建自主决策周期的 prompt (精简版，节省 Token)"""
+        """构建自主决策周期的 prompt (自由思考版)"""
         return (
-            "定时巡逻: 查价格+指标，判断是否交易。\n"
-            "言简意赅，只说关键数据和结论。没信号就说观望。"
+            "轮到你值班了。看看现在市场什么情况，有没有机会，自己判断要不要动。"
         )
     
     def get_running_agents(self) -> list:

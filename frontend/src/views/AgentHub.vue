@@ -293,7 +293,7 @@ async function handleControl(id: number, action: string) {
       scrollWarRoom()
       // 走 SSE 流式路径，实时显示思考过程
       try {
-        const cyclePrompt = '定时巡逻: 查价格+指标，判断是否交易。言简意赅，只说关键数据和结论。'
+        const cyclePrompt = '轮到你值班了。看看现在市场什么情况，有没有机会，自己判断要不要动。'
         for await (const event of streamChatWithAgent(agent.id, cyclePrompt)) {
           if (event.type === 'text' || event.type === 'done') {
             if (event.content) {
