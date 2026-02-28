@@ -227,6 +227,46 @@ SIGNAL_PARSE_PROMPT = """你是一个专业的加密货币交易信号解析器�
 只返回 JSON，不要其他内容。"""
 
 
+# ==================== 推理模型自动检测 ====================
+
+def _detect_reasoner_model(base_url: str, chat_model: str) -> str:
+    """
+    根据 API base_url 和 chat 模型名自动选择对应的推理模型
+    
+    映射规则:
+    - DeepSeek    → deepseek-reasoner
+    - OpenAI      → o3-mini
+    - Gemini      → gemini-2.0-flash-thinking-exp
+    - Claude      → claude-3-5-sonnet (无专属推理模型, 用最强模型)
+    - 其他        → 使用 chat 模型本身 (降级为普通分析)
+    """
+    url = base_url.lower()
+    model = chat_model.lower()
+    
+    # DeepSeek
+    if "deepseek" in url or "deepseek" in model:
+        return "deepseek-reasoner"
+    
+    # OpenAI
+    if "openai.com" in url or model.startswith(("gpt-", "o1", "o3")):
+        return "o3-mini"
+    
+    # Gemini (Google AI Studio / Vertex AI)
+    if "googleapis" in url or "generativelanguage" in url or model.startswith("gemini"):
+        return "gemini-2.0-flash-thinking-exp"
+    
+    # Claude (Anthropic)
+    if "anthropic" in url or model.startswith("claude"):
+        return "claude-3-5-sonnet-20241022"
+    
+    # 未知 Provider → 降级：用 chat 模型做分析 (没有 reasoning_content，但仍能工作)
+    logger.warning(
+        f"[DeepThink] Unknown provider ({base_url}), "
+        f"falling back to chat model: {chat_model}"
+    )
+    return chat_model
+
+
 class AIBrain:
     """
     AI 大脑服务
@@ -285,10 +325,13 @@ class AIBrain:
     @staticmethod
     async def get_reasoner_provider(db: AsyncSession, user_id: int) -> DeepSeekProvider:
         """
-        获取深度推理 Provider (deepseek-reasoner)
+        获取深度推理 Provider (自动适配不同 AI 供应商)
         
-        复用用户的 API Key 和 base_url，
-        但固定使用 deepseek-reasoner 模型，超时 120s。
+        根据用户配置的 API base_url 和 model 自动选择对应的推理模型:
+        - DeepSeek → deepseek-reasoner
+        - OpenAI   → o3-mini
+        - Gemini   → gemini-2.0-flash-thinking-exp
+        - 其他     → 使用用户配置的 chat 模型 (降级为普通分析)
         """
         result = await db.execute(
             select(UserAIConfig).where(UserAIConfig.user_id == user_id)
@@ -299,11 +342,21 @@ class AIBrain:
             raise ValueError("Deep thinking requires configured API Key")
         
         api_key = decrypt_api_key(config.api_key_encrypted)
+        base_url = config.api_base_url or "https://api.deepseek.com"
+        chat_model = config.api_model or "deepseek-chat"
+        
+        # 自动选择推理模型
+        reasoner_model = _detect_reasoner_model(base_url, chat_model)
+        
+        logger.info(
+            f"[DeepThink] User {user_id}: provider={base_url}, "
+            f"chat_model={chat_model} → reasoner={reasoner_model}"
+        )
         
         return DeepSeekProvider(
             api_key=api_key,
-            base_url=config.api_base_url or "https://api.deepseek.com",
-            model="deepseek-reasoner",
+            base_url=base_url,
+            model=reasoner_model,
             timeout=120,
         )
     
