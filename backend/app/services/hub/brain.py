@@ -96,7 +96,7 @@ class HubBrain:
         tools_spec = self._get_tools_spec()
         
         # 5. 调用 AI (支持多轮 tool_call)
-        max_rounds = 5
+        max_rounds = 15
         for round_idx in range(max_rounds):
             try:
                 response = await client.chat.completions.create(
