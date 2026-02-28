@@ -169,16 +169,9 @@ async function sendGlobalCommand() {
             }))
           }
         } else if (event.type === 'tool_call') {
-          warRoomMessages.value.push(wrMsg('tool_call', `调用 ${event.tool}(${JSON.stringify(event.args || {}).slice(0, 80)})`, {
-            avatar: 'TOOL',
-            name: event.tool || 'Tool',
-          }))
+          warRoomMessages.value.push(wrMsg('system', `正在调用 ${event.tool} ...`))
         } else if (event.type === 'tool_result') {
-          const preview = (event.result || '').slice(0, 150)
-          warRoomMessages.value.push(wrMsg('tool_result', `${event.tool} → ${preview}`, {
-            avatar: 'OK',
-            name: event.tool || 'Result',
-          }))
+          // AI 会用人话描述工具结果，这里不再显示原始 JSON
         } else if (event.type === 'error') {
           warRoomMessages.value.push(wrMsg('error', event.content || '未知错误'))
         }
@@ -302,14 +295,9 @@ async function handleControl(id: number, action: string) {
               }))
             }
           } else if (event.type === 'tool_call') {
-            warRoomMessages.value.push(wrMsg('tool_call', `调用 ${event.tool}(${JSON.stringify(event.args || {}).slice(0, 80)})`, {
-              avatar: 'TOOL', name: event.tool || 'Tool',
-            }))
+            warRoomMessages.value.push(wrMsg('system', `正在调用 ${event.tool} ...`))
           } else if (event.type === 'tool_result') {
-            const preview = (event.result || '').slice(0, 150)
-            warRoomMessages.value.push(wrMsg('tool_result', `${event.tool} → ${preview}`, {
-              avatar: 'OK', name: event.tool || 'Result',
-            }))
+            // AI 会用人话描述工具结果，这里不再显示原始 JSON
           } else if (event.type === 'error') {
             warRoomMessages.value.push(wrMsg('error', event.content || '未知错误'))
           }
