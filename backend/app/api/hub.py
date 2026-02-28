@@ -38,7 +38,7 @@ class HubAgentCreateRequest(BaseModel):
     """创建智能体请求"""
     name: str
     role: str = "trader"
-    avatar: str = "🤖"
+    avatar: str = "BOT"
     provider: str = "deepseek"
     model: str = "deepseek-chat"
     api_base_url: Optional[str] = None

@@ -157,16 +157,14 @@ class HubDaemon:
     def _build_cycle_prompt(self, agent: HubAgent) -> str:
         """构建自主决策周期的 prompt"""
         return (
-            "请进行一次完整的市场分析和交易决策。\n\n"
-            "执行步骤:\n"
-            "1. 调用 get_balance 查看账户状态\n"
-            "2. 调用 get_positions 查看当前持仓\n"
-            "3. 调用 get_price 获取 BTCUSDT 最新价格\n"
-            "4. 调用 get_indicators 获取技术指标\n"
-            "5. 基于以上数据，决定是否需要交易\n"
-            "6. 如果有明确信号，调用 place_order 执行交易\n"
-            "7. 给出简要的分析报告\n\n"
-            "注意: 如果没有明确信号，选择 HOLD 观望即可。不要强行交易。"
+            "现在开始你的定时巡逻。请像一个值班交易员一样，按以下步骤思考：\n\n"
+            "1. 先调用 get_balance 看看账户还有多少钱\n"
+            "2. 调用 get_positions 看看手里有没有持仓\n"
+            "3. 调用 get_price 查 BTCUSDT 现在什么价\n"
+            "4. 调用 get_indicators 看看技术指标怎么说\n"
+            "5. 然后用你的经验综合判断：现在该不该动？\n\n"
+            "请用 [观察] [分析] [判断] [行动] 的格式输出你的完整思考过程。\n"
+            "如果没有明确信号，就选择观望，不要强行交易。宁可错过，不可做错。"
         )
     
     def get_running_agents(self) -> list:
