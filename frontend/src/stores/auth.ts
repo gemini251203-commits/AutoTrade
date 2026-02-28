@@ -126,14 +126,20 @@ export const useAuthStore = defineStore('auth', () => {
       const newToken = data.access_token
       const newRefreshToken = data.refresh_token || ''
       
-      // Fetch user info with new token
-      const userResponse = await request.get<User>('/auth/me', {
+      // Fetch user info with the NEW token
+      // ⚠️ 必须用 raw fetch 而不是 request — 因为 request 的拦截器
+      //    会用 localStorage 的旧 token 覆盖我们设置的新 token
+      const userResponse = await fetch('/api/auth/me', {
         headers: {
           'Authorization': `Bearer ${newToken}`,
         },
       })
       
-      const userData: User = userResponse.data
+      if (!userResponse.ok) {
+        throw new Error('Failed to fetch user info')
+      }
+      
+      const userData: User = await userResponse.json()
       
       // Check if user already has a session
       const existingIndex = sessions.value.findIndex(s => s.user.id === userData.id)
