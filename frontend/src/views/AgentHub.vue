@@ -288,19 +288,39 @@ async function handleControl(id: number, action: string) {
       scrollWarRoom()
     } else if (action === 'run_once') {
       const agent = agents.value.find(a => a.id === id)
-      warRoomMessages.value.push(wrMsg('system', `[TRIGGER] ${agent?.name || `Agent #${id}`} 单次执行已触发，后台运行中...`))
+      if (!agent) return
+      warRoomMessages.value.push(wrMsg('system', `[TRIGGER] ${agent.name} 单次执行...`))
       scrollWarRoom()
-      // 15 秒后自动刷新数据，获取执行结果
-      setTimeout(async () => {
-        await loadData()
-        const updated = agents.value.find(a => a.id === id)
-        if (updated && updated.last_error) {
-          warRoomMessages.value.push(wrMsg('error', `${updated.name}: ${updated.last_error}`))
-        } else if (updated) {
-          warRoomMessages.value.push(wrMsg('system', `[DONE] ${updated.name} 单次执行完成 (运行 ${updated.total_runs} 次)`))
+      // 走 SSE 流式路径，实时显示思考过程
+      try {
+        const cyclePrompt = '定时巡逻: 查价格+指标，判断是否交易。言简意赅，只说关键数据和结论。'
+        for await (const event of streamChatWithAgent(agent.id, cyclePrompt)) {
+          if (event.type === 'text' || event.type === 'done') {
+            if (event.content) {
+              warRoomMessages.value.push(wrMsg('ai_text', event.content, {
+                avatar: agent.avatar, name: agent.name,
+              }))
+            }
+          } else if (event.type === 'tool_call') {
+            warRoomMessages.value.push(wrMsg('tool_call', `调用 ${event.tool}(${JSON.stringify(event.args || {}).slice(0, 80)})`, {
+              avatar: 'TOOL', name: event.tool || 'Tool',
+            }))
+          } else if (event.type === 'tool_result') {
+            const preview = (event.result || '').slice(0, 150)
+            warRoomMessages.value.push(wrMsg('tool_result', `${event.tool} → ${preview}`, {
+              avatar: 'OK', name: event.tool || 'Result',
+            }))
+          } else if (event.type === 'error') {
+            warRoomMessages.value.push(wrMsg('error', event.content || '未知错误'))
+          }
+          scrollWarRoom()
         }
+        warRoomMessages.value.push(wrMsg('system', `[DONE] ${agent.name} 单次执行完成`))
         scrollWarRoom()
-      }, 15000)
+      } catch (e: any) {
+        warRoomMessages.value.push(wrMsg('error', `执行失败: ${e.message}`))
+      }
+      await loadData()
     }
   } catch (e) {
     console.error('Control agent failed:', e)
