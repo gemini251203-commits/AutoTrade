@@ -18,6 +18,7 @@ from .autopilot_log import AutopilotLog, AutopilotDecision
 from .news import NewsArticle, NewsAlert, NewsThinking
 from .strategy import Strategy, StrategyLog, TradeMemory
 from .trend_scheme import TrendScheme, TrendSnapshot
+from .hub_agent import HubAgent, HubAgentStatus
 
 
 __all__ = [
@@ -53,6 +54,8 @@ __all__ = [
     "TradeMemory",
     "TrendScheme",
     "TrendSnapshot",
+    "HubAgent",
+    "HubAgentStatus",
 ]
 
 
