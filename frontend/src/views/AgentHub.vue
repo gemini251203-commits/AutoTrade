@@ -12,6 +12,7 @@ import {
 import {
   listHubAgents, createHubAgent, updateHubAgent, deleteHubAgent,
   controlHubAgent, getHubStatus, boardDeliberate, streamChatWithAgent,
+  getHubLogs, saveHubLog,
   type HubAgent, type HubStatus, type BoardResult,
   type HubAgentCreateRequest, type HubAgentUpdateRequest,
 } from '@/api/hub'
@@ -124,10 +125,58 @@ async function loadData() {
     console.error('Failed to load hub data:', e)
   }
 }
+// ==================== 日志搜索 ====================
+const logSearchKeyword = ref('')
+const logSearchLoading = ref(false)
+
+/** 从 API 加载历史日志 */
+async function loadWarRoomHistory(keyword?: string) {
+  try {
+    logSearchLoading.value = true
+    const params: any = { limit: 200 }
+    if (keyword) params.keyword = keyword
+    const res = await getHubLogs(params)
+    const logs = (res as any).data?.logs || (res as any).logs || []
+    warRoomMessages.value = logs.map((log: any) => wrMsg(
+      log.log_type as WRMessage['type'],
+      log.content,
+      { name: log.agent_name, time: log.created_at?.slice(11, 19) || '' }
+    ))
+    scrollWarRoom()
+  } catch (e) {
+    console.error('Failed to load war room history:', e)
+  } finally {
+    logSearchLoading.value = false
+  }
+}
+
+/** 推送一条消息到 War Room 并异步保存到后端 */
+function pushAndSave(
+  type: WRMessage['type'],
+  content: string,
+  opts: Partial<WRMessage> & { agentId?: number | null; agentName?: string } = {},
+) {
+  const msg = wrMsg(type, content, opts)
+  warRoomMessages.value.push(msg)
+  scrollWarRoom()
+  // 异步保存，不阻塞 UI
+  saveHubLog({
+    agent_id: opts.agentId ?? null,
+    agent_name: opts.agentName || opts.name || 'System',
+    log_type: type,
+    content,
+  }).catch(() => {})
+  return msg
+}
+
+/** 搜索日志 */
+async function searchLogs() {
+  await loadWarRoomHistory(logSearchKeyword.value.trim() || undefined)
+}
 
 onMounted(async () => {
   loading.value = true
-  await loadData()
+  await Promise.all([loadData(), loadWarRoomHistory()])
   loading.value = false
   pollTimer = setInterval(loadData, 10000)
 })
@@ -156,17 +205,18 @@ async function sendGlobalCommand() {
 
   if (mode.value === 'dictator' && activeAgentForDictator.value) {
     // 独裁者: SSE 对话
-    warRoomMessages.value.push(wrMsg('system', `[CMD] Dispatched: "${cmd}"`))
-    scrollWarRoom()
+    pushAndSave('system', `[CMD] ${cmd}`)
 
     try {
       for await (const event of streamChatWithAgent(activeAgentForDictator.value.id, cmd)) {
         if (event.type === 'text' || event.type === 'done') {
           if (event.content) {
-            warRoomMessages.value.push(wrMsg('ai_text', event.content, {
+            pushAndSave('ai_text', event.content, {
               avatar: activeAgentForDictator.value!.avatar,
               name: activeAgentForDictator.value!.name,
-            }))
+              agentId: activeAgentForDictator.value!.id,
+              agentName: activeAgentForDictator.value!.name,
+            })
           }
         } else if (event.type === 'tool_call') {
           warRoomMessages.value.push(wrMsg('system', `正在调用 ${event.tool} ...`))
@@ -274,25 +324,23 @@ async function handleControl(id: number, action: string) {
     await loadData()
     if (action === 'start') {
       const agent = agents.value.find(a => a.id === id)
-      warRoomMessages.value.push(wrMsg('system', `[STARTED] ${agent?.name || `Agent #${id}`} activated`))
-      scrollWarRoom()
+      pushAndSave('system', `[STARTED] ${agent?.name || `Agent #${id}`} activated`)
     } else if (action === 'stop') {
-      warRoomMessages.value.push(wrMsg('system', `[STOPPED] Agent #${id} deactivated`))
-      scrollWarRoom()
+      pushAndSave('system', `[STOPPED] Agent #${id} deactivated`)
     } else if (action === 'run_once') {
       const agent = agents.value.find(a => a.id === id)
       if (!agent) return
-      warRoomMessages.value.push(wrMsg('system', `[TRIGGER] ${agent.name} 单次执行...`))
-      scrollWarRoom()
+      pushAndSave('system', `[TRIGGER] ${agent.name} 单次执行...`, { agentId: agent.id, agentName: agent.name })
       // 走 SSE 流式路径，实时显示思考过程
       try {
         const cyclePrompt = '轮到你值班了。看看现在市场什么情况，有没有机会，自己判断要不要动。'
         for await (const event of streamChatWithAgent(agent.id, cyclePrompt)) {
           if (event.type === 'text' || event.type === 'done') {
             if (event.content) {
-              warRoomMessages.value.push(wrMsg('ai_text', event.content, {
+              pushAndSave('ai_text', event.content, {
                 avatar: agent.avatar, name: agent.name,
-              }))
+                agentId: agent.id, agentName: agent.name,
+              })
             }
           } else if (event.type === 'tool_call') {
             warRoomMessages.value.push(wrMsg('system', `正在调用 ${event.tool} ...`))
@@ -303,8 +351,7 @@ async function handleControl(id: number, action: string) {
           }
           scrollWarRoom()
         }
-        warRoomMessages.value.push(wrMsg('system', `[DONE] ${agent.name} 单次执行完成`))
-        scrollWarRoom()
+        pushAndSave('system', `[DONE] ${agent.name} 单次执行完成`, { agentId: agent.id, agentName: agent.name })
       } catch (e: any) {
         warRoomMessages.value.push(wrMsg('error', `执行失败: ${e.message}`))
       }
@@ -498,7 +545,22 @@ function statusLabel(status: string) {
           <span class="text-xs font-semibold text-gray-300 tracking-wider font-mono">WAR ROOM CONSOLE</span>
           <span class="text-[10px] text-gray-600 ml-auto font-mono">{{ warRoomMessages.length }} events</span>
         </div>
-
+        <!-- 搜索栏 -->
+        <div class="flex items-center gap-2 px-3 py-1.5 border-b border-white/5" style="background: rgba(0,0,0,0.2);">
+          <NInput
+            v-model:value="logSearchKeyword"
+            placeholder="搜索日志记录..."
+            size="tiny"
+            clearable
+            @keyup.enter="searchLogs"
+            @clear="loadWarRoomHistory()"
+            class="flex-1"
+            style="max-width: 300px;"
+          />
+          <NButton size="tiny" quaternary :loading="logSearchLoading" @click="searchLogs">
+            查询
+          </NButton>
+        </div>
         <!-- War Room Content -->
         <div ref="warRoomRef" class="flex-1 overflow-auto p-3 space-y-2 custom-scrollbar">
           <!-- Empty state -->

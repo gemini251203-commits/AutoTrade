@@ -126,6 +126,26 @@ export function controlHubAgent(agentId: number, action: string) {
   return request.post<HubAgent>(`/hub/agents/${agentId}/activate`, { action })
 }
 
+/** 日志条目 */
+export interface HubLogEntry {
+  id: number
+  agent_id: number | null
+  agent_name: string
+  log_type: string
+  content: string
+  created_at: string
+}
+
+/** 获取历史日志 */
+export function getHubLogs(params?: { limit?: number; offset?: number; keyword?: string; agent_id?: number }) {
+  return request.get<{ logs: HubLogEntry[] }>('/hub/logs', { params })
+}
+
+/** 保存一条日志 */
+export function saveHubLog(data: { agent_id?: number | null; agent_name?: string; log_type?: string; content: string }) {
+  return request.post('/hub/logs', data)
+}
+
 /** 获取 Hub 全局状态 */
 export function getHubStatus() {
   return request.get<HubStatus>('/hub/status')

@@ -475,3 +475,89 @@ async def board_deliberate(
     )
     
     return board_result
+
+
+# ============================================================
+# 路由: War Room 日志
+# ============================================================
+
+class HubLogEntry(BaseModel):
+    """日志条目"""
+    id: int
+    agent_id: Optional[int]
+    agent_name: str
+    log_type: str
+    content: str
+    created_at: str
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HubLogSaveRequest(BaseModel):
+    """前端保存日志请求"""
+    agent_id: Optional[int] = None
+    agent_name: str = "System"
+    log_type: str = "system"
+    content: str
+
+
+@router.get("/logs")
+async def get_hub_logs(
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = 100,
+    offset: int = 0,
+    keyword: Optional[str] = None,
+    agent_id: Optional[int] = None,
+):
+    """获取 War Room 历史日志 (支持关键词搜索和分页)"""
+    from app.models.hub_log import HubLog
+    
+    query = select(HubLog).where(
+        HubLog.user_id == current_user.id
+    ).order_by(HubLog.created_at.desc())
+    
+    if keyword:
+        query = query.where(HubLog.content.ilike(f"%{keyword}%"))
+    if agent_id:
+        query = query.where(HubLog.agent_id == agent_id)
+    
+    query = query.offset(offset).limit(limit)
+    result = await db.execute(query)
+    logs = result.scalars().all()
+    
+    return {
+        "logs": [
+            {
+                "id": log.id,
+                "agent_id": log.agent_id,
+                "agent_name": log.agent_name,
+                "log_type": log.log_type,
+                "content": log.content,
+                "created_at": log.created_at.isoformat() if log.created_at else "",
+            }
+            for log in reversed(logs)  # 倒序查询，正序返回
+        ]
+    }
+
+
+@router.post("/logs")
+async def save_hub_log(
+    body: HubLogSaveRequest,
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """前端保存一条 War Room 日志"""
+    from app.models.hub_log import HubLog
+    
+    log = HubLog(
+        user_id=current_user.id,
+        agent_id=body.agent_id,
+        agent_name=body.agent_name,
+        log_type=body.log_type,
+        content=body.content,
+    )
+    db.add(log)
+    await db.commit()
+    return {"success": True, "id": log.id}
+
