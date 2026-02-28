@@ -51,7 +51,7 @@ class HubDaemon:
             name=f"hub_agent_{key}",
         )
         self._agent_tasks[key] = task
-        logger.info(f"[HubDaemon] ✅ Agent #{agent.id} '{agent.name}' started for user {user_id}")
+        logger.info(f"[HubDaemon] [STARTED] Agent #{agent.id} '{agent.name}' started for user {user_id}")
     
     async def stop_agent(self, user_id: int, agent_id: int):
         """停止单个智能体"""
@@ -59,7 +59,7 @@ class HubDaemon:
         task = self._agent_tasks.pop(key, None)
         if task and not task.done():
             task.cancel()
-            logger.info(f"[HubDaemon] 🛑 Agent #{agent_id} stopped for user {user_id}")
+            logger.info(f"[HubDaemon] [STOPPED] Agent #{agent_id} stopped for user {user_id}")
     
     async def run_agent_once(
         self,
@@ -123,7 +123,7 @@ class HubDaemon:
         """执行一个决策周期"""
         from app.services.hub.brain import hub_brain
         
-        logger.info(f"[HubDaemon] 🔄 Agent #{agent.id} '{agent.name}' executing cycle")
+        logger.info(f"[HubDaemon] [CYCLE] Agent #{agent.id} '{agent.name}' executing cycle")
         
         # 构建分析指令
         prompt = self._build_cycle_prompt(agent)

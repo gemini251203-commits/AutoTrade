@@ -34,7 +34,7 @@ const warRoomRef = ref<HTMLElement | null>(null)
 const showEditModal = ref(false)
 const editingAgent = ref<HubAgent | null>(null)
 const editForm = ref<HubAgentCreateRequest & { id?: number }>({
-  name: '', role: 'trader', avatar: '🤖', provider: 'deepseek',
+  name: '', role: 'trader', avatar: 'BOT', provider: 'deepseek',
   model: 'deepseek-chat', api_base_url: null, api_key: null,
   system_prompt: '', temperature: 0.7,
 })
@@ -65,16 +65,17 @@ function wrMsg(type: WRMessage['type'], content: string, opts: Partial<WRMessage
 
 // Options
 const roleOptions = [
-  { label: '🏹 交易员 (Trader)', value: 'trader' },
-  { label: '📊 分析师 (Analyst)', value: 'analyst' },
-  { label: '🛡️ 风控顾问 (Risk Advisor)', value: 'risk_advisor' },
+  { label: 'Trader (交易员)', value: 'trader' },
+  { label: 'Analyst (分析师)', value: 'analyst' },
+  { label: 'Risk Advisor (风控顾问)', value: 'risk_advisor' },
 ]
+// Avatar: use short code, frontend renders as initial letter circle
 const avatarOptions = [
-  { label: '🤖', value: '🤖' }, { label: '🦊', value: '🦊' },
-  { label: '🐺', value: '🐺' }, { label: '🦅', value: '🦅' },
-  { label: '🐉', value: '🐉' }, { label: '🧠', value: '🧠' },
-  { label: '⚡', value: '⚡' }, { label: '🔮', value: '🔮' },
-  { label: '🎯', value: '🎯' }, { label: '🏴‍☠️', value: '🏴‍☠️' },
+  { label: 'BOT', value: 'BOT' }, { label: 'FOX', value: 'FOX' },
+  { label: 'WOLF', value: 'WOLF' }, { label: 'EAGLE', value: 'EAGLE' },
+  { label: 'DRAGON', value: 'DRAGON' }, { label: 'BRAIN', value: 'BRAIN' },
+  { label: 'BOLT', value: 'BOLT' }, { label: 'ORB', value: 'ORB' },
+  { label: 'TARGET', value: 'TARGET' }, { label: 'PIRATE', value: 'PIRATE' },
 ]
 const providerOptions = [
   { label: 'DeepSeek', value: 'deepseek' },
@@ -88,7 +89,7 @@ const mode = computed(() => hubStatus.value?.mode ?? 'idle')
 
 const modeLabel = computed(() => {
   const map: Record<string, string> = {
-    idle: '💤 待命', dictator: '👑 独裁者模式', board: '🏛️ 董事会模式',
+    idle: 'STANDBY', dictator: 'DICTATOR', board: 'BOARD',
   }
   return map[mode.value] || mode.value
 })
@@ -155,7 +156,7 @@ async function sendGlobalCommand() {
 
   if (mode.value === 'dictator' && activeAgentForDictator.value) {
     // 独裁者: SSE 对话
-    warRoomMessages.value.push(wrMsg('system', `📡 指令下发: "${cmd}"`))
+    warRoomMessages.value.push(wrMsg('system', `[CMD] Dispatched: "${cmd}"`))
     scrollWarRoom()
 
     try {
@@ -189,8 +190,8 @@ async function sendGlobalCommand() {
 
   } else if (mode.value === 'board') {
     // 董事会: 辩论
-    warRoomMessages.value.push(wrMsg('system', `🏛️ 董事会议题: "${cmd}"`))
-    warRoomMessages.value.push(wrMsg('system', `${activeCount.value} 位 AI 正在独立分析中...`))
+    warRoomMessages.value.push(wrMsg('system', `[BOARD] Topic: "${cmd}"`))
+    warRoomMessages.value.push(wrMsg('system', `${activeCount.value} agents analyzing independently...`))
     scrollWarRoom()
 
     try {
@@ -199,7 +200,7 @@ async function sendGlobalCommand() {
 
       // 每位 AI 的观点 → 群聊气泡
       for (const op of result.opinions) {
-        const decisionLabel = op.decision === 'open_long' ? '📈 做多' : op.decision === 'open_short' ? '📉 做空' : '⏸️ 观望'
+        const decisionLabel = op.decision === 'open_long' ? 'LONG' : op.decision === 'open_short' ? 'SHORT' : 'HOLD'
         warRoomMessages.value.push(wrMsg('opinion', op.reasoning, {
           avatar: op.avatar,
           name: op.agent_name,
@@ -225,7 +226,7 @@ async function sendGlobalCommand() {
 function openCreate() {
   editingAgent.value = null
   editForm.value = {
-    name: '', role: 'trader', avatar: '🤖', provider: 'deepseek',
+    name: '', role: 'trader', avatar: 'BOT', provider: 'deepseek',
     model: 'deepseek-chat', api_base_url: null, api_key: null,
     system_prompt: '', temperature: 0.7,
   }
@@ -280,10 +281,10 @@ async function handleControl(id: number, action: string) {
     await loadData()
     if (action === 'start') {
       const agent = agents.value.find(a => a.id === id)
-      warRoomMessages.value.push(wrMsg('system', `✅ ${agent?.avatar || '🤖'} ${agent?.name || `Agent #${id}`} 已启动`))
+      warRoomMessages.value.push(wrMsg('system', `[STARTED] ${agent?.name || `Agent #${id}`} activated`))
       scrollWarRoom()
     } else if (action === 'stop') {
-      warRoomMessages.value.push(wrMsg('system', `🛑 Agent #${id} 已停止`))
+      warRoomMessages.value.push(wrMsg('system', `[STOPPED] Agent #${id} deactivated`))
       scrollWarRoom()
     }
   } catch (e) {
@@ -313,7 +314,7 @@ function statusLabel(status: string) {
     <!-- ========== Header ========== -->
     <div class="flex items-center justify-between flex-shrink-0">
       <div class="flex items-center gap-3">
-        <h1 class="text-xl font-bold text-white">🧠 Agent Hub</h1>
+        <h1 class="text-xl font-bold text-white">Agent Hub</h1>
         <span
           class="text-xs px-3 py-1 rounded-full font-medium tracking-wide"
           :style="{ background: modeColor + '15', color: modeColor, border: '1px solid ' + modeColor + '30' }"
@@ -332,10 +333,10 @@ function statusLabel(status: string) {
     <div class="flex-shrink-0 p-4 rounded-xl border border-white/5 bg-white/[0.02] backdrop-blur">
       <div class="flex items-center gap-2 mb-2">
         <span class="text-xs font-semibold" :style="{ color: modeColor }">
-          {{ mode === 'dictator' ? '📡 作战指令 → 直接执行' : mode === 'board' ? '🏛️ 辩论议题 → 群聊辩论' : '📡 全局作战指示' }}
+          {{ mode === 'dictator' ? 'CMD > Execute' : mode === 'board' ? 'TOPIC > Deliberate' : 'Global Command' }}
         </span>
         <span v-if="mode === 'dictator' && activeAgentForDictator" class="text-xs text-gray-500">
-          → {{ activeAgentForDictator.avatar }} {{ activeAgentForDictator.name }}
+          > {{ activeAgentForDictator.name }}
         </span>
       </div>
       <div class="flex gap-2">
@@ -367,7 +368,7 @@ function statusLabel(status: string) {
       <!-- ===== LEFT: 员工列表 (40%) ===== -->
       <div class="w-[38%] flex flex-col min-h-0">
         <div class="flex items-center justify-between mb-3 flex-shrink-0">
-          <span class="text-sm font-semibold text-gray-400">👤 智能体编队</span>
+          <span class="text-sm font-semibold text-gray-400">Agents</span>
           <NButton size="small" type="primary" quaternary @click="openCreate">
             <template #icon><NIcon><AddOutline /></NIcon></template>
             新建
@@ -398,7 +399,7 @@ function statusLabel(status: string) {
           >
             <!-- Agent Header -->
             <div class="flex items-center gap-2.5 mb-2">
-              <span class="text-xl">{{ agent.avatar }}</span>
+              <span class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white" style="background: linear-gradient(135deg, #a855f7, #6366f1);">{{ agent.avatar?.charAt(0) || agent.name?.charAt(0) || 'A' }}</span>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
                   <span class="font-semibold text-white text-sm truncate">{{ agent.name }}</span>
@@ -421,7 +422,7 @@ function statusLabel(status: string) {
 
             <!-- Error -->
             <div v-if="agent.last_error" class="text-[10px] text-red-400 mb-2 p-1.5 rounded bg-red-500/10 truncate">
-              ❌ {{ agent.last_error }}
+              [ERR] {{ agent.last_error }}
             </div>
 
             <!-- Actions -->
@@ -480,9 +481,9 @@ function statusLabel(status: string) {
           <!-- Empty state -->
           <div v-if="warRoomMessages.length === 0" class="h-full flex items-center justify-center">
             <div class="text-center text-gray-600">
-              <div class="text-3xl mb-3">📺</div>
-              <div class="text-sm">作战指挥室</div>
-              <div class="text-xs text-gray-700 mt-1">在顶部输入作战指令，实时查看 AI 的思考与行动</div>
+              <div class="text-3xl mb-3 font-mono text-gray-700">[~]</div>
+              <div class="text-sm">War Room</div>
+              <div class="text-xs text-gray-700 mt-1">Send a command above to see real-time AI actions</div>
             </div>
           </div>
 
@@ -505,7 +506,7 @@ function statusLabel(status: string) {
             <!-- AI Text -->
             <div v-else-if="msg.type === 'ai_text'" class="bg-white/[0.03] rounded-lg p-3">
               <div class="flex items-center gap-2 mb-1.5">
-                <span class="text-sm">{{ msg.avatar }}</span>
+                <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style="background: linear-gradient(135deg, #a855f7, #6366f1);">{{ msg.avatar?.charAt(0) || 'A' }}</span>
                 <span class="text-xs font-semibold text-purple-300">{{ msg.name }}</span>
                 <span class="text-[10px] text-gray-700 ml-auto font-mono">{{ msg.time }}</span>
               </div>
@@ -514,14 +515,14 @@ function statusLabel(status: string) {
 
             <!-- Tool Call -->
             <div v-else-if="msg.type === 'tool_call'" class="flex items-center gap-2 px-3 py-1.5 rounded bg-blue-500/5 border border-blue-500/10">
-              <span class="text-xs">🔧</span>
+              <span class="text-xs font-mono text-blue-400">[TOOL]</span>
               <span class="text-[11px] font-mono text-blue-300 truncate">{{ msg.content }}</span>
               <span class="text-[10px] text-gray-700 ml-auto font-mono">{{ msg.time }}</span>
             </div>
 
             <!-- Tool Result -->
             <div v-else-if="msg.type === 'tool_result'" class="flex items-center gap-2 px-3 py-1.5 rounded bg-green-500/5 border border-green-500/10">
-              <span class="text-xs">✅</span>
+              <span class="text-xs font-mono text-green-400">[OK]</span>
               <span class="text-[11px] font-mono text-green-300 truncate">{{ msg.content }}</span>
               <span class="text-[10px] text-gray-700 ml-auto font-mono">{{ msg.time }}</span>
             </div>
@@ -529,7 +530,7 @@ function statusLabel(status: string) {
             <!-- Board Opinion (群聊气泡) -->
             <div v-else-if="msg.type === 'opinion'" class="bg-white/[0.03] rounded-lg p-3">
               <div class="flex items-center gap-2 mb-1.5">
-                <span class="text-lg">{{ msg.avatar }}</span>
+                <span class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style="background: linear-gradient(135deg, #a855f7, #6366f1);">{{ msg.avatar?.charAt(0) || 'A' }}</span>
                 <span class="text-xs font-bold text-white">{{ msg.name }}</span>
                 <NTag
                   :type="msg.meta?.decision?.includes('做多') ? 'success' : msg.meta?.decision?.includes('做空') ? 'error' : 'default'"
@@ -546,21 +547,21 @@ function statusLabel(status: string) {
             <div v-else-if="msg.type === 'consensus'" class="mx-auto max-w-md">
               <div class="p-4 rounded-xl border-2 border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-blue-500/5">
                 <div class="text-center mb-2">
-                  <span class="text-xs font-bold text-purple-400 tracking-wider">📊 共识决策</span>
+                  <span class="text-xs font-bold text-purple-400 tracking-wider">CONSENSUS</span>
                 </div>
                 <div class="flex items-center justify-center gap-4 mb-2">
                   <NTag
                     :type="msg.meta?.decision === 'open_long' ? 'success' : msg.meta?.decision === 'open_short' ? 'error' : 'default'"
                     size="large" round
                   >
-                    {{ msg.meta?.decision === 'open_long' ? '✅ 做多' : msg.meta?.decision === 'open_short' ? '❌ 做空' : '⏸️ 观望' }}
+                    {{ msg.meta?.decision === 'open_long' ? 'LONG' : msg.meta?.decision === 'open_short' ? 'SHORT' : 'HOLD' }}
                   </NTag>
                 </div>
                 <div class="text-center text-xs text-gray-400 space-y-0.5">
                   <div>{{ msg.meta?.vote_count }}</div>
                   <div>平均信心: {{ ((msg.meta?.confidence || 0) * 100).toFixed(0) }}%</div>
                   <div v-if="msg.meta?.executed" class="text-green-400 font-semibold mt-1">
-                    ✅ 已执行交易 (订单 #{{ msg.meta?.order_id }})
+                    [EXECUTED] Order #{{ msg.meta?.order_id }}
                   </div>
                   <div v-else class="text-gray-600 mt-1">未触发交易</div>
                 </div>
@@ -569,7 +570,7 @@ function statusLabel(status: string) {
 
             <!-- Error -->
             <div v-else-if="msg.type === 'error'" class="px-3 py-1.5 rounded bg-red-500/10 border border-red-500/10">
-              <span class="text-xs text-red-400">❌ {{ msg.content }}</span>
+              <span class="text-xs text-red-400">[ERROR] {{ msg.content }}</span>
             </div>
           </div>
         </div>
@@ -580,7 +581,7 @@ function statusLabel(status: string) {
     <NModal
       v-model:show="showEditModal"
       preset="card"
-      :title="editingAgent ? `✏️ 编辑 ${editingAgent.avatar} ${editingAgent.name}` : '✨ 创建智能体'"
+      :title="editingAgent ? `Edit ${editingAgent.name}` : 'Create Agent'"
       style="max-width: 600px; max-height: 90vh;"
       :mask-closable="false"
     >
@@ -628,7 +629,7 @@ function statusLabel(status: string) {
         <!-- Row 4: System Prompt (巨大输入框) -->
         <div>
           <label class="text-[11px] text-gray-500 mb-1.5 block font-semibold">
-            📋 人设与长期 KPI (System Prompt)
+            System Prompt (KPI)
             <span class="text-gray-700 font-normal ml-2">— 在这里写入角色定位、交易风格、绩效目标</span>
           </label>
           <div class="rounded-lg border border-white/10 overflow-hidden" style="background: rgba(0,0,0,0.3);">

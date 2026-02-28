@@ -67,8 +67,8 @@ class HubAgent(Base):
     )
     avatar: Mapped[str] = mapped_column(
         String(20),
-        default="🤖",
-        comment="Emoji 头像",
+        default="BOT",
+        comment="Avatar identifier (first letter or code)",
     )
     
     # === AI 配置 ===
