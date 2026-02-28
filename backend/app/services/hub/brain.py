@@ -51,6 +51,7 @@ SYSTEM_OVERVIEW = """你是一个经验丰富的加密货币交易员，在 Auto
 - 全程中文，说人话
 - 简洁，不写长文
 - 没把握就别动，说"我先看看"就行
+- 你有记忆，能想起之前说过什么、做过什么。如果情况和上次差不多，可以说"跟刚才差不多"
 - 禁止使用 Emoji"""
 
 
@@ -80,9 +81,13 @@ class HubBrain:
         # 1. 组装 system prompt
         full_system_prompt = self._build_system_prompt(agent)
         
-        # 2. 构建 messages
+        # 2. 加载记忆 (从 hub_logs 获取近期对话历史)
+        memory_messages = await self._load_memory(db, user_id, agent.id)
+        
+        # 3. 构建 messages (system + 记忆 + 当前消息)
         messages = [
             {"role": "system", "content": full_system_prompt},
+            *memory_messages,
             {"role": "user", "content": message},
         ]
         
@@ -160,7 +165,7 @@ class HubBrain:
                 })
                 yield json.dumps({
                     "type": "done",
-                    "content": content,
+                    "content": "",
                 })
                 return
         
@@ -186,6 +191,70 @@ class HubBrain:
             elif event["type"] == "error":
                 full_reply = f"[ERROR] {event.get('content', '')}"
         return full_reply
+    
+    async def _load_memory(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        agent_id: int,
+        max_entries: int = 20,
+    ) -> list:
+        """
+        加载 AI 的记忆 (从 hub_logs 读取近期对话历史)
+        
+        将历史日志重构为 user/assistant 消息对，
+        让 AI 记住自己之前做了什么、说了什么。
+        """
+        try:
+            from app.models.hub_log import HubLog
+            from sqlalchemy import select
+            
+            query = (
+                select(HubLog)
+                .where(
+                    HubLog.user_id == user_id,
+                    HubLog.agent_id == agent_id,
+                    HubLog.log_type.in_(["system", "ai_text"]),
+                )
+                .order_by(HubLog.created_at.desc())
+                .limit(max_entries)
+            )
+            result = await db.execute(query)
+            logs = list(reversed(result.scalars().all()))
+            
+            if not logs:
+                return []
+            
+            # 重构为对话消息
+            memory = []
+            for log in logs:
+                if log.log_type == "system" and log.content.startswith("[CMD]"):
+                    # 用户指令 → user message
+                    cmd_text = log.content.replace("[CMD] ", "").strip()
+                    if cmd_text:
+                        memory.append({"role": "user", "content": cmd_text})
+                elif log.log_type == "system" and log.content.startswith("[TRIGGER]"):
+                    # 值班触发 → user message
+                    memory.append({"role": "user", "content": "轮到你值班了，看看市场情况。"})
+                elif log.log_type == "ai_text":
+                    # AI 回复 → assistant message
+                    memory.append({"role": "assistant", "content": log.content})
+            
+            # 清理: 确保不以 user 结尾 (当前消息会补上)
+            # 也确保不超过 token 限制 (粗略估计)
+            total_chars = sum(len(m["content"]) for m in memory)
+            while total_chars > 3000 and memory:
+                removed = memory.pop(0)
+                total_chars -= len(removed["content"])
+            
+            if memory:
+                logger.info(f"[HubBrain] Loaded {len(memory)} memory entries for agent #{agent_id}")
+            
+            return memory
+            
+        except Exception as e:
+            logger.warning(f"[HubBrain] Failed to load memory: {e}")
+            return []
     
     def _build_system_prompt(self, agent: HubAgent) -> str:
         """组装完整的 system prompt"""
