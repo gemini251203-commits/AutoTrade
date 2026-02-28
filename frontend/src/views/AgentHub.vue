@@ -286,6 +286,21 @@ async function handleControl(id: number, action: string) {
     } else if (action === 'stop') {
       warRoomMessages.value.push(wrMsg('system', `[STOPPED] Agent #${id} deactivated`))
       scrollWarRoom()
+    } else if (action === 'run_once') {
+      const agent = agents.value.find(a => a.id === id)
+      warRoomMessages.value.push(wrMsg('system', `[TRIGGER] ${agent?.name || `Agent #${id}`} 单次执行已触发，后台运行中...`))
+      scrollWarRoom()
+      // 15 秒后自动刷新数据，获取执行结果
+      setTimeout(async () => {
+        await loadData()
+        const updated = agents.value.find(a => a.id === id)
+        if (updated && updated.last_error) {
+          warRoomMessages.value.push(wrMsg('error', `${updated.name}: ${updated.last_error}`))
+        } else if (updated) {
+          warRoomMessages.value.push(wrMsg('system', `[DONE] ${updated.name} 单次执行完成 (运行 ${updated.total_runs} 次)`))
+        }
+        scrollWarRoom()
+      }, 15000)
     }
   } catch (e) {
     console.error('Control agent failed:', e)
