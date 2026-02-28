@@ -40,7 +40,8 @@ async function handleLogin() {
   const success = await authStore.login(username.value, password.value)
   
   if (success) {
-    router.push('/')
+    // 强制全页刷新，确保所有 store 加载正确用户的数据
+    window.location.href = '/'
   } else {
     showError.value = true
     errorMessage.value = authStore.error || '登录失败'

@@ -52,9 +52,9 @@ function closeMenu() {
 async function handleSwitchAccount(index: number) {
   if (index === activeIndex.value) return
   authStore.switchAccount(index)
-  // Refresh wallet data for new account
-  await walletStore.fetchBalance()
   closeMenu()
+  // 强制刷新整个页面，确保所有数据 (持仓/余额/策略) 归属正确用户
+  window.location.reload()
 }
 
 // Add account - navigate to login with addAccount flag
