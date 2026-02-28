@@ -1,18 +1,18 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import {
-  NButton, NCard, NModal, NInput, NSelect, NSlider,
-  NTag, NSpin, NEmpty, NIcon, NTooltip, NInputNumber,
+  NButton, NModal, NInput, NSelect, NSlider, NTag, NSpin,
+  NEmpty, NIcon, NTooltip, NScrollbar,
 } from 'naive-ui'
 import {
   AddOutline, TrashOutline, PlayOutline, StopOutline,
-  FlashOutline, ChatboxEllipsesOutline, PeopleOutline,
+  FlashOutline, SendOutline, CreateOutline,
 } from '@vicons/ionicons5'
 import {
   listHubAgents, createHubAgent, updateHubAgent, deleteHubAgent,
   controlHubAgent, getHubStatus, boardDeliberate, streamChatWithAgent,
   type HubAgent, type HubStatus, type BoardResult,
-  type HubAgentCreateRequest,
+  type HubAgentCreateRequest, type HubAgentUpdateRequest,
 } from '@/api/hub'
 
 // ==================== State ====================
@@ -21,33 +21,46 @@ const agents = ref<HubAgent[]>([])
 const hubStatus = ref<HubStatus | null>(null)
 const loading = ref(false)
 
-// Create modal
-const showCreateModal = ref(false)
-const createForm = ref<HubAgentCreateRequest>({
-  name: '',
-  role: 'trader',
-  avatar: '🤖',
-  provider: 'deepseek',
-  model: 'deepseek-chat',
-  api_base_url: null,
-  api_key: null,
-  system_prompt: '',
-  temperature: 0.7,
+// 全局作战指示
+const globalCommand = ref('')
+const globalCommandLoading = ref(false)
+
+// War Room Console
+const warRoomMessages = ref<WRMessage[]>([])
+const warRoomRef = ref<HTMLElement | null>(null)
+
+// 编辑弹窗
+const showEditModal = ref(false)
+const editingAgent = ref<HubAgent | null>(null)
+const editForm = ref<HubAgentCreateRequest & { id?: number }>({
+  name: '', role: 'trader', avatar: '🤖', provider: 'deepseek',
+  model: 'deepseek-chat', api_base_url: null, api_key: null,
+  system_prompt: '', temperature: 0.7,
 })
 
-// Chat modal (Dictator mode)
-const showChatModal = ref(false)
-const chatAgentId = ref<number | null>(null)
-const chatMessages = ref<{ role: string; content: string; tool?: string }[]>([])
-const chatInput = ref('')
-const chatLoading = ref(false)
+// 轮询
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
-// Board modal
-const showBoardModal = ref(false)
-const boardTopic = ref('')
-const boardSymbol = ref('BTCUSDT')
-const boardResult = ref<BoardResult | null>(null)
-const boardLoading = ref(false)
+interface WRMessage {
+  id: number
+  type: 'system' | 'ai_text' | 'tool_call' | 'tool_result' | 'error' | 'opinion' | 'consensus'
+  avatar?: string
+  name?: string
+  content: string
+  meta?: any
+  time: string
+}
+
+let msgIdCounter = 0
+function wrMsg(type: WRMessage['type'], content: string, opts: Partial<WRMessage> = {}): WRMessage {
+  return {
+    id: ++msgIdCounter,
+    type,
+    content,
+    time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    ...opts,
+  }
+}
 
 // Options
 const roleOptions = [
@@ -55,14 +68,13 @@ const roleOptions = [
   { label: '📊 分析师 (Analyst)', value: 'analyst' },
   { label: '🛡️ 风控顾问 (Risk Advisor)', value: 'risk_advisor' },
 ]
-
 const avatarOptions = [
   { label: '🤖', value: '🤖' }, { label: '🦊', value: '🦊' },
   { label: '🐺', value: '🐺' }, { label: '🦅', value: '🦅' },
   { label: '🐉', value: '🐉' }, { label: '🧠', value: '🧠' },
   { label: '⚡', value: '⚡' }, { label: '🔮', value: '🔮' },
+  { label: '🎯', value: '🎯' }, { label: '🏴‍☠️', value: '🏴‍☠️' },
 ]
-
 const providerOptions = [
   { label: 'DeepSeek', value: 'deepseek' },
   { label: 'OpenAI', value: 'openai' },
@@ -70,61 +82,185 @@ const providerOptions = [
 ]
 
 // Computed
+const activeCount = computed(() => hubStatus.value?.active_count ?? 0)
+const mode = computed(() => hubStatus.value?.mode ?? 'idle')
+
 const modeLabel = computed(() => {
-  if (!hubStatus.value) return '—'
   const map: Record<string, string> = {
-    idle: '💤 待命',
-    dictator: '👑 独裁者模式',
-    board: '🏛️ 董事会模式',
+    idle: '💤 待命', dictator: '👑 独裁者模式', board: '🏛️ 董事会模式',
   }
-  return map[hubStatus.value.mode] || hubStatus.value.mode
+  return map[mode.value] || mode.value
+})
+const modeColor = computed(() => {
+  const map: Record<string, string> = {
+    idle: '#666', dictator: '#a855f7', board: '#3b82f6',
+  }
+  return map[mode.value] || '#666'
 })
 
-const modeColor = computed(() => {
-  if (!hubStatus.value) return '#666'
-  const map: Record<string, string> = {
-    idle: '#666',
-    dictator: '#a855f7',
-    board: '#3b82f6',
-  }
-  return map[hubStatus.value.mode] || '#666'
+const activeAgentForDictator = computed(() => {
+  if (mode.value !== 'dictator') return null
+  return agents.value.find(a => a.is_active) || null
+})
+
+const commandPlaceholder = computed(() => {
+  if (activeCount.value === 0) return '请先激活至少一个智能体...'
+  if (mode.value === 'dictator') return '输入作战指令，直接发给 AI 执行... (例: "分析 BTC 趋势，如果有机会就做多")'
+  return '输入辩论议题，触发多 AI 董事会... (例: "目前是熊市，不要抢多单，合作帮我赚钱")'
 })
 
 // ==================== Data Loading ====================
 
 async function loadData() {
-  loading.value = true
   try {
     const [agentRes, statusRes] = await Promise.all([
-      listHubAgents(),
-      getHubStatus(),
+      listHubAgents(), getHubStatus(),
     ])
     agents.value = (agentRes as any).data?.agents || (agentRes as any).agents || []
     hubStatus.value = (statusRes as any).data || statusRes as any
   } catch (e) {
     console.error('Failed to load hub data:', e)
-  } finally {
-    loading.value = false
   }
 }
 
-onMounted(loadData)
+onMounted(async () => {
+  loading.value = true
+  await loadData()
+  loading.value = false
+  pollTimer = setInterval(loadData, 10000)
+})
+
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer)
+})
+
+// Auto-scroll war room
+function scrollWarRoom() {
+  nextTick(() => {
+    if (warRoomRef.value) {
+      warRoomRef.value.scrollTop = warRoomRef.value.scrollHeight
+    }
+  })
+}
+
+// ==================== 全局作战指示 ====================
+
+async function sendGlobalCommand() {
+  const cmd = globalCommand.value.trim()
+  if (!cmd || globalCommandLoading.value || activeCount.value === 0) return
+
+  globalCommand.value = ''
+  globalCommandLoading.value = true
+
+  if (mode.value === 'dictator' && activeAgentForDictator.value) {
+    // 独裁者: SSE 对话
+    warRoomMessages.value.push(wrMsg('system', `📡 指令下发: "${cmd}"`))
+    scrollWarRoom()
+
+    try {
+      for await (const event of streamChatWithAgent(activeAgentForDictator.value.id, cmd)) {
+        if (event.type === 'text' || event.type === 'done') {
+          if (event.content) {
+            warRoomMessages.value.push(wrMsg('ai_text', event.content, {
+              avatar: activeAgentForDictator.value!.avatar,
+              name: activeAgentForDictator.value!.name,
+            }))
+          }
+        } else if (event.type === 'tool_call') {
+          warRoomMessages.value.push(wrMsg('tool_call', `调用 ${event.tool}(${JSON.stringify(event.args || {}).slice(0, 80)})`, {
+            avatar: '🔧',
+            name: event.tool || 'Tool',
+          }))
+        } else if (event.type === 'tool_result') {
+          const preview = (event.result || '').slice(0, 150)
+          warRoomMessages.value.push(wrMsg('tool_result', `${event.tool} → ${preview}`, {
+            avatar: '✅',
+            name: event.tool || 'Result',
+          }))
+        } else if (event.type === 'error') {
+          warRoomMessages.value.push(wrMsg('error', event.content || '未知错误'))
+        }
+        scrollWarRoom()
+      }
+    } catch (e: any) {
+      warRoomMessages.value.push(wrMsg('error', `连接失败: ${e.message}`))
+    }
+
+  } else if (mode.value === 'board') {
+    // 董事会: 辩论
+    warRoomMessages.value.push(wrMsg('system', `🏛️ 董事会议题: "${cmd}"`))
+    warRoomMessages.value.push(wrMsg('system', `${activeCount.value} 位 AI 正在独立分析中...`))
+    scrollWarRoom()
+
+    try {
+      const res = await boardDeliberate(cmd, 'BTCUSDT')
+      const result: BoardResult = (res as any).data || res as any
+
+      // 每位 AI 的观点 → 群聊气泡
+      for (const op of result.opinions) {
+        const decisionLabel = op.decision === 'open_long' ? '📈 做多' : op.decision === 'open_short' ? '📉 做空' : '⏸️ 观望'
+        warRoomMessages.value.push(wrMsg('opinion', op.reasoning, {
+          avatar: op.avatar,
+          name: op.agent_name,
+          meta: { decision: decisionLabel, confidence: op.confidence },
+        }))
+        scrollWarRoom()
+      }
+
+      // 共识卡片
+      warRoomMessages.value.push(wrMsg('consensus', '', { meta: result.consensus }))
+      scrollWarRoom()
+    } catch (e: any) {
+      warRoomMessages.value.push(wrMsg('error', `辩论失败: ${e.message}`))
+    }
+  }
+
+  globalCommandLoading.value = false
+  await loadData()
+}
 
 // ==================== CRUD ====================
 
-async function handleCreate() {
-  if (!createForm.value.name) return
+function openCreate() {
+  editingAgent.value = null
+  editForm.value = {
+    name: '', role: 'trader', avatar: '🤖', provider: 'deepseek',
+    model: 'deepseek-chat', api_base_url: null, api_key: null,
+    system_prompt: '', temperature: 0.7,
+  }
+  showEditModal.value = true
+}
+
+function openEdit(agent: HubAgent) {
+  editingAgent.value = agent
+  editForm.value = {
+    id: agent.id,
+    name: agent.name, role: agent.role, avatar: agent.avatar,
+    provider: agent.provider, model: agent.model,
+    api_base_url: agent.api_base_url, api_key: null,
+    system_prompt: agent.system_prompt, temperature: agent.temperature,
+  }
+  showEditModal.value = true
+}
+
+async function handleSave() {
+  if (!editForm.value.name) return
   try {
-    await createHubAgent(createForm.value)
-    showCreateModal.value = false
-    createForm.value = {
-      name: '', role: 'trader', avatar: '🤖', provider: 'deepseek',
-      model: 'deepseek-chat', api_base_url: null, api_key: null,
-      system_prompt: '', temperature: 0.7,
+    if (editingAgent.value) {
+      const data: HubAgentUpdateRequest = {}
+      const fields: (keyof HubAgentUpdateRequest)[] = ['name', 'role', 'avatar', 'provider', 'model', 'api_base_url', 'api_key', 'system_prompt', 'temperature']
+      for (const f of fields) {
+        const v = (editForm.value as any)[f]
+        if (v !== null && v !== undefined && v !== '') (data as any)[f] = v
+      }
+      await updateHubAgent(editingAgent.value.id, data)
+    } else {
+      await createHubAgent(editForm.value)
     }
+    showEditModal.value = false
     await loadData()
   } catch (e) {
-    console.error('Create agent failed:', e)
+    console.error('Save agent failed:', e)
   }
 }
 
@@ -141,387 +277,408 @@ async function handleControl(id: number, action: string) {
   try {
     await controlHubAgent(id, action)
     await loadData()
+    if (action === 'start') {
+      const agent = agents.value.find(a => a.id === id)
+      warRoomMessages.value.push(wrMsg('system', `✅ ${agent?.avatar || '🤖'} ${agent?.name || `Agent #${id}`} 已启动`))
+      scrollWarRoom()
+    } else if (action === 'stop') {
+      warRoomMessages.value.push(wrMsg('system', `🛑 Agent #${id} 已停止`))
+      scrollWarRoom()
+    }
   } catch (e) {
     console.error('Control agent failed:', e)
   }
 }
 
-// ==================== Chat (Dictator) ====================
-
-function openChat(agent: HubAgent) {
-  chatAgentId.value = agent.id
-  chatMessages.value = []
-  chatInput.value = ''
-  showChatModal.value = true
-}
-
-async function sendChat() {
-  if (!chatInput.value.trim() || !chatAgentId.value || chatLoading.value) return
-  
-  const msg = chatInput.value.trim()
-  chatInput.value = ''
-  chatMessages.value.push({ role: 'user', content: msg })
-  chatLoading.value = true
-  
-  try {
-    let assistantContent = ''
-    for await (const event of streamChatWithAgent(chatAgentId.value, msg)) {
-      if (event.type === 'text' || event.type === 'done') {
-        assistantContent = event.content || assistantContent
-      } else if (event.type === 'tool_call') {
-        chatMessages.value.push({
-          role: 'tool',
-          content: `🔧 调用 ${event.tool}`,
-          tool: event.tool,
-        })
-      } else if (event.type === 'tool_result') {
-        chatMessages.value.push({
-          role: 'tool',
-          content: `✅ ${event.tool} 返回结果`,
-          tool: event.tool,
-        })
-      } else if (event.type === 'error') {
-        assistantContent = `❌ ${event.content}`
-      }
-    }
-    if (assistantContent) {
-      chatMessages.value.push({ role: 'assistant', content: assistantContent })
-    }
-  } catch (e: any) {
-    chatMessages.value.push({ role: 'assistant', content: `❌ 错误: ${e.message}` })
-  } finally {
-    chatLoading.value = false
-    await loadData()
-  }
-}
-
-// ==================== Board (董事会) ====================
-
-async function triggerBoard() {
-  if (!boardTopic.value.trim() || boardLoading.value) return
-  boardLoading.value = true
-  boardResult.value = null
-  try {
-    const res = await boardDeliberate(boardTopic.value, boardSymbol.value)
-    boardResult.value = (res as any).data || res as any
-  } catch (e) {
-    console.error('Board deliberate failed:', e)
-  } finally {
-    boardLoading.value = false
-    await loadData()
-  }
-}
-
 // Status helpers
-function statusTag(status: string) {
-  const map: Record<string, { type: string; label: string }> = {
-    idle: { type: 'default', label: '待命' },
-    active: { type: 'success', label: '运行中' },
-    paused: { type: 'warning', label: '暂停' },
-    error: { type: 'error', label: '错误' },
+function statusDot(status: string) {
+  const map: Record<string, string> = {
+    idle: '#666', active: '#22c55e', paused: '#eab308', error: '#ef4444',
   }
-  return map[status] || { type: 'default', label: status }
+  return map[status] || '#666'
+}
+function statusLabel(status: string) {
+  const map: Record<string, string> = {
+    idle: '待命', active: '运行中', paused: '暂停', error: '错误',
+  }
+  return map[status] || status
 }
 </script>
 
 <template>
-  <div class="max-w-7xl mx-auto space-y-6">
-    <!-- Header -->
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold text-white flex items-center gap-3">
-          🧠 Agent Hub
-          <span
-            class="text-sm px-3 py-1 rounded-full font-medium"
-            :style="{ background: modeColor + '20', color: modeColor, border: '1px solid ' + modeColor + '40' }"
-          >
-            {{ modeLabel }}
-          </span>
-        </h1>
-        <p class="text-sm text-gray-500 mt-1">智能体中枢 — 创建、管理和编排 AI 交易智能体</p>
-      </div>
-      <div class="flex gap-3">
-        <NButton
-          v-if="hubStatus && hubStatus.active_count >= 2"
-          type="info"
-          @click="showBoardModal = true"
+  <div class="max-w-[1600px] mx-auto space-y-4 h-full flex flex-col">
+
+    <!-- ========== Header ========== -->
+    <div class="flex items-center justify-between flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <h1 class="text-xl font-bold text-white">🧠 Agent Hub</h1>
+        <span
+          class="text-xs px-3 py-1 rounded-full font-medium tracking-wide"
+          :style="{ background: modeColor + '15', color: modeColor, border: '1px solid ' + modeColor + '30' }"
         >
-          <template #icon><NIcon><PeopleOutline /></NIcon></template>
-          董事会辩论
+          {{ modeLabel }}
+        </span>
+      </div>
+      <div class="flex items-center gap-4 text-xs text-gray-500">
+        <span>智能体 <b class="text-white">{{ agents.length }}</b></span>
+        <span>运行中 <b class="text-green-400">{{ activeCount }}</b></span>
+        <span>累计交易 <b class="text-purple-400">{{ agents.reduce((s, a) => s + a.total_trades, 0) }}</b></span>
+      </div>
+    </div>
+
+    <!-- ========== ZONE 1: 全局作战指示 ========== -->
+    <div class="flex-shrink-0 p-4 rounded-xl border border-white/5 bg-white/[0.02] backdrop-blur">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-xs font-semibold" :style="{ color: modeColor }">
+          {{ mode === 'dictator' ? '📡 作战指令 → 直接执行' : mode === 'board' ? '🏛️ 辩论议题 → 群聊辩论' : '📡 全局作战指示' }}
+        </span>
+        <span v-if="mode === 'dictator' && activeAgentForDictator" class="text-xs text-gray-500">
+          → {{ activeAgentForDictator.avatar }} {{ activeAgentForDictator.name }}
+        </span>
+      </div>
+      <div class="flex gap-2">
+        <NInput
+          v-model:value="globalCommand"
+          :placeholder="commandPlaceholder"
+          :disabled="activeCount === 0 || globalCommandLoading"
+          @keyup.enter="sendGlobalCommand"
+          class="flex-1"
+          size="large"
+        />
+        <NButton
+          type="primary"
+          size="large"
+          :loading="globalCommandLoading"
+          :disabled="activeCount === 0 || !globalCommand.trim()"
+          @click="sendGlobalCommand"
+          style="min-width: 80px;"
+        >
+          <template #icon><NIcon><SendOutline /></NIcon></template>
+          {{ mode === 'board' ? '辩论' : '发送' }}
         </NButton>
-        <NButton type="primary" @click="showCreateModal = true">
-          <template #icon><NIcon><AddOutline /></NIcon></template>
-          新建智能体
-        </NButton>
       </div>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4" v-if="hubStatus">
-      <div class="p-4 rounded-xl border border-white/5 bg-white/[0.02]">
-        <div class="text-xs text-gray-500">智能体总数</div>
-        <div class="text-2xl font-bold text-white mt-1">{{ hubStatus.total_agents }}</div>
-      </div>
-      <div class="p-4 rounded-xl border border-white/5 bg-white/[0.02]">
-        <div class="text-xs text-gray-500">运行中</div>
-        <div class="text-2xl font-bold text-green-400 mt-1">{{ hubStatus.active_count }}</div>
-      </div>
-      <div class="p-4 rounded-xl border border-white/5 bg-white/[0.02]">
-        <div class="text-xs text-gray-500">运行模式</div>
-        <div class="text-lg font-bold mt-1" :style="{ color: modeColor }">{{ modeLabel }}</div>
-      </div>
-      <div class="p-4 rounded-xl border border-white/5 bg-white/[0.02]">
-        <div class="text-xs text-gray-500">累计交易</div>
-        <div class="text-2xl font-bold text-purple-400 mt-1">{{ agents.reduce((s, a) => s + a.total_trades, 0) }}</div>
-      </div>
-    </div>
+    <!-- ========== ZONE 2 + ZONE 3: 双栏主体 ========== -->
+    <div class="flex-1 flex gap-4 min-h-0">
 
-    <!-- Loading -->
-    <div v-if="loading" class="flex justify-center py-20">
-      <NSpin size="large" />
-    </div>
+      <!-- ===== LEFT: 员工列表 (40%) ===== -->
+      <div class="w-[38%] flex flex-col min-h-0">
+        <div class="flex items-center justify-between mb-3 flex-shrink-0">
+          <span class="text-sm font-semibold text-gray-400">👤 智能体编队</span>
+          <NButton size="small" type="primary" quaternary @click="openCreate">
+            <template #icon><NIcon><AddOutline /></NIcon></template>
+            新建
+          </NButton>
+        </div>
 
-    <!-- Empty State -->
-    <div v-else-if="agents.length === 0" class="py-20">
-      <NEmpty description="还没有创建任何智能体">
-        <template #extra>
-          <NButton type="primary" @click="showCreateModal = true">创建第一个智能体</NButton>
-        </template>
-      </NEmpty>
-    </div>
+        <div v-if="loading" class="flex-1 flex items-center justify-center">
+          <NSpin size="large" />
+        </div>
 
-    <!-- Agent Cards Grid -->
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      <div
-        v-for="agent in agents"
-        :key="agent.id"
-        class="p-5 rounded-xl border transition-all duration-300 hover:shadow-lg"
-        :style="{
-          background: agent.is_active ? 'rgba(138,43,226,0.05)' : 'rgba(255,255,255,0.02)',
-          borderColor: agent.is_active ? 'rgba(138,43,226,0.3)' : 'rgba(255,255,255,0.06)',
-        }"
-      >
-        <!-- Header -->
-        <div class="flex items-center justify-between mb-3">
-          <div class="flex items-center gap-3">
-            <span class="text-2xl">{{ agent.avatar }}</span>
-            <div>
-              <div class="font-semibold text-white">{{ agent.name }}</div>
-              <div class="text-xs text-gray-500">{{ agent.role }} · {{ agent.provider }}/{{ agent.model }}</div>
+        <div v-else-if="agents.length === 0" class="flex-1 flex items-center justify-center">
+          <NEmpty description="还没有创建任何智能体">
+            <template #extra>
+              <NButton type="primary" size="small" @click="openCreate">创建第一个智能体</NButton>
+            </template>
+          </NEmpty>
+        </div>
+
+        <div v-else class="flex-1 overflow-auto space-y-2 pr-1 custom-scrollbar">
+          <div
+            v-for="agent in agents"
+            :key="agent.id"
+            class="p-3 rounded-lg border transition-all duration-200 cursor-default"
+            :style="{
+              background: agent.is_active ? 'rgba(138,43,226,0.06)' : 'rgba(255,255,255,0.015)',
+              borderColor: agent.is_active ? 'rgba(138,43,226,0.25)' : 'rgba(255,255,255,0.04)',
+            }"
+          >
+            <!-- Agent Header -->
+            <div class="flex items-center gap-2.5 mb-2">
+              <span class="text-xl">{{ agent.avatar }}</span>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-semibold text-white text-sm truncate">{{ agent.name }}</span>
+                  <span class="flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full" :style="{ background: statusDot(agent.status) }"></span>
+                    <span class="text-[10px]" :style="{ color: statusDot(agent.status) }">{{ statusLabel(agent.status) }}</span>
+                  </span>
+                </div>
+                <div class="text-[10px] text-gray-600 truncate">{{ agent.role }} · {{ agent.provider }}/{{ agent.model }}</div>
+              </div>
+            </div>
+
+            <!-- Stats row -->
+            <div class="flex items-center gap-3 mb-2 text-[10px] text-gray-500">
+              <span>运行 <b class="text-gray-300">{{ agent.total_runs }}</b></span>
+              <span>交易 <b class="text-purple-400">{{ agent.total_trades }}</b></span>
+              <span>T° <b class="text-gray-300">{{ agent.temperature }}</b></span>
+              <span v-if="agent.last_run_at" class="ml-auto text-gray-600 truncate" style="max-width: 100px;">{{ agent.last_run_at.slice(11, 19) }}</span>
+            </div>
+
+            <!-- Error -->
+            <div v-if="agent.last_error" class="text-[10px] text-red-400 mb-2 p-1.5 rounded bg-red-500/10 truncate">
+              ❌ {{ agent.last_error }}
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-1.5">
+              <NTooltip :delay="300" placement="bottom">
+                <template #trigger>
+                  <NButton v-if="!agent.is_active" size="tiny" type="success" quaternary @click="handleControl(agent.id, 'start')">
+                    <template #icon><NIcon size="14"><PlayOutline /></NIcon></template>
+                  </NButton>
+                  <NButton v-else size="tiny" type="warning" quaternary @click="handleControl(agent.id, 'stop')">
+                    <template #icon><NIcon size="14"><StopOutline /></NIcon></template>
+                  </NButton>
+                </template>
+                {{ agent.is_active ? '停止' : '启动' }}
+              </NTooltip>
+              <NTooltip :delay="300" placement="bottom">
+                <template #trigger>
+                  <NButton size="tiny" quaternary @click="handleControl(agent.id, 'run_once')">
+                    <template #icon><NIcon size="14"><FlashOutline /></NIcon></template>
+                  </NButton>
+                </template>
+                单次执行
+              </NTooltip>
+              <NTooltip :delay="300" placement="bottom">
+                <template #trigger>
+                  <NButton size="tiny" quaternary @click="openEdit(agent)">
+                    <template #icon><NIcon size="14"><CreateOutline /></NIcon></template>
+                  </NButton>
+                </template>
+                编辑
+              </NTooltip>
+              <NTooltip :delay="300" placement="bottom">
+                <template #trigger>
+                  <NButton size="tiny" type="error" quaternary class="ml-auto" @click="handleDelete(agent.id)">
+                    <template #icon><NIcon size="14"><TrashOutline /></NIcon></template>
+                  </NButton>
+                </template>
+                删除
+              </NTooltip>
             </div>
           </div>
-          <NTag
-            :type="statusTag(agent.status).type as any"
-            size="small"
-            round
-          >
-            {{ statusTag(agent.status).label }}
-          </NTag>
+        </div>
+      </div>
+
+      <!-- ===== RIGHT: 作战指挥室 War Room (60%) ===== -->
+      <div class="flex-1 flex flex-col min-h-0 rounded-xl border border-white/5 overflow-hidden" style="background: rgba(0,0,0,0.4);">
+        <!-- War Room Header -->
+        <div class="flex items-center gap-2 px-4 py-2.5 border-b border-white/5" style="background: rgba(0,0,0,0.3);">
+          <span class="text-green-400 text-xs font-mono animate-pulse">●</span>
+          <span class="text-xs font-semibold text-gray-300 tracking-wider font-mono">WAR ROOM CONSOLE</span>
+          <span class="text-[10px] text-gray-600 ml-auto font-mono">{{ warRoomMessages.length }} events</span>
         </div>
 
-        <!-- Stats -->
-        <div class="grid grid-cols-3 gap-2 mb-3 text-center">
-          <div class="p-2 rounded-lg bg-white/[0.03]">
-            <div class="text-xs text-gray-500">运行次数</div>
-            <div class="text-sm font-mono text-white">{{ agent.total_runs }}</div>
+        <!-- War Room Content -->
+        <div ref="warRoomRef" class="flex-1 overflow-auto p-3 space-y-2 custom-scrollbar">
+          <!-- Empty state -->
+          <div v-if="warRoomMessages.length === 0" class="h-full flex items-center justify-center">
+            <div class="text-center text-gray-600">
+              <div class="text-3xl mb-3">📺</div>
+              <div class="text-sm">作战指挥室</div>
+              <div class="text-xs text-gray-700 mt-1">在顶部输入作战指令，实时查看 AI 的思考与行动</div>
+            </div>
           </div>
-          <div class="p-2 rounded-lg bg-white/[0.03]">
-            <div class="text-xs text-gray-500">交易次数</div>
-            <div class="text-sm font-mono text-purple-400">{{ agent.total_trades }}</div>
-          </div>
-          <div class="p-2 rounded-lg bg-white/[0.03]">
-            <div class="text-xs text-gray-500">温度</div>
-            <div class="text-sm font-mono text-gray-300">{{ agent.temperature }}</div>
-          </div>
-        </div>
 
-        <!-- Error display -->
-        <div v-if="agent.last_error" class="text-xs text-red-400 mb-3 p-2 rounded bg-red-500/10 truncate">
-          ❌ {{ agent.last_error }}
-        </div>
+          <!-- Messages -->
+          <div
+            v-for="msg in warRoomMessages"
+            :key="msg.id"
+            class="rounded-lg text-sm"
+            :class="{
+              'px-3 py-1.5 text-xs': msg.type === 'system',
+              'p-3': msg.type !== 'system' && msg.type !== 'consensus',
+            }"
+          >
+            <!-- System message -->
+            <div v-if="msg.type === 'system'" class="text-gray-500 font-mono text-[11px] flex items-center gap-2">
+              <span class="text-gray-700">{{ msg.time }}</span>
+              <span>{{ msg.content }}</span>
+            </div>
 
-        <!-- Actions -->
-        <div class="flex gap-2">
-          <NButton
-            v-if="!agent.is_active"
-            size="small" type="success" quaternary
-            @click="handleControl(agent.id, 'start')"
-          >
-            <template #icon><NIcon><PlayOutline /></NIcon></template>
-            启动
-          </NButton>
-          <NButton
-            v-else
-            size="small" type="warning" quaternary
-            @click="handleControl(agent.id, 'stop')"
-          >
-            <template #icon><NIcon><StopOutline /></NIcon></template>
-            停止
-          </NButton>
-          <NButton
-            size="small" quaternary
-            @click="handleControl(agent.id, 'run_once')"
-          >
-            <template #icon><NIcon><FlashOutline /></NIcon></template>
-            单次
-          </NButton>
-          <NButton
-            size="small" quaternary
-            @click="openChat(agent)"
-          >
-            <template #icon><NIcon><ChatboxEllipsesOutline /></NIcon></template>
-            对话
-          </NButton>
-          <NButton
-            size="small" type="error" quaternary
-            @click="handleDelete(agent.id)"
-            class="ml-auto"
-          >
-            <template #icon><NIcon><TrashOutline /></NIcon></template>
-          </NButton>
+            <!-- AI Text -->
+            <div v-else-if="msg.type === 'ai_text'" class="bg-white/[0.03] rounded-lg p-3">
+              <div class="flex items-center gap-2 mb-1.5">
+                <span class="text-sm">{{ msg.avatar }}</span>
+                <span class="text-xs font-semibold text-purple-300">{{ msg.name }}</span>
+                <span class="text-[10px] text-gray-700 ml-auto font-mono">{{ msg.time }}</span>
+              </div>
+              <div class="text-gray-200 text-[13px] leading-relaxed whitespace-pre-wrap">{{ msg.content }}</div>
+            </div>
+
+            <!-- Tool Call -->
+            <div v-else-if="msg.type === 'tool_call'" class="flex items-center gap-2 px-3 py-1.5 rounded bg-blue-500/5 border border-blue-500/10">
+              <span class="text-xs">🔧</span>
+              <span class="text-[11px] font-mono text-blue-300 truncate">{{ msg.content }}</span>
+              <span class="text-[10px] text-gray-700 ml-auto font-mono">{{ msg.time }}</span>
+            </div>
+
+            <!-- Tool Result -->
+            <div v-else-if="msg.type === 'tool_result'" class="flex items-center gap-2 px-3 py-1.5 rounded bg-green-500/5 border border-green-500/10">
+              <span class="text-xs">✅</span>
+              <span class="text-[11px] font-mono text-green-300 truncate">{{ msg.content }}</span>
+              <span class="text-[10px] text-gray-700 ml-auto font-mono">{{ msg.time }}</span>
+            </div>
+
+            <!-- Board Opinion (群聊气泡) -->
+            <div v-else-if="msg.type === 'opinion'" class="bg-white/[0.03] rounded-lg p-3">
+              <div class="flex items-center gap-2 mb-1.5">
+                <span class="text-lg">{{ msg.avatar }}</span>
+                <span class="text-xs font-bold text-white">{{ msg.name }}</span>
+                <NTag
+                  :type="msg.meta?.decision?.includes('做多') ? 'success' : msg.meta?.decision?.includes('做空') ? 'error' : 'default'"
+                  size="tiny" round
+                >
+                  {{ msg.meta?.decision }}
+                </NTag>
+                <span class="text-[10px] text-gray-500 ml-auto">信心 {{ ((msg.meta?.confidence || 0) * 100).toFixed(0) }}%</span>
+              </div>
+              <div class="text-gray-300 text-xs leading-relaxed">{{ msg.content }}</div>
+            </div>
+
+            <!-- Consensus Card -->
+            <div v-else-if="msg.type === 'consensus'" class="mx-auto max-w-md">
+              <div class="p-4 rounded-xl border-2 border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-blue-500/5">
+                <div class="text-center mb-2">
+                  <span class="text-xs font-bold text-purple-400 tracking-wider">📊 共识决策</span>
+                </div>
+                <div class="flex items-center justify-center gap-4 mb-2">
+                  <NTag
+                    :type="msg.meta?.decision === 'open_long' ? 'success' : msg.meta?.decision === 'open_short' ? 'error' : 'default'"
+                    size="large" round
+                  >
+                    {{ msg.meta?.decision === 'open_long' ? '✅ 做多' : msg.meta?.decision === 'open_short' ? '❌ 做空' : '⏸️ 观望' }}
+                  </NTag>
+                </div>
+                <div class="text-center text-xs text-gray-400 space-y-0.5">
+                  <div>{{ msg.meta?.vote_count }}</div>
+                  <div>平均信心: {{ ((msg.meta?.confidence || 0) * 100).toFixed(0) }}%</div>
+                  <div v-if="msg.meta?.executed" class="text-green-400 font-semibold mt-1">
+                    ✅ 已执行交易 (订单 #{{ msg.meta?.order_id }})
+                  </div>
+                  <div v-else class="text-gray-600 mt-1">未触发交易</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Error -->
+            <div v-else-if="msg.type === 'error'" class="px-3 py-1.5 rounded bg-red-500/10 border border-red-500/10">
+              <span class="text-xs text-red-400">❌ {{ msg.content }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- ==================== Create Modal ==================== -->
-    <NModal v-model:show="showCreateModal" preset="card" title="✨ 创建智能体" style="max-width: 500px;">
-      <div class="space-y-4">
-        <div>
-          <label class="text-xs text-gray-500 mb-1 block">名称</label>
-          <NInput v-model:value="createForm.name" placeholder="e.g. Alpha 猎手" />
+    <!-- ========== 编辑 / 创建弹窗 ========== -->
+    <NModal
+      v-model:show="showEditModal"
+      preset="card"
+      :title="editingAgent ? `✏️ 编辑 ${editingAgent.avatar} ${editingAgent.name}` : '✨ 创建智能体'"
+      style="max-width: 600px; max-height: 90vh;"
+      :mask-closable="false"
+    >
+      <div class="space-y-4 overflow-auto" style="max-height: 70vh;">
+        <!-- Row 1: Name + Avatar -->
+        <div class="grid grid-cols-3 gap-3">
+          <div class="col-span-2">
+            <label class="text-[11px] text-gray-500 mb-1 block font-semibold">名称</label>
+            <NInput v-model:value="editForm.name" placeholder="e.g. Alpha 猎手" />
+          </div>
+          <div>
+            <label class="text-[11px] text-gray-500 mb-1 block font-semibold">头像</label>
+            <NSelect v-model:value="editForm.avatar" :options="avatarOptions" />
+          </div>
         </div>
+
+        <!-- Row 2: Role + Provider + Model -->
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="text-[11px] text-gray-500 mb-1 block font-semibold">角色</label>
+            <NSelect v-model:value="editForm.role" :options="roleOptions" />
+          </div>
+          <div>
+            <label class="text-[11px] text-gray-500 mb-1 block font-semibold">AI 供应商</label>
+            <NSelect v-model:value="editForm.provider" :options="providerOptions" />
+          </div>
+          <div>
+            <label class="text-[11px] text-gray-500 mb-1 block font-semibold">模型</label>
+            <NInput v-model:value="editForm.model" placeholder="deepseek-chat" />
+          </div>
+        </div>
+
+        <!-- Row 3: API Key + Temperature -->
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-xs text-gray-500 mb-1 block">角色</label>
-            <NSelect v-model:value="createForm.role" :options="roleOptions" />
+            <label class="text-[11px] text-gray-500 mb-1 block font-semibold">API Key <span class="text-gray-700">(可选，覆盖全局)</span></label>
+            <NInput v-model:value="editForm.api_key" type="password" show-password-on="click" placeholder="留空则使用全局配置" />
           </div>
           <div>
-            <label class="text-xs text-gray-500 mb-1 block">头像</label>
-            <NSelect v-model:value="createForm.avatar" :options="avatarOptions" />
+            <label class="text-[11px] text-gray-500 mb-1 block font-semibold">温度 ({{ editForm.temperature }})</label>
+            <NSlider v-model:value="editForm.temperature" :min="0" :max="2" :step="0.1" class="mt-2" />
           </div>
         </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-xs text-gray-500 mb-1 block">AI 供应商</label>
-            <NSelect v-model:value="createForm.provider" :options="providerOptions" />
+
+        <!-- Row 4: System Prompt (巨大输入框) -->
+        <div>
+          <label class="text-[11px] text-gray-500 mb-1.5 block font-semibold">
+            📋 人设与长期 KPI (System Prompt)
+            <span class="text-gray-700 font-normal ml-2">— 在这里写入角色定位、交易风格、绩效目标</span>
+          </label>
+          <div class="rounded-lg border border-white/10 overflow-hidden" style="background: rgba(0,0,0,0.3);">
+            <NInput
+              v-model:value="editForm.system_prompt"
+              type="textarea"
+              :autosize="{ minRows: 10, maxRows: 20 }"
+              placeholder="示例:
+
+你是 Alpha 猎手，一个激进但精准的短线交易员。
+
+【你的 KPI】
+- 3天内赚 200 USDT
+- 单笔止损不超过 2%
+- 胜率目标 60%+
+- 不追高，只在回调确认后进场
+- 优先交易 BTC 和 ETH
+
+【你的交易风格】
+- 基于技术指标（RSI、MACD、布林带）做决策
+- 只在趋势明确时入场
+- 到达止盈目标后主动平仓"
+              style="font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.6;"
+            />
           </div>
-          <div>
-            <label class="text-xs text-gray-500 mb-1 block">模型</label>
-            <NInput v-model:value="createForm.model" placeholder="deepseek-chat" />
-          </div>
-        </div>
-        <div>
-          <label class="text-xs text-gray-500 mb-1 block">API Key (可选, 覆盖全局)</label>
-          <NInput v-model:value="createForm.api_key" type="password" show-password-on="click" placeholder="留空则使用全局配置" />
-        </div>
-        <div>
-          <label class="text-xs text-gray-500 mb-1 block">温度 ({{ createForm.temperature }})</label>
-          <NSlider v-model:value="createForm.temperature" :min="0" :max="2" :step="0.1" />
-        </div>
-        <div>
-          <label class="text-xs text-gray-500 mb-1 block">专属指令 (System Prompt)</label>
-          <NInput v-model:value="createForm.system_prompt" type="textarea" :rows="3" placeholder="为这个智能体定制角色和策略偏好..." />
         </div>
       </div>
+
       <template #action>
         <div class="flex justify-end gap-3">
-          <NButton @click="showCreateModal = false">取消</NButton>
-          <NButton type="primary" @click="handleCreate" :disabled="!createForm.name">创建</NButton>
+          <NButton @click="showEditModal = false">取消</NButton>
+          <NButton type="primary" @click="handleSave" :disabled="!editForm.name">
+            {{ editingAgent ? '保存修改' : '创建' }}
+          </NButton>
         </div>
       </template>
     </NModal>
-
-    <!-- ==================== Chat Modal ==================== -->
-    <NModal v-model:show="showChatModal" preset="card" title="💬 智能体对话" style="max-width: 700px; max-height: 80vh;">
-      <div class="flex flex-col" style="height: 60vh;">
-        <div class="flex-1 overflow-auto space-y-3 mb-3 p-3 rounded-lg" style="background: rgba(0,0,0,0.3);">
-          <div
-            v-for="(msg, i) in chatMessages"
-            :key="i"
-            class="p-3 rounded-lg text-sm"
-            :class="{
-              'bg-purple-500/10 ml-8': msg.role === 'user',
-              'bg-white/5 mr-8': msg.role === 'assistant',
-              'bg-blue-500/10 text-blue-300 text-xs': msg.role === 'tool',
-            }"
-          >
-            <div class="text-xs text-gray-500 mb-1">
-              {{ msg.role === 'user' ? '你' : msg.role === 'tool' ? '🔧 工具' : '🤖 AI' }}
-            </div>
-            <div class="whitespace-pre-wrap">{{ msg.content }}</div>
-          </div>
-          <div v-if="chatLoading" class="text-center py-4 text-gray-500">
-            <NSpin size="small" /> AI 思考中...
-          </div>
-        </div>
-        <div class="flex gap-2">
-          <NInput
-            v-model:value="chatInput"
-            placeholder="输入指令..."
-            @keyup.enter="sendChat"
-            :disabled="chatLoading"
-          />
-          <NButton type="primary" @click="sendChat" :loading="chatLoading">发送</NButton>
-        </div>
-      </div>
-    </NModal>
-
-    <!-- ==================== Board Modal ==================== -->
-    <NModal v-model:show="showBoardModal" preset="card" title="🏛️ 董事会辩论" style="max-width: 700px;">
-      <div class="space-y-4">
-        <div>
-          <label class="text-xs text-gray-500 mb-1 block">辩论议题</label>
-          <NInput v-model:value="boardTopic" placeholder="e.g. BTC 当前应该做多还是做空?" />
-        </div>
-        <div>
-          <label class="text-xs text-gray-500 mb-1 block">交易对</label>
-          <NInput v-model:value="boardSymbol" placeholder="BTCUSDT" />
-        </div>
-        <NButton type="primary" block @click="triggerBoard" :loading="boardLoading">
-          开始辩论
-        </NButton>
-
-        <!-- Results -->
-        <div v-if="boardResult" class="space-y-3 mt-4">
-          <div class="text-sm font-semibold text-white">各方观点:</div>
-          <div
-            v-for="op in boardResult.opinions"
-            :key="op.agent_id"
-            class="p-3 rounded-lg border border-white/5 bg-white/[0.02]"
-          >
-            <div class="flex items-center gap-2 mb-1">
-              <span>{{ op.avatar }}</span>
-              <span class="font-medium text-white">{{ op.agent_name }}</span>
-              <NTag
-                :type="op.decision === 'open_long' ? 'success' : op.decision === 'open_short' ? 'error' : 'default'"
-                size="small"
-              >
-                {{ op.decision === 'open_long' ? '做多' : op.decision === 'open_short' ? '做空' : '观望' }}
-              </NTag>
-              <span class="text-xs text-gray-500 ml-auto">信心: {{ (op.confidence * 100).toFixed(0) }}%</span>
-            </div>
-            <div class="text-xs text-gray-400">{{ op.reasoning }}</div>
-          </div>
-
-          <!-- Consensus -->
-          <div class="p-4 rounded-xl border-2 border-purple-500/30 bg-purple-500/5">
-            <div class="text-sm font-bold text-purple-400 mb-2">📊 投票共识</div>
-            <div class="flex items-center gap-4">
-              <NTag
-                :type="boardResult.consensus.decision === 'open_long' ? 'success' : boardResult.consensus.decision === 'open_short' ? 'error' : 'default'"
-                size="large"
-              >
-                {{ boardResult.consensus.decision === 'open_long' ? '✅ 做多' : boardResult.consensus.decision === 'open_short' ? '❌ 做空' : '⏸️ 观望' }}
-              </NTag>
-              <span class="text-sm text-gray-400">{{ boardResult.consensus.vote_count }}</span>
-              <span class="text-sm text-gray-400">信心: {{ (boardResult.consensus.confidence * 100).toFixed(0) }}%</span>
-            </div>
-            <div v-if="boardResult.consensus.executed" class="mt-2 text-xs text-green-400">
-              ✅ 已执行 (订单 #{{ boardResult.consensus.order_id }})
-            </div>
-          </div>
-        </div>
-      </div>
-    </NModal>
   </div>
 </template>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+</style>
