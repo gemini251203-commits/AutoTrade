@@ -174,3 +174,17 @@ export async function deleteMemory(id: number): Promise<{ ok: boolean }> {
   const response = await request.delete<{ ok: boolean }>(`/journal/${id}`)
   return response.data
 }
+
+/** 全局策略统计 */
+export interface StrategyStats {
+  total_trades: number
+  win_trades: number
+  win_rate: number
+  total_pnl: number
+}
+
+/** 获取真实全局策略统计 (从 Order/Position 表) */
+export async function getStrategyStats(): Promise<StrategyStats> {
+  const response = await request.get<StrategyStats>('/strategy/stats')
+  return response.data
+}

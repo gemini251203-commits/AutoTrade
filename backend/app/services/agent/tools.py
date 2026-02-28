@@ -1021,6 +1021,10 @@ async def run_strategy(
         )
         
         if result.get("success"):
+            # 递增策略交易计数
+            if str(strategy_id).isdigit() and strategy:
+                strategy.total_trades += 1
+                strategy.last_run_at = utc_now()
             await db.commit()
             return json.dumps({
                 "action": "executed",

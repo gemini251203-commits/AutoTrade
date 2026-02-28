@@ -37,11 +37,13 @@ import {
   runStrategyOnce,
   getStrategyLogs,
   getTemplates,
+  getStrategyStats,
 
   type StrategyResponse,
   type StrategyLogResponse,
   type StrategyTemplate,
   type TradeMemoryResponse,
+  type StrategyStats,
 } from '@/api/strategy'
 import { formatDateBJ } from '@/utils/time'
 import {
@@ -82,6 +84,12 @@ const viewingLogs = ref<StrategyLogResponse[]>([])
 const viewingStrategyName = ref('')
 const logsLoading = ref(false)
 
+// Create mode: 'pipeline' | 'yaml'
+const createMode = ref<'pipeline' | 'yaml'>('pipeline')
+
+// Real stats from API
+const realStats = ref<StrategyStats>({ total_trades: 0, win_trades: 0, win_rate: 0, total_pnl: 0 })
+
 // Wizard state
 const wizardStep = ref(1)
 const formName = ref('')
@@ -115,6 +123,8 @@ const portOddsRatio = ref(2.0)
 const riskMaxLeverage = ref(20)
 const riskMaxDailyLoss = ref(10)
 const riskMaxDailyTrades = ref(20)
+const riskStopLossPct = ref(3)
+const riskTakeProfitPct = ref(9)
 
 // Execution params
 const selectedExecution = ref('market')
@@ -169,10 +179,6 @@ const filteredDecisionLogs = computed(() => {
 // ==================== Computed ====================
 
 const activeCount = computed(() => strategies.value.filter(s => s.is_active).length)
-const totalPnl = computed(() => strategies.value.reduce((sum, s) => sum + parseFloat(s.total_pnl), 0))
-const totalTrades = computed(() => strategies.value.reduce((sum, s) => sum + s.total_trades, 0))
-const totalWins = computed(() => strategies.value.reduce((sum, s) => sum + s.win_trades, 0))
-const winRate = computed(() => totalTrades.value > 0 ? ((totalWins.value / totalTrades.value) * 100).toFixed(1) : '0.0')
 
 const intervalOptions = [
   { label: '1分钟', value: '1m' },
@@ -205,6 +211,7 @@ async function fetchAll() {
 
 function openCreateModal(template?: StrategyTemplate) {
   editingStrategy.value = null
+  createMode.value = 'pipeline'
   wizardStep.value = 1
   formName.value = template?.name || ''
   formSymbol.value = 'BTCUSDT'
@@ -273,6 +280,8 @@ function buildPipelineYaml(): string {
   lines.push(`    max_leverage: ${riskMaxLeverage.value}`)
   lines.push(`    max_daily_loss_pct: ${riskMaxDailyLoss.value}`)
   lines.push(`    max_daily_trades: ${riskMaxDailyTrades.value}`)
+  lines.push(`    stop_loss_pct: ${riskStopLossPct.value}`)
+  lines.push(`    take_profit_pct: ${riskTakeProfitPct.value}`)
 
   lines.push('execution:')
   lines.push(`  type: "${selectedExecution.value}"`)
@@ -291,9 +300,15 @@ async function handleSave() {
     error.value = '请填写策略名称和交易对'
     return
   }
+  if (createMode.value === 'yaml' && !editingStrategy.value && !formYaml.value.trim()) {
+    error.value = '请输入 YAML 策略配置'
+    return
+  }
   formSaving.value = true
   try {
-    const yaml = editingStrategy.value ? formYaml.value : buildPipelineYaml()
+    const yaml = editingStrategy.value
+      ? formYaml.value
+      : (createMode.value === 'yaml' ? formYaml.value : buildPipelineYaml())
     const data = {
       name: formName.value,
       symbol: formSymbol.value.toUpperCase(),
@@ -473,8 +488,17 @@ function regimeColor(r: string) {
   return '#6b7280'
 }
 
+async function fetchStats() {
+  try {
+    realStats.value = await getStrategyStats()
+  } catch (e) {
+    console.warn('Failed to fetch strategy stats', e)
+  }
+}
+
 onMounted(() => {
   fetchAll()
+  fetchStats()
   // 加载 Pipeline 状态
   getPipelineStatus().then(s => pipelineStatus.value = s).catch(() => {})
 })
@@ -506,16 +530,16 @@ onMounted(() => {
         </div>
         <div class="stat-card">
           <div class="stat-label">累计交易</div>
-          <div class="stat-value">{{ totalTrades }}</div>
+          <div class="stat-value">{{ realStats.total_trades }}</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">胜率</div>
-          <div class="stat-value">{{ winRate }}%</div>
+          <div class="stat-value">{{ realStats.win_rate }}%</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">累计盈亏</div>
-          <div class="stat-value" :style="{ color: pnlColor(totalPnl) }">
-            {{ totalPnl >= 0 ? '+' : '' }}{{ totalPnl.toFixed(2) }}
+          <div class="stat-value" :style="{ color: pnlColor(realStats.total_pnl) }">
+            {{ realStats.total_pnl >= 0 ? '+' : '' }}{{ realStats.total_pnl.toFixed(2) }}
           </div>
         </div>
       </div>
@@ -526,7 +550,7 @@ onMounted(() => {
           <div class="pl-title-row">
             <span class="pl-dot" :style="{ background: pipelineStatus.circuit_breaker ? '#ef4444' : '#22c55e' }"></span>
             <span class="pl-title">交易流水线</span>
-            <span class="pl-uptime">{{ Math.floor((pipelineStatus.uptime_seconds || 0) / 3600) }}h 运行</span>
+            <span class="pl-uptime">{{ (pipelineStatus.uptime_seconds || 0) >= 3600 ? Math.floor((pipelineStatus.uptime_seconds || 0) / 3600) + 'h ' + Math.floor(((pipelineStatus.uptime_seconds || 0) % 3600) / 60) + 'm' : Math.floor((pipelineStatus.uptime_seconds || 0) / 60) + 'm' }} 运行</span>
           </div>
           <div style="display: flex; align-items: center; gap: 8px;">
             <button
@@ -951,8 +975,32 @@ onMounted(() => {
       style="width: 680px; background: #18181b; border: 1px solid rgba(255,255,255,0.06);"
       :bordered="false"
     >
-      <!-- Step indicator -->
-      <div v-if="!editingStrategy" class="flex items-center gap-2 mb-6">
+      <!-- Mode Tabs (Pipeline vs YAML) -->
+      <div v-if="!editingStrategy" class="flex gap-1 p-1 rounded-lg mb-4" style="background: rgba(255,255,255,0.03);">
+        <button
+          @click="createMode = 'pipeline'"
+          class="flex-1 px-4 py-2 rounded-md text-sm transition-all"
+          :style="{
+            background: createMode === 'pipeline' ? 'rgba(138,43,226,0.15)' : 'transparent',
+            color: createMode === 'pipeline' ? '#a855f7' : '#6b7280',
+          }"
+        >
+          🔗 流水线策略
+        </button>
+        <button
+          @click="createMode = 'yaml'"
+          class="flex-1 px-4 py-2 rounded-md text-sm transition-all"
+          :style="{
+            background: createMode === 'yaml' ? 'rgba(138,43,226,0.15)' : 'transparent',
+            color: createMode === 'yaml' ? '#a855f7' : '#6b7280',
+          }"
+        >
+          📝 传统 YAML 策略
+        </button>
+      </div>
+
+      <!-- Step indicator (Pipeline mode only) -->
+      <div v-if="!editingStrategy && createMode === 'pipeline'" class="flex items-center gap-2 mb-6">
         <template v-for="step in 5" :key="step">
           <div
             class="flex items-center gap-1.5 cursor-pointer"
@@ -974,8 +1022,70 @@ onMounted(() => {
       </div>
 
       <div class="space-y-4">
-        <!-- Step 1: Alpha -->
-        <template v-if="wizardStep === 1 && !editingStrategy">
+        <!-- YAML Create Mode -->
+        <template v-if="createMode === 'yaml' && !editingStrategy">
+          <div class="text-sm text-gray-300 mb-3">直接输入传统 YAML 策略配置</div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1.5">策略名称</label>
+            <NInput
+              v-model:value="formName"
+              placeholder="例如: BTC RSI 反转策略"
+              style="--n-color: #0f0f14; --n-border: 1px solid rgba(255,255,255,0.1); --n-text-color: white;"
+            />
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1.5">交易对</label>
+              <NInput
+                v-model:value="formSymbol"
+                placeholder="BTCUSDT"
+                style="--n-color: #0f0f14; --n-border: 1px solid rgba(255,255,255,0.1); --n-text-color: white;"
+              />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1.5">K线周期</label>
+              <NSelect
+                v-model:value="formInterval"
+                :options="intervalOptions"
+                style="--n-color: #0f0f14; --n-border: 1px solid rgba(255,255,255,0.1);"
+              />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1.5">策略配置 (YAML)</label>
+            <NInput
+              v-model:value="formYaml"
+              type="textarea"
+              :rows="14"
+              placeholder="name: BTC RSI反转&#10;symbol: BTCUSDT&#10;interval: 1h&#10;entry:&#10;  operator: AND&#10;  conditions:&#10;    - indicator: rsi&#10;      compare: '<'&#10;      value: 30&#10;exit:&#10;  operator: OR&#10;  conditions:&#10;    - indicator: rsi&#10;      compare: '>'&#10;      value: 70&#10;risk:&#10;  side: buy&#10;  leverage: 5&#10;  stop_loss_pct: 3&#10;  take_profit_pct: 9"
+              style="--n-color: #0f0f14; --n-border: 1px solid rgba(255,255,255,0.1); --n-text-color: white; font-family: monospace; font-size: 13px;"
+            />
+          </div>
+          <!-- Save button -->
+          <div class="flex justify-end pt-2">
+            <div class="flex gap-3">
+              <button
+                @click="showCreateModal = false"
+                class="px-4 py-2 rounded-lg text-sm text-gray-400 transition-colors"
+                style="background: rgba(255,255,255,0.05);"
+              >
+                取消
+              </button>
+              <button
+                @click="handleSave"
+                :disabled="formSaving"
+                class="px-4 py-2 rounded-lg text-sm text-white font-medium transition-all flex items-center gap-2"
+                style="background: linear-gradient(135deg, #8a2be2, #5a189a);"
+              >
+                <NSpin v-if="formSaving" size="small" />
+                创建策略
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <!-- Step 1: Alpha (Pipeline mode) -->
+        <template v-if="wizardStep === 1 && !editingStrategy && createMode === 'pipeline'">
           <div class="text-sm text-gray-300 mb-3">选择信号源模块：AI 根据什么来判断买卖时机？</div>
           <div class="grid grid-cols-2 gap-3">
             <button
@@ -1023,7 +1133,7 @@ onMounted(() => {
         </template>
 
         <!-- Step 2: Portfolio -->
-        <template v-if="wizardStep === 2 && !editingStrategy">
+        <template v-if="wizardStep === 2 && !editingStrategy && createMode === 'pipeline'">
           <div class="text-sm text-gray-300 mb-3">选择仓位管理模型：每次用多少资金开仓？</div>
           <div class="grid grid-cols-2 gap-3">
             <button
@@ -1076,7 +1186,7 @@ onMounted(() => {
         </template>
 
         <!-- Step 3: Risk -->
-        <template v-if="wizardStep === 3 && !editingStrategy">
+        <template v-if="wizardStep === 3 && !editingStrategy && createMode === 'pipeline'">
           <div class="text-sm text-gray-300 mb-3">配置风控参数：设定安全边界</div>
           <div class="p-4 rounded-lg space-y-4" style="background: rgba(255,255,255,0.02);">
             <div>
@@ -1094,11 +1204,24 @@ onMounted(() => {
               <NSlider v-model:value="riskMaxDailyTrades" :min="1" :max="100" :step="1" class="mt-1" />
               <div class="text-right text-xs text-purple-400 mt-0.5">{{ riskMaxDailyTrades }} 次</div>
             </div>
+            <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; margin-top: 8px;">
+              <div class="text-xs text-gray-400 mb-3">📌 专属止损止盈（覆盖全局设置）</div>
+              <div>
+                <label class="text-xs text-gray-500">默认止损 (%)</label>
+                <NSlider v-model:value="riskStopLossPct" :min="0.5" :max="20" :step="0.5" class="mt-1" />
+                <div class="text-right text-xs text-red-400 mt-0.5">{{ riskStopLossPct }}%</div>
+              </div>
+              <div class="mt-3">
+                <label class="text-xs text-gray-500">默认止盈 (%)</label>
+                <NSlider v-model:value="riskTakeProfitPct" :min="1" :max="50" :step="0.5" class="mt-1" />
+                <div class="text-right text-xs text-green-400 mt-0.5">{{ riskTakeProfitPct }}%</div>
+              </div>
+            </div>
           </div>
         </template>
 
         <!-- Step 4: Execution -->
-        <template v-if="wizardStep === 4 && !editingStrategy">
+        <template v-if="wizardStep === 4 && !editingStrategy && createMode === 'pipeline'">
           <div class="text-sm text-gray-300 mb-3">选择执行方式：如何下单？</div>
           <div class="grid grid-cols-3 gap-3">
             <button
@@ -1146,7 +1269,7 @@ onMounted(() => {
         </template>
 
         <!-- Step 5: Basic Info -->
-        <template v-if="wizardStep === 5 || editingStrategy">
+        <template v-if="(wizardStep === 5 && createMode === 'pipeline') || editingStrategy">
           <div v-if="!editingStrategy" class="text-sm text-gray-300 mb-3">最后一步：填写策略名称</div>
           <div>
             <label class="block text-xs text-gray-500 mb-1.5">策略名称</label>
@@ -1200,7 +1323,7 @@ onMounted(() => {
         </template>
 
         <!-- Navigation -->
-        <div class="flex justify-between pt-2">
+        <div v-if="createMode === 'pipeline' || editingStrategy" class="flex justify-between pt-2">
           <button
             v-if="wizardStep > 1 && !editingStrategy"
             @click="wizardStep--"

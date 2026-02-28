@@ -25,6 +25,8 @@ from sqlalchemy import select, desc, func
 
 from app.api.deps import CurrentUser, DbSession
 from app.models.strategy import Strategy, StrategyLog, TradeMemory
+from app.models.order import Order, OrderStatus
+from app.models.position import Position, PositionStatus
 from app.services.quant.strategy import StrategyEngine, list_templates, get_template
 
 
@@ -148,6 +150,72 @@ async def list_strategies(
     )
     strategies = result.scalars().all()
     return [_strategy_to_response(s) for s in strategies]
+
+
+class StrategyStatsResponse(BaseModel):
+    """全局策略统计"""
+    total_trades: int
+    win_trades: int
+    win_rate: float
+    total_pnl: float
+
+
+@router.get("/stats", response_model=StrategyStatsResponse)
+async def get_strategy_stats(
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """
+    获取真实的全局策略统计
+    
+    数据来源:
+    - total_trades: Order 表 FILLED 订单数
+    - total_pnl: Position 表已平仓位的 realized_pnl 之和
+    - win_rate: realized_pnl > 0 的已平仓位占比
+    """
+    user_id = current_user.id
+    
+    # 1. 总交易数: 所有已成交订单
+    r1 = await db.execute(
+        select(func.count(Order.id)).where(
+            Order.user_id == user_id,
+            Order.status == OrderStatus.FILLED,
+        )
+    )
+    total_trades = r1.scalar() or 0
+    
+    # 2. 已平仓位的 realized_pnl 汇总
+    r2 = await db.execute(
+        select(
+            func.coalesce(func.sum(Position.realized_pnl), 0),
+            func.count(Position.id),
+        ).where(
+            Position.user_id == user_id,
+            Position.status == PositionStatus.CLOSED,
+        )
+    )
+    row = r2.one()
+    total_pnl = float(row[0])
+    closed_count = row[1]
+    
+    # 3. 盈利仓位数
+    r3 = await db.execute(
+        select(func.count(Position.id)).where(
+            Position.user_id == user_id,
+            Position.status == PositionStatus.CLOSED,
+            Position.realized_pnl > 0,
+        )
+    )
+    win_trades = r3.scalar() or 0
+    
+    win_rate = round((win_trades / closed_count * 100), 1) if closed_count > 0 else 0.0
+    
+    return StrategyStatsResponse(
+        total_trades=total_trades,
+        win_trades=win_trades,
+        win_rate=win_rate,
+        total_pnl=round(total_pnl, 2),
+    )
 
 
 @router.post("/", response_model=StrategyResponse, status_code=status.HTTP_201_CREATED)
@@ -478,3 +546,4 @@ async def get_memories(
         )
         for m in memories
     ]
+
