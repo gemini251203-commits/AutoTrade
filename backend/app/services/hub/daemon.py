@@ -72,7 +72,7 @@ class HubDaemon:
     
     async def _agent_loop(self, user_id: int, agent_id: int):
         """单个智能体的自主循环"""
-        interval = 60  # 默认 60 秒一个周期
+        interval = 300  # 默认 5 分钟一个周期 (节省 Token)
         
         while True:
             try:
@@ -155,16 +155,10 @@ class HubDaemon:
         )
     
     def _build_cycle_prompt(self, agent: HubAgent) -> str:
-        """构建自主决策周期的 prompt"""
+        """构建自主决策周期的 prompt (精简版，节省 Token)"""
         return (
-            "现在开始你的定时巡逻。请像一个值班交易员一样，按以下步骤思考：\n\n"
-            "1. 先调用 get_balance 看看账户还有多少钱\n"
-            "2. 调用 get_positions 看看手里有没有持仓\n"
-            "3. 调用 get_price 查 BTCUSDT 现在什么价\n"
-            "4. 调用 get_indicators 看看技术指标怎么说\n"
-            "5. 然后用你的经验综合判断：现在该不该动？\n\n"
-            "请用 [观察] [分析] [判断] [行动] 的格式输出你的完整思考过程。\n"
-            "如果没有明确信号，就选择观望，不要强行交易。宁可错过，不可做错。"
+            "定时巡逻: 查价格+指标，判断是否交易。\n"
+            "言简意赅，只说关键数据和结论。没信号就说观望。"
         )
     
     def get_running_agents(self) -> list:
