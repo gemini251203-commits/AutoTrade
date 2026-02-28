@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import MainLayout from '@/layouts/MainLayout.vue'
 import {
   NButton, NModal, NInput, NSelect, NSlider, NTag, NSpin,
   NEmpty, NIcon, NTooltip, NScrollbar,
@@ -306,6 +307,7 @@ function statusLabel(status: string) {
 </script>
 
 <template>
+  <MainLayout>
   <div class="max-w-[1600px] mx-auto space-y-4 h-full flex flex-col">
 
     <!-- ========== Header ========== -->
@@ -665,6 +667,7 @@ function statusLabel(status: string) {
       </template>
     </NModal>
   </div>
+  </MainLayout>
 </template>
 
 <style scoped>
