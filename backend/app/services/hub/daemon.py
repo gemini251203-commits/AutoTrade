@@ -195,58 +195,107 @@ class HubDaemon:
         agent: HubAgent,
         db: AsyncSession,
     ):
-        """执行一个决策周期"""
+        """执行一个决策周期 (逐事件写入 hub_logs, 与手动触发完全对齐)"""
         from app.services.hub.brain import hub_brain
         from app.models.hub_log import HubLog
+        import json as _json
         
         logger.info(f"[HubDaemon] [CYCLE] Agent #{agent.id} '{agent.name}' executing cycle")
         
-        # 构建分析指令
         prompt = self._build_cycle_prompt(agent)
         
-        # 调用 AI
+        # ★ 核心改造: 直接遍历 chat_stream, 逐事件推送到 hub_logs
+        full_reply = ""
+        has_error = False
+        
         try:
-            reply = await hub_brain.chat_once(
+            async for event_str in hub_brain.chat_stream(
                 agent=agent,
                 message=prompt,
                 db=db,
                 user_id=user_id,
-            )
+            ):
+                try:
+                    event = _json.loads(event_str)
+                except Exception:
+                    continue
+                
+                ev_type = event.get("type", "")
+                ev_content = event.get("content", "")
+                
+                # 跳过空事件和 ping
+                if ev_type == "ping" or not ev_type:
+                    continue
+                
+                if ev_type == "text" and ev_content:
+                    # AI 思考输出 — 写入 hub_logs
+                    db.add(HubLog(
+                        user_id=user_id,
+                        agent_id=agent.id,
+                        agent_name=agent.name,
+                        log_type="ai_text",
+                        content=ev_content[:500],
+                    ))
+                
+                elif ev_type == "tool_call":
+                    # 工具调用 — 写入 hub_logs
+                    tool_name = event.get("tool", "unknown")
+                    tool_args = event.get("args", {})
+                    args_str = _json.dumps(tool_args, ensure_ascii=False)[:200]
+                    db.add(HubLog(
+                        user_id=user_id,
+                        agent_id=agent.id,
+                        agent_name=agent.name,
+                        log_type="tool_call",
+                        content=f"[TOOL] {tool_name}({args_str})",
+                    ))
+                
+                elif ev_type == "tool_result":
+                    # 工具结果 — 写入 hub_logs
+                    result_preview = event.get("result", str(ev_content))[:300]
+                    db.add(HubLog(
+                        user_id=user_id,
+                        agent_id=agent.id,
+                        agent_name=agent.name,
+                        log_type="tool_result",
+                        content=f"[RESULT] {result_preview}",
+                    ))
+                
+                elif ev_type == "done":
+                    full_reply = ev_content or ""
+                
+                elif ev_type == "error":
+                    has_error = True
+                    full_reply = f"[ERROR] {ev_content}"
+                    db.add(HubLog(
+                        user_id=user_id,
+                        agent_id=agent.id,
+                        agent_name=agent.name,
+                        log_type="error",
+                        content=f"[ERROR] {ev_content}",
+                    ))
+                    
         except Exception as e:
-            reply = f"[ERROR] AI 调用异常: {str(e)}"
-            logger.error(f"[HubDaemon] Agent #{agent.id} AI call exception: {e}")
-        
-        has_error = "[ERROR]" in reply
-        
-        # ★ 日志穿透: 无论成功还是失败，ALL 输出都推到 hub_logs
-        try:
-            if has_error:
+            has_error = True
+            full_reply = f"[ERROR] AI 调用异常: {str(e)}"
+            logger.error(f"[HubDaemon] Agent #{agent.id} stream exception: {e}")
+            try:
                 db.add(HubLog(
                     user_id=user_id,
                     agent_id=agent.id,
                     agent_name=agent.name,
                     log_type="error",
-                    content=reply,
+                    content=full_reply,
                 ))
-            else:
-                # 成功的 AI 回复也推送到 War Room
-                summary = reply[:300] + ("..." if len(reply) > 300 else "")
-                db.add(HubLog(
-                    user_id=user_id,
-                    agent_id=agent.id,
-                    agent_name=agent.name,
-                    log_type="ai_text",
-                    content=summary,
-                ))
-        except Exception as log_err:
-            logger.warning(f"[HubDaemon] Failed to save cycle log: {log_err}")
+            except Exception:
+                pass
         
         # 更新状态
         agent.total_runs += 1
         agent.last_run_at = utc_now()
         
         if has_error:
-            agent.last_error = reply[:500]
+            agent.last_error = full_reply[:500]
         else:
             agent.last_error = None
             # ★ 自愈机制: 成功执行 → 从 error 恢复为 active
@@ -265,7 +314,7 @@ class HubDaemon:
                     pass
         
         # 检查是否产生了交易
-        if any(kw in reply for kw in ["order_id", "订单已", "已下单", "已平仓"]):
+        if any(kw in full_reply for kw in ["order_id", "订单已", "已下单", "已平仓"]):
             agent.total_trades += 1
         
         logger.info(
