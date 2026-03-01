@@ -276,3 +276,21 @@ html {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* ==================== Anti-Overflow Safety Net ==================== */
+
+/* War Room: prevent any text from blowing out containers */
+.custom-scrollbar * {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Code blocks: horizontal scroll instead of overflow */
+pre, code {
+  overflow-x: auto;
+  max-width: 100%;
+}
+pre {
+  white-space: pre-wrap;
+  word-break: break-all;
+}

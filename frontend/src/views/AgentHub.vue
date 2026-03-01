@@ -219,16 +219,14 @@ function collapseToolLogs(msgs: WRMessage[]): WRMessage[] {
 
 async function loadData() {
   try {
-    const [agentRes, statusRes] = await Promise.all([
-      listHubAgents(), getHubStatus(),
+    const [agentRes, statusRes, secRes] = await Promise.all([
+      listHubAgents(), getHubStatus(), getSecretary().catch(() => null),
     ])
     agents.value = (agentRes as any).data?.agents || (agentRes as any).agents || []
     hubStatus.value = (statusRes as any).data || statusRes as any
-    // 加载书记员设置
-    try {
-      const secRes = await getSecretary()
+    if (secRes) {
       secretaryAgentId.value = (secRes as any).data?.secretary_agent_id ?? (secRes as any).secretary_agent_id ?? null
-    } catch {}
+    }
     // 连接成功
     connectionStatus.value = 'connected'
     pollFailCount = 0
@@ -286,6 +284,8 @@ function pushAndSave(
 ) {
   const msg = wrMsg(type, content, opts)
   warRoomMessages.value.unshift(msg)
+  // 限制内存中消息数量，防止长时间运行 OOM
+  if (warRoomMessages.value.length > 100) warRoomMessages.value.length = 100
   scrollWarRoom()
   // 异步保存，不阻塞 UI
   saveHubLog({
@@ -307,7 +307,7 @@ onMounted(async () => {
   await Promise.all([loadData(), loadWarRoomHistory()])
   loading.value = false
   // 5秒轮询，确保状态及时更新
-  pollTimer = setInterval(loadData, 5000)
+  pollTimer = setInterval(loadData, 10000)
 })
 
 onUnmounted(() => {
@@ -724,7 +724,7 @@ async function handleSecretaryChange(val: number | null) {
       </div>
 
       <!-- ===== RIGHT: 作战指挥室 War Room (60%) ===== -->
-      <div class="flex-1 flex flex-col min-h-0 rounded-xl border border-white/5 overflow-hidden" style="background: rgba(0,0,0,0.4);">
+      <div class="flex-1 flex flex-col min-h-0 min-w-0 rounded-xl border border-white/5 overflow-hidden" style="background: rgba(0,0,0,0.4);">
         <!-- War Room Header -->
         <div class="flex items-center gap-2 px-4 py-2.5 border-b border-white/5" style="background: rgba(0,0,0,0.3);">
           <span class="text-green-400 text-xs font-mono animate-pulse">●</span>
@@ -780,16 +780,16 @@ async function handleSecretaryChange(val: number | null) {
           <div
             v-for="msg in warRoomMessages"
             :key="msg.id"
-            class="rounded-lg text-sm"
+            class="rounded-lg text-sm min-w-0"
             :class="{
               'px-3 py-1.5 text-xs': msg.type === 'system',
               'p-3': msg.type !== 'system' && msg.type !== 'consensus',
             }"
           >
             <!-- System message -->
-            <div v-if="msg.type === 'system'" class="text-gray-500 font-mono text-[11px] flex items-center gap-2">
-              <span class="text-gray-700">{{ msg.time }}</span>
-              <span>{{ msg.content }}</span>
+            <div v-if="msg.type === 'system'" class="text-gray-500 font-mono text-[11px] flex items-center gap-2 min-w-0">
+              <span class="text-gray-700 flex-shrink-0">{{ msg.time }}</span>
+              <span class="break-all min-w-0">{{ msg.content }}</span>
             </div>
 
             <!-- AI Text -->
@@ -799,7 +799,7 @@ async function handleSecretaryChange(val: number | null) {
                 <span class="text-xs font-semibold text-purple-300">{{ msg.name }}</span>
                 <span class="text-[10px] text-gray-700 ml-auto font-mono">{{ msg.time }}</span>
               </div>
-              <div class="text-gray-200 text-[13px] leading-relaxed whitespace-pre-wrap">{{ msg.content }}</div>
+              <div class="text-gray-200 text-[13px] leading-relaxed whitespace-pre-wrap break-words" style="overflow-wrap: anywhere;">{{ msg.content }}</div>
             </div>
 
             <!-- Tool Trace (极简分隔线) -->
@@ -812,8 +812,8 @@ async function handleSecretaryChange(val: number | null) {
             </div>
 
             <!-- Tool Call (单条残留，极简) -->
-            <div v-else-if="msg.type === 'tool_call'" class="flex items-center gap-2 px-3 py-0.5 text-[10px] text-gray-600 font-mono">
-              <span>[调用] {{ msg.content }}</span>
+            <div v-else-if="msg.type === 'tool_call'" class="flex items-center gap-2 px-3 py-0.5 text-[10px] text-gray-600 font-mono min-w-0">
+              <span class="truncate">[调用] {{ msg.content }}</span>
             </div>
 
             <!-- Tool Result (隐藏) -->

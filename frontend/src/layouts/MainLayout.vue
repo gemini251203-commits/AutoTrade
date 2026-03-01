@@ -72,7 +72,7 @@ onMounted(async () => {
   // 每 3 秒刷新一次余额 (包括 Unrealized PnL)
   walletTimer = setInterval(() => {
     walletStore.fetchBalance()
-  }, 3000)
+  }, 10000)
 })
 
 onUnmounted(() => {
