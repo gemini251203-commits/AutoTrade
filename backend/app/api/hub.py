@@ -559,7 +559,10 @@ async def get_hub_logs(
     from app.models.hub_log import HubLog
     from sqlalchemy import func
     
-    base_filter = [HubLog.user_id == current_user.id]
+    base_filter = [
+        HubLog.user_id == current_user.id,
+        HubLog.log_type.notin_(["tool_call", "tool_result"]),  # 前端不显示，不计入分页
+    ]
     if keyword:
         base_filter.append(HubLog.content.ilike(f"%{keyword}%"))
     if agent_id:

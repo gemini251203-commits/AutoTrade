@@ -800,11 +800,11 @@ async function handleSecretaryChange(val: number | null) {
             </div>
 
             <!-- Tool Trace (极简分隔线) -->
-            <div v-else-if="msg.type === 'tool_trace'" class="flex items-center justify-center py-1">
-              <div class="flex items-center gap-2 text-[10px] text-gray-700 font-mono">
-                <span class="flex-1 h-px bg-white/5" style="min-width: 40px;"></span>
+            <div v-else-if="msg.type === 'tool_trace'" class="flex items-center justify-center py-1.5 px-6">
+              <div class="flex items-center gap-3 w-full text-[10px] text-gray-500 font-mono">
+                <span class="flex-1 h-px" style="background: rgba(255,255,255,0.08);"></span>
                 <span>执行了 {{ msg.content }} 项查询</span>
-                <span class="flex-1 h-px bg-white/5" style="min-width: 40px;"></span>
+                <span class="flex-1 h-px" style="background: rgba(255,255,255,0.08);"></span>
               </div>
             </div>
 
