@@ -51,7 +51,7 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 
 interface WRMessage {
   id: number
-  type: 'system' | 'ai_text' | 'tool_call' | 'tool_result' | 'error' | 'opinion' | 'consensus'
+  type: 'system' | 'ai_text' | 'tool_call' | 'tool_result' | 'tool_trace' | 'error' | 'opinion' | 'consensus'
   avatar?: string
   name?: string
   content: string
@@ -147,33 +147,57 @@ const commandPlaceholder = computed(() => {
 const TOOL_LABELS: Record<string, string> = {
   get_balance: '查询余额',
   get_positions: '查询持仓',
-  get_indicators: '获取技术指标',
-  place_order: '下单交易',
+  get_indicators: '获取行情',
+  place_order: '下单',
   close_position: '平仓',
-  get_trade_journal: '查阅交易日志',
-  manage_grid: '管理网格策略',
+  get_trade_journal: '查阅日志',
+  manage_grid: '管理网格',
   analyze_trend_now: '趋势分析',
-  search_historical_minutes: '检索历史纪要',
-  get_market_overview: '获取市场概览',
+  search_historical_minutes: '检索纪要',
+  get_market_overview: '市场概览',
   set_leverage: '设置杠杆',
   set_stop_loss: '设置止损',
   set_take_profit: '设置止盈',
 }
 
-function formatToolCall(raw: string): string {
-  // 输入: "[TOOL] get_balance({"symbol":"BTCUSDT"})" 或 "get_balance(...)"
+function extractToolName(raw: string): string {
   const match = raw.replace(/^\[TOOL\]\s*/, '').match(/^(\w+)/)
-  const toolName = match?.[1] || 'unknown'
-  const label = TOOL_LABELS[toolName] || toolName
-  return `正在调用 ${label}...`
+  return match?.[1] || 'unknown'
 }
 
-function formatToolResult(raw: string): string {
-  // 输入: "[RESULT] {...json...}" 或 "[OK] [RESULT] ..."
-  const cleaned = raw.replace(/^\[(?:OK|RESULT)\]\s*/g, '').trim()
-  // 如果是 JSON，只显示"已完成"
-  if (cleaned.startsWith('{') || cleaned.startsWith('[')) return '已返回结果'
-  return cleaned.slice(0, 80) || '已完成'
+function toolLabel(name: string): string {
+  return TOOL_LABELS[name] || name
+}
+
+/** 将连续的 tool_call/tool_result 折叠为 tool_trace 摘要行 */
+function collapseToolLogs(msgs: WRMessage[]): WRMessage[] {
+  const result: WRMessage[] = []
+  let toolChain: string[] = []
+  let chainTime = ''
+  let chainName = ''
+
+  function flushChain() {
+    if (toolChain.length === 0) return
+    const trace = toolChain.join(' > ')
+    result.push(wrMsg('tool_trace' as any, `${trace}`, { time: chainTime, name: chainName }))
+    toolChain = []
+  }
+
+  for (const m of msgs) {
+    if (m.type === 'tool_call') {
+      const name = extractToolName(m.content)
+      toolChain.push(toolLabel(name))
+      chainTime = m.time || ''
+      chainName = m.name || ''
+    } else if (m.type === 'tool_result') {
+      // 吞掉, 不显示
+    } else {
+      flushChain()
+      result.push(m)
+    }
+  }
+  flushChain()
+  return result
 }
 
 // ==================== Data Loading ====================
@@ -211,11 +235,11 @@ async function loadWarRoomHistory(keyword?: string) {
     if (keyword) params.keyword = keyword
     const res = await getHubLogs(params)
     const logs = (res as any).data?.logs || (res as any).logs || []
-    warRoomMessages.value = logs.map((log: any) => wrMsg(
+    warRoomMessages.value = collapseToolLogs(logs.map((log: any) => wrMsg(
       log.log_type as WRMessage['type'],
       log.content,
       { name: log.agent_name, time: _utc2beijing(log.created_at) }
-    ))
+    )))
     scrollWarRoom()
   } catch (e) {
     console.error('Failed to load war room history:', e)
@@ -755,18 +779,20 @@ async function handleSecretaryChange(val: number | null) {
               <div class="text-gray-200 text-[13px] leading-relaxed whitespace-pre-wrap">{{ msg.content }}</div>
             </div>
 
-            <!-- Tool Call (极简提示) -->
-            <div v-else-if="msg.type === 'tool_call'" class="flex items-center gap-2 px-3 py-1 rounded-md" style="background: rgba(59,130,246,0.04);">
-              <span class="text-[11px] text-gray-600">🔧</span>
-              <span class="text-[11px] text-gray-500">{{ formatToolCall(msg.content) }}</span>
-              <span class="text-[10px] text-gray-700 ml-auto font-mono">{{ msg.time }}</span>
+            <!-- Tool Trace (折叠后的工具链摘要) -->
+            <div v-else-if="msg.type === 'tool_trace'" class="flex items-center gap-2 px-3 py-1 text-[10px] text-gray-600 font-mono">
+              <span class="text-gray-700">[工具链]</span>
+              <span class="truncate">{{ msg.content }}</span>
+              <span class="text-gray-700 ml-auto">{{ msg.time }}</span>
             </div>
 
-            <!-- Tool Result (折叠为极简完成标记) -->
-            <div v-else-if="msg.type === 'tool_result'" class="flex items-center gap-2 px-3 py-0.5">
-              <span class="text-[10px] text-green-600">✓</span>
-              <span class="text-[10px] text-gray-600 truncate" style="max-width: 400px;">{{ formatToolResult(msg.content) }}</span>
+            <!-- Tool Call (单条残留，极简) -->
+            <div v-else-if="msg.type === 'tool_call'" class="flex items-center gap-2 px-3 py-0.5 text-[10px] text-gray-600 font-mono">
+              <span>[调用] {{ msg.content }}</span>
             </div>
+
+            <!-- Tool Result (隐藏) -->
+            <template v-else-if="msg.type === 'tool_result'"></template>
 
             <!-- Board Opinion (群聊气泡) -->
             <div v-else-if="msg.type === 'opinion'" class="bg-white/[0.03] rounded-lg p-3">

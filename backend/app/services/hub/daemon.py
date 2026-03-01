@@ -137,11 +137,11 @@ class HubDaemon:
                         agent_name = agent.name if agent else f"Agent #{agent_id}"
                         
                         if is_fatal:
-                            log_content = f"[🔴 致命错误] {agent_name}: {err_detail}"
+                            log_content = f"[致命错误] {agent_name}: {err_detail}"
                         elif is_transient:
-                            log_content = f"[⚠️ 瞬态错误] {agent_name}: {err_detail} (将自动重试)"
+                            log_content = f"[瞬态错误] {agent_name}: {err_detail} (将自动重试)"
                         else:
-                            log_content = f"[❌ 运行错误] {agent_name}: {err_detail}"
+                            log_content = f"[运行错误] {agent_name}: {err_detail}"
                         
                         err_db.add(HubLog(
                             user_id=user_id,
@@ -163,7 +163,7 @@ class HubDaemon:
                                     agent_id=agent_id,
                                     agent_name=agent_name,
                                     log_type="error",
-                                    content=f"[⛔ 熔断] {agent_name} 连续 {consecutive_errors} 次致命错误，已自动挂起。请检查 API Key / 账户余额后手动重启。",
+                                    content=f"[熔断] {agent_name} 连续 {consecutive_errors} 次致命错误，已自动挂起。请检查 API Key / 账户余额后手动重启。",
                                 ))
                         elif not is_transient and agent:
                             agent.status = HubAgentStatus.ERROR
@@ -308,7 +308,7 @@ class HubDaemon:
                         agent_id=agent.id,
                         agent_name=agent.name,
                         log_type="system",
-                        content=f"[✅ 自愈] {agent.name} 已从错误状态恢复正常运行",
+                        content=f"[自愈] {agent.name} 已从错误状态恢复正常运行",
                     ))
                 except Exception:
                     pass

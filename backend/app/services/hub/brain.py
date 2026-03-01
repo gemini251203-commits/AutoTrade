@@ -95,6 +95,14 @@ class HubBrain:
         except Exception as e:
             logger.warning(f"[HubBrain] Board memory injection failed: {e}")
         
+        # 1.6 注入全体 Agent 共享上下文 (打破平行宇宙)
+        try:
+            shared_ctx = await self._load_shared_context(db, user_id, agent.id)
+            if shared_ctx:
+                full_system_prompt += shared_ctx
+        except Exception as e:
+            logger.warning(f"[HubBrain] Shared context injection failed: {e}")
+        
         # 2. 加载记忆 (从 hub_logs 获取近期对话历史)
         memory_messages = await self._load_memory(db, user_id, agent.id)
         
@@ -280,6 +288,64 @@ class HubBrain:
         parts.append(f"\n## 你的身份\n- 名称: {agent.name}\n- 角色: {agent.role}")
         
         return "\n".join(parts)
+    
+    async def _load_shared_context(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        current_agent_id: int,
+        max_entries: int = 15,
+    ) -> str:
+        """
+        加载全体 Agent 的近期动态 (打破平行宇宙)
+        
+        从 hub_logs 中捞取所有 Agent（排除自己）的对话和动作，
+        拼装为"会议室实时动态"注入到 system prompt。
+        """
+        try:
+            from app.models.hub_log import HubLog
+            from sqlalchemy import select
+            
+            query = (
+                select(HubLog)
+                .where(
+                    HubLog.user_id == user_id,
+                    HubLog.agent_id != current_agent_id,  # 排除自己
+                    HubLog.log_type.in_(["ai_text", "error", "system"]),
+                )
+                .order_by(HubLog.created_at.desc())
+                .limit(max_entries)
+            )
+            result = await db.execute(query)
+            logs = list(reversed(result.scalars().all()))
+            
+            if not logs:
+                return ""
+            
+            lines = []
+            for log in logs:
+                name = log.agent_name or f"Agent #{log.agent_id}"
+                content = log.content[:200]
+                # 格式: "[Alpha猎手] 我看了下BTC, 67000附近有阻力..."
+                lines.append(f"[{name}] {content}")
+            
+            if not lines:
+                return ""
+            
+            shared = "\n".join(lines)
+            logger.info(
+                f"[HubBrain] Injected {len(lines)} shared context entries "
+                f"for agent #{current_agent_id}"
+            )
+            return (
+                "\n\n## 会议室实时动态\n"
+                "以下是你的同事们最近的发言和动作，你可以参考、接话或反驳：\n"
+                f"{shared}"
+            )
+            
+        except Exception as e:
+            logger.warning(f"[HubBrain] Failed to load shared context: {e}")
+            return ""
     
     async def _get_client(self, agent: HubAgent, user_id: int, db: AsyncSession):
         """获取 OpenAI 兼容的 client"""
