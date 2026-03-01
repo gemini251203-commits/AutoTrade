@@ -175,20 +175,25 @@ class MemoryConsolidator:
         self, db: AsyncSession, user_id: int, d: date,
     ) -> str:
         """从 orders 表抽取当日已成交订单"""
-        from app.models.order import Order
+        from app.models.order import Order, OrderStatus
         
-        day_start = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+        # DB 存的是 naive UTC 时间，不要加 tzinfo
+        day_start = datetime(d.year, d.month, d.day)
         day_end = day_start + timedelta(days=1)
         
-        result = await db.execute(
-            select(Order).where(
-                Order.user_id == user_id,
-                Order.created_at >= day_start,
-                Order.created_at < day_end,
-                Order.status == "filled",
-            ).order_by(Order.created_at)
-        )
-        orders = result.scalars().all()
+        try:
+            result = await db.execute(
+                select(Order).where(
+                    Order.user_id == user_id,
+                    Order.created_at >= day_start,
+                    Order.created_at < day_end,
+                    Order.status == OrderStatus.FILLED,
+                ).order_by(Order.created_at)
+            )
+            orders = result.scalars().all()
+        except Exception as e:
+            logger.warning(f"[MemoryConsolidator] extract_trades error: {e}")
+            return ""
         
         if not orders:
             return ""
@@ -196,12 +201,16 @@ class MemoryConsolidator:
         lines = []
         for o in orders:
             pnl_str = ""
-            if hasattr(o, 'realized_pnl') and o.realized_pnl:
-                pnl_str = f" → {'+' if o.realized_pnl > 0 else ''}{o.realized_pnl:.2f} USDT"
-            side = getattr(o, 'side', '').upper()
-            symbol = getattr(o, 'symbol', 'UNKNOWN')
-            qty = getattr(o, 'quantity', 0)
-            leverage = getattr(o, 'leverage', 1)
+            try:
+                if o.realized_pnl and float(o.realized_pnl) != 0:
+                    pnl_val = float(o.realized_pnl)
+                    pnl_str = f" → {'+' if pnl_val > 0 else ''}{pnl_val:.2f} USDT"
+            except Exception:
+                pass
+            side = o.side.value.upper() if hasattr(o.side, 'value') else str(o.side).upper()
+            symbol = o.symbol or 'UNKNOWN'
+            qty = o.quantity or 0
+            leverage = o.leverage or 1
             lines.append(f"- {symbol} {side} {qty} 杠杆{leverage}x{pnl_str}")
         
         return "\n".join(lines)
@@ -212,7 +221,7 @@ class MemoryConsolidator:
         """从 hub_logs 表抽取当日 AI 发言"""
         from app.models.hub_log import HubLog
         
-        day_start = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+        day_start = datetime(d.year, d.month, d.day)
         day_end = day_start + timedelta(days=1)
         
         result = await db.execute(
@@ -242,7 +251,7 @@ class MemoryConsolidator:
         """从 autopilot_logs 表抽取当日决策"""
         from app.models.autopilot_log import AutopilotLog
         
-        day_start = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+        day_start = datetime(d.year, d.month, d.day)
         day_end = day_start + timedelta(days=1)
         
         result = await db.execute(
@@ -267,24 +276,28 @@ class MemoryConsolidator:
         self, db: AsyncSession, user_id: int, d: date,
     ) -> tuple:
         """获取当日交易统计"""
-        from app.models.order import Order
+        from app.models.order import Order, OrderStatus
         
-        day_start = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+        day_start = datetime(d.year, d.month, d.day)
         day_end = day_start + timedelta(days=1)
         
-        result = await db.execute(
-            select(
-                func.count(Order.id),
-                func.coalesce(func.sum(Order.realized_pnl), 0),
-            ).where(
-                Order.user_id == user_id,
-                Order.created_at >= day_start,
-                Order.created_at < day_end,
-                Order.status == "filled",
+        try:
+            result = await db.execute(
+                select(
+                    func.count(Order.id),
+                    func.coalesce(func.sum(Order.realized_pnl), 0),
+                ).where(
+                    Order.user_id == user_id,
+                    Order.created_at >= day_start,
+                    Order.created_at < day_end,
+                    Order.status == OrderStatus.FILLED,
+                )
             )
-        )
-        row = result.one()
-        return int(row[0]), float(row[1])
+            row = result.one()
+            return int(row[0]), float(row[1])
+        except Exception as e:
+            logger.warning(f"[MemoryConsolidator] get_trade_stats error: {e}")
+            return 0, 0.0
     
     # ======== 书记员 AI ========
     
