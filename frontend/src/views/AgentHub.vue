@@ -74,14 +74,16 @@ function wrMsg(type: WRMessage['type'], content: string, opts: Partial<WRMessage
 function _utc2beijing(utcStr?: string): string {
   if (!utcStr) return ''
   try {
-    // 后端返回 ISO 格式 (如 "2026-03-01T04:30:00")
     const d = new Date(utcStr.endsWith('Z') ? utcStr : utcStr + 'Z')
-    return d.toLocaleTimeString('zh-CN', {
+    const mm = String(d.toLocaleString('en', { month: '2-digit', timeZone: 'Asia/Shanghai' }))
+    const dd = String(d.toLocaleString('en', { day: '2-digit', timeZone: 'Asia/Shanghai' }))
+    const time = d.toLocaleTimeString('zh-CN', {
       hour: '2-digit', minute: '2-digit', second: '2-digit',
       timeZone: 'Asia/Shanghai',
     })
+    return `${mm}-${dd} ${time}`
   } catch {
-    return utcStr.slice(11, 19) || ''
+    return utcStr.slice(5, 19) || ''
   }
 }
 
