@@ -245,8 +245,7 @@ async function loadWarRoomHistory(keyword?: string, page?: number) {
     const res = await getHubLogs(params)
     const data = (res as any).data || res as any
     const logs = data?.logs || []
-    logTotal.value = data?.total ?? logs.length
-    logHasMore.value = logs.length >= logPageSize
+    logHasMore.value = data?.has_more ?? (logs.length >= logPageSize)
     logPage.value = p
     warRoomMessages.value = collapseToolLogs(logs.map((log: any) => wrMsg(
       log.log_type as WRMessage['type'],
@@ -864,11 +863,11 @@ async function handleSecretaryChange(val: number | null) {
           </div>
         </div>
         <!-- War Room Pagination Footer -->
-        <div v-if="logTotal > logPageSize" class="flex items-center justify-between px-4 py-1.5 border-t border-white/5 text-[10px] text-gray-600 font-mono" style="background: rgba(0,0,0,0.3);">
+        <div v-if="logPage > 1 || logHasMore" class="flex items-center justify-between px-4 py-1.5 border-t border-white/5 text-[10px] text-gray-600 font-mono" style="background: rgba(0,0,0,0.3);">
           <NButton size="tiny" quaternary :disabled="logPage <= 1" @click="logPrevPage">
             &lt; 上一页
           </NButton>
-          <span>第 {{ logPage }} 页 / 共 {{ Math.ceil(logTotal / logPageSize) }} 页 ({{ logTotal }} 条)</span>
+          <span>第 {{ logPage }} 页</span>
           <NButton size="tiny" quaternary :disabled="!logHasMore" @click="logNextPage">
             下一页 &gt;
           </NButton>

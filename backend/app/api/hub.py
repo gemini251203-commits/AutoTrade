@@ -557,34 +557,34 @@ async def get_hub_logs(
 ):
     """获取 War Room 历史日志 (支持关键词搜索和分页)"""
     from app.models.hub_log import HubLog
-    from sqlalchemy import func
     
     base_filter = [
         HubLog.user_id == current_user.id,
-        HubLog.log_type.notin_(["tool_call", "tool_result"]),  # 前端不显示，不计入分页
+        HubLog.log_type.notin_(["tool_call", "tool_result"]),
     ]
     if keyword:
         base_filter.append(HubLog.content.ilike(f"%{keyword}%"))
     if agent_id:
         base_filter.append(HubLog.agent_id == agent_id)
     
-    # 总数
-    count_q = select(func.count(HubLog.id)).where(*base_filter)
-    total = (await db.execute(count_q)).scalar() or 0
-    
-    # 分页查询
+    # limit+1 技巧: 多取 1 条判断是否有下一页, 避免 COUNT 慢查询
     query = (
         select(HubLog)
         .where(*base_filter)
         .order_by(HubLog.created_at.desc())
         .offset(offset)
-        .limit(limit)
+        .limit(limit + 1)
     )
     result = await db.execute(query)
-    logs = result.scalars().all()
+    logs = list(result.scalars().all())
+    
+    has_more = len(logs) > limit
+    if has_more:
+        logs = logs[:limit]
     
     return {
-        "total": total,
+        "has_more": has_more,
+        "page_size": limit,
         "logs": [
             {
                 "id": log.id,
@@ -594,7 +594,7 @@ async def get_hub_logs(
                 "content": log.content,
                 "created_at": log.created_at.isoformat() if log.created_at else "",
             }
-            for log in reversed(logs)  # 倒序查询，正序返回
+            for log in reversed(logs)
         ]
     }
 
