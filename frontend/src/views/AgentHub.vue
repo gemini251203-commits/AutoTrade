@@ -61,11 +61,15 @@ interface WRMessage {
 
 let msgIdCounter = 0
 function wrMsg(type: WRMessage['type'], content: string, opts: Partial<WRMessage> = {}): WRMessage {
+  const now = new Date()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  const time = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Shanghai' })
   return {
     id: ++msgIdCounter,
     type,
     content,
-    time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Shanghai' }),
+    time: `${mm}-${dd} ${time}`,
     ...opts,
   }
 }
@@ -276,7 +280,7 @@ function pushAndSave(
   opts: Partial<WRMessage> & { agentId?: number | null; agentName?: string } = {},
 ) {
   const msg = wrMsg(type, content, opts)
-  warRoomMessages.value.push(msg)
+  warRoomMessages.value.unshift(msg)
   scrollWarRoom()
   // 异步保存，不阻塞 UI
   saveHubLog({

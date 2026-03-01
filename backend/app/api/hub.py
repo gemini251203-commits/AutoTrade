@@ -594,7 +594,7 @@ async def get_hub_logs(
                 "content": log.content,
                 "created_at": log.created_at.isoformat() if log.created_at else "",
             }
-            for log in reversed(logs)
+            for log in logs
         ]
     }
 
