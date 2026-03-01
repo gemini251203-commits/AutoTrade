@@ -104,6 +104,28 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Memory Consolidator skipped: {e}")
     
+    # 启动 Hub Daemon (自动恢复活跃 Agent 的轮询循环)
+    try:
+        from app.services.hub.daemon import hub_daemon
+        from app.models.hub_agent import HubAgent
+        from sqlalchemy import select
+        
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(HubAgent).where(HubAgent.is_active == True)
+            )
+            active_agents = result.scalars().all()
+            
+            for agent in active_agents:
+                await hub_daemon.start_agent(agent.user_id, agent)
+            
+            if active_agents:
+                logger.info(f"HubDaemon: resumed {len(active_agents)} active agent(s)")
+            else:
+                logger.info("HubDaemon: no active agents to resume")
+    except Exception as e:
+        logger.warning(f"HubDaemon auto-resume skipped: {e}")
+    
     yield
     
     # ==================== Graceful Shutdown ====================
