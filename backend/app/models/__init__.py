@@ -20,6 +20,7 @@ from .strategy import Strategy, StrategyLog, TradeMemory
 from .trend_scheme import TrendScheme, TrendSnapshot
 from .hub_agent import HubAgent, HubAgentStatus
 from .hub_log import HubLog
+from .board_minutes import BoardMinutes
 
 
 __all__ = [
@@ -58,6 +59,7 @@ __all__ = [
     "HubAgent",
     "HubAgentStatus",
     "HubLog",
+    "BoardMinutes",
 ]
 
 

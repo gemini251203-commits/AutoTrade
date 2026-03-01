@@ -96,6 +96,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Trend Scheduler skipped: {e}")
     
+    # 启动记忆坍缩引擎 (每日生成董事会纪要)
+    try:
+        from app.services.hub.consolidator import memory_consolidator
+        await memory_consolidator.start()
+        logger.info("Memory Consolidator started (daily @ 00:05 CST)")
+    except Exception as e:
+        logger.warning(f"Memory Consolidator skipped: {e}")
+    
     yield
     
     # ==================== Graceful Shutdown ====================

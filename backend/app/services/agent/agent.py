@@ -249,6 +249,15 @@ async def chat_stream(
         # 4. 构建 system prompt
         system_prompt = build_system_prompt(persona, context_text)
 
+        # 4.5 注入董事会共享记忆
+        try:
+            from app.services.hub.consolidator import load_board_memory
+            board_mem = await load_board_memory(db, user_id, days=3)
+            if board_mem:
+                system_prompt += f"\n\n## 董事会共享记忆 (近期纪要)\n{board_mem}"
+        except Exception:
+            pass
+
         # 5. 构建消息列表
         messages = [ProviderMessage(role="system", content=system_prompt)]
         for msg in history:
@@ -502,6 +511,15 @@ async def chat_complete(
 
         # 4. 构建 system prompt
         system_prompt = build_system_prompt(persona, context_text)
+
+        # 4.5 注入董事会共享记忆
+        try:
+            from app.services.hub.consolidator import load_board_memory
+            board_mem = await load_board_memory(db, user_id, days=3)
+            if board_mem:
+                system_prompt += f"\n\n## 董事会共享记忆 (近期纪要)\n{board_mem}"
+        except Exception:
+            pass
 
         # 5. 构建消息列表
         messages = [ProviderMessage(role="system", content=system_prompt)]

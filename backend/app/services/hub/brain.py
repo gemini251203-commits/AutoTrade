@@ -81,6 +81,15 @@ class HubBrain:
         # 1. 组装 system prompt
         full_system_prompt = self._build_system_prompt(agent)
         
+        # 1.5 注入董事会共享记忆 (近期纪要)
+        try:
+            from app.services.hub.consolidator import load_board_memory
+            board_mem = await load_board_memory(db, user_id, days=3)
+            if board_mem:
+                full_system_prompt += f"\n\n## 董事会共享记忆 (近期纪要)\n{board_mem}"
+        except Exception as e:
+            logger.warning(f"[HubBrain] Board memory injection failed: {e}")
+        
         # 2. 加载记忆 (从 hub_logs 获取近期对话历史)
         memory_messages = await self._load_memory(db, user_id, agent.id)
         

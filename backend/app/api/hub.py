@@ -561,3 +561,65 @@ async def save_hub_log(
     await db.commit()
     return {"success": True, "id": log.id}
 
+
+# ============================================================
+# 路由: 记忆坍缩引擎
+# ============================================================
+
+@router.post("/memory/consolidate")
+async def trigger_consolidation(
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """
+    手动触发记忆坍缩 — CEO 一键生成今日《董事会纪要》
+    """
+    from app.services.hub.consolidator import memory_consolidator
+    
+    try:
+        result = await memory_consolidator.consolidate(current_user.id)
+        return {
+            "success": True,
+            "summary": result.get("summary", ""),
+            "key_lessons": result.get("key_lessons", ""),
+            "importance": result.get("importance", 5),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"坍缩失败: {str(e)}")
+
+
+@router.get("/memory/minutes")
+async def get_board_minutes(
+    current_user: CurrentUser,
+    db: DbSession,
+    days: int = 7,
+):
+    """获取近 N 天的董事会纪要"""
+    from app.models.board_minutes import BoardMinutes
+    from datetime import date, timedelta
+    
+    cutoff = date.today() - timedelta(days=days)
+    result = await db.execute(
+        select(BoardMinutes).where(
+            BoardMinutes.user_id == current_user.id,
+            BoardMinutes.date >= cutoff,
+        ).order_by(BoardMinutes.date.desc())
+    )
+    minutes = result.scalars().all()
+    
+    return {
+        "minutes": [
+            {
+                "id": m.id,
+                "date": m.date.isoformat(),
+                "summary": m.summary,
+                "key_lessons": m.key_lessons,
+                "importance": m.importance,
+                "trade_count": m.trade_count,
+                "pnl_total": m.pnl_total,
+                "created_at": m.created_at.isoformat() if m.created_at else "",
+            }
+            for m in minutes
+        ]
+    }
+

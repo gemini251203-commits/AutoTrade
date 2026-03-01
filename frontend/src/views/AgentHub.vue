@@ -7,12 +7,12 @@ import {
 } from 'naive-ui'
 import {
   AddOutline, TrashOutline, PlayOutline, StopOutline,
-  FlashOutline, SendOutline, CreateOutline,
+  FlashOutline, SendOutline, CreateOutline, DocumentTextOutline,
 } from '@vicons/ionicons5'
 import {
   listHubAgents, createHubAgent, updateHubAgent, deleteHubAgent,
   controlHubAgent, getHubStatus, boardDeliberate, streamChatWithAgent,
-  getHubLogs, saveHubLog,
+  getHubLogs, saveHubLog, triggerConsolidation,
   type HubAgent, type HubStatus, type BoardResult,
   type HubAgentCreateRequest, type HubAgentUpdateRequest,
 } from '@/api/hub'
@@ -26,6 +26,7 @@ const loading = ref(false)
 // 全局作战指示
 const globalCommand = ref('')
 const globalCommandLoading = ref(false)
+const consolidating = ref(false)
 
 // War Room Console
 const warRoomMessages = ref<WRMessage[]>([])
@@ -391,6 +392,26 @@ function statusLabel(status: string) {
   }
   return map[status] || status
 }
+
+// 立刻生成今日复盘
+async function handleConsolidate() {
+  consolidating.value = true
+  warRoomMessages.value.push(wrMsg('system', '🧠 正在生成今日《董事会纪要》...', { name: 'System' }))
+  scrollWarRoom()
+  try {
+    const res = await triggerConsolidation()
+    const data = res.data || res
+    const text = `📋 **今日董事会纪要** (重要性: ${data.importance}/10)\n\n${data.summary}\n\n💡 **核心教训**: ${data.key_lessons}`
+    warRoomMessages.value.push(wrMsg('ai_text', text, { name: '书记员', avatar: 'BRAIN' }))
+    // 保存到日志
+    try { await saveHubLog({ agent_name: '书记员', log_type: 'ai_text', content: text }) } catch {}
+  } catch (e: any) {
+    warRoomMessages.value.push(wrMsg('error', `纪要生成失败: ${e?.message || e}`, { name: 'System' }))
+  } finally {
+    consolidating.value = false
+    scrollWarRoom()
+  }
+}
 </script>
 
 <template>
@@ -409,6 +430,16 @@ function statusLabel(status: string) {
         </span>
       </div>
       <div class="flex items-center gap-4 text-xs text-gray-500">
+        <NButton
+          size="tiny"
+          :loading="consolidating"
+          @click="handleConsolidate"
+          class="!text-[11px]"
+          style="background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%); border: none; color: white;"
+        >
+          <template #icon><NIcon :component="DocumentTextOutline" /></template>
+          立刻生成今日复盘
+        </NButton>
         <span>智能体 <b class="text-white">{{ agents.length }}</b></span>
         <span>运行中 <b class="text-green-400">{{ activeCount }}</b></span>
         <span>累计交易 <b class="text-purple-400">{{ agents.reduce((s, a) => s + a.total_trades, 0) }}</b></span>

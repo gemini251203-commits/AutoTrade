@@ -236,3 +236,31 @@ export async function* streamChatWithAgent(
     }
   }
 }
+
+// ==================== Memory Consolidator ====================
+
+/** 手动触发记忆坍缩 — 立刻生成今日复盘 */
+export function triggerConsolidation() {
+  return request.post<{
+    success: boolean
+    summary: string
+    key_lessons: string
+    importance: number
+  }>('/hub/memory/consolidate')
+}
+
+/** 获取近 N 天董事会纪要 */
+export function getBoardMinutes(days: number = 7) {
+  return request.get<{
+    minutes: Array<{
+      id: number
+      date: string
+      summary: string
+      key_lessons: string
+      importance: number
+      trade_count: number
+      pnl_total: number
+      created_at: string
+    }>
+  }>('/hub/memory/minutes', { params: { days } })
+}
