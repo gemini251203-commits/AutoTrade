@@ -73,6 +73,16 @@ class HubDaemon:
     async def _agent_loop(self, user_id: int, agent_id: int):
         """单个智能体的自主循环"""
         interval = 300  # 每5分钟巡逻一次
+        consecutive_errors = 0
+        MAX_CONSECUTIVE_FATAL = 3  # 连续致命错误 N 次后熔断
+        
+        # 不可恢复的致命关键词 (这些错误再重试也没用)
+        FATAL_KEYWORDS = [
+            'insufficient', 'balance', 'billing', 'quota', 'exceeded',
+            'invalid api key', 'invalid_api_key', 'api key not valid',
+            'account deactivated', 'account suspended', 'deactivated',
+            'permission denied', 'forbidden',
+        ]
         
         while True:
             try:
@@ -90,6 +100,9 @@ class HubDaemon:
                     
                     await self._execute_cycle(user_id, agent, db)
                     await db.commit()
+                    
+                    # ★ 自愈机制: 成功执行后重置错误计数
+                    consecutive_errors = 0
                 
                 await asyncio.sleep(interval)
                 
@@ -100,47 +113,73 @@ class HubDaemon:
                 err_str = str(e).lower()
                 err_detail = str(e)[:500]
                 
-                # HTTP 401 / timeout / 连接失败 → 不崩溃，不改状态，短暂等待后继续
-                is_transient = any(kw in err_str for kw in [
+                # 判断是否为致命错误 (不可自动恢复)
+                is_fatal = any(kw in err_str for kw in FATAL_KEYWORDS)
+                # 瞬态: timeout/连接/SSL 等
+                is_transient = not is_fatal and any(kw in err_str for kw in [
                     '401', 'unauthorized', 'timeout', 'timed out',
                     'connect', 'connection', 'refused', 'reset',
                     'ssl', 'eof', 'broken pipe',
                 ])
                 
-                # ★ 无论瞬态还是致命错误，都推送到 hub_logs 让前端可见
+                if is_fatal:
+                    consecutive_errors += 1
+                
+                # ★ 推送错误到 hub_logs (前端可见)
                 try:
                     from app.db.session import AsyncSessionLocal
                     from app.models.hub_log import HubLog
                     async with AsyncSessionLocal() as err_db:
-                        # 获取 agent 名称
                         result = await err_db.execute(
                             select(HubAgent).where(HubAgent.id == agent_id)
                         )
                         agent = result.scalar_one_or_none()
                         agent_name = agent.name if agent else f"Agent #{agent_id}"
                         
-                        if is_transient:
+                        if is_fatal:
+                            log_content = f"[🔴 致命错误] {agent_name}: {err_detail}"
+                        elif is_transient:
                             log_content = f"[⚠️ 瞬态错误] {agent_name}: {err_detail} (将自动重试)"
                         else:
-                            log_content = f"[🔴 致命错误] {agent_name}: {err_detail}"
+                            log_content = f"[❌ 运行错误] {agent_name}: {err_detail}"
                         
-                        error_log = HubLog(
+                        err_db.add(HubLog(
                             user_id=user_id,
                             agent_id=agent_id,
                             agent_name=agent_name,
                             log_type="error",
                             content=log_content,
-                        )
-                        err_db.add(error_log)
+                        ))
                         
-                        # 致命错误还要更新 agent 状态
-                        if not is_transient and agent:
+                        # 致命错误: 标红 + 熔断
+                        if is_fatal and agent:
+                            agent.status = HubAgentStatus.ERROR
+                            agent.last_error = err_detail
+                            # 连续致命错误超过阈值 → 彻底停止
+                            if consecutive_errors >= MAX_CONSECUTIVE_FATAL:
+                                agent.is_active = False
+                                err_db.add(HubLog(
+                                    user_id=user_id,
+                                    agent_id=agent_id,
+                                    agent_name=agent_name,
+                                    log_type="error",
+                                    content=f"[⛔ 熔断] {agent_name} 连续 {consecutive_errors} 次致命错误，已自动挂起。请检查 API Key / 账户余额后手动重启。",
+                                ))
+                        elif not is_transient and agent:
                             agent.status = HubAgentStatus.ERROR
                             agent.last_error = err_detail
                         
                         await err_db.commit()
                 except Exception as log_err:
                     logger.warning(f"[HubDaemon] Failed to save error log: {log_err}")
+                
+                # ★ 致命错误熔断: 真正停止循环
+                if is_fatal and consecutive_errors >= MAX_CONSECUTIVE_FATAL:
+                    logger.error(f"[HubDaemon] Agent #{agent_id} CIRCUIT BREAK: {consecutive_errors} consecutive fatal errors, stopping loop")
+                    # 从运行列表中移除
+                    key = self._task_key(user_id, agent_id)
+                    self._agent_tasks.pop(key, None)
+                    break
                 
                 if is_transient:
                     logger.warning(f"[HubDaemon] Agent #{agent_id} transient error (will retry): {e}")
@@ -158,6 +197,7 @@ class HubDaemon:
     ):
         """执行一个决策周期"""
         from app.services.hub.brain import hub_brain
+        from app.models.hub_log import HubLog
         
         logger.info(f"[HubDaemon] [CYCLE] Agent #{agent.id} '{agent.name}' executing cycle")
         
@@ -176,29 +216,53 @@ class HubDaemon:
             reply = f"[ERROR] AI 调用异常: {str(e)}"
             logger.error(f"[HubDaemon] Agent #{agent.id} AI call exception: {e}")
         
-        # 如果有错误，推送到 hub_logs 让前端 War Room 可见
-        if "[ERROR]" in reply:
-            try:
-                from app.models.hub_log import HubLog
-                error_log = HubLog(
+        has_error = "[ERROR]" in reply
+        
+        # ★ 日志穿透: 无论成功还是失败，ALL 输出都推到 hub_logs
+        try:
+            if has_error:
+                db.add(HubLog(
                     user_id=user_id,
                     agent_id=agent.id,
                     agent_name=agent.name,
                     log_type="error",
                     content=reply,
-                )
-                db.add(error_log)
-            except Exception as log_err:
-                logger.warning(f"[HubDaemon] Failed to save error log: {log_err}")
+                ))
+            else:
+                # 成功的 AI 回复也推送到 War Room
+                summary = reply[:300] + ("..." if len(reply) > 300 else "")
+                db.add(HubLog(
+                    user_id=user_id,
+                    agent_id=agent.id,
+                    agent_name=agent.name,
+                    log_type="ai_text",
+                    content=summary,
+                ))
+        except Exception as log_err:
+            logger.warning(f"[HubDaemon] Failed to save cycle log: {log_err}")
         
         # 更新状态
         agent.total_runs += 1
         agent.last_run_at = utc_now()
         
-        if "[ERROR]" in reply:
+        if has_error:
             agent.last_error = reply[:500]
         else:
             agent.last_error = None
+            # ★ 自愈机制: 成功执行 → 从 error 恢复为 active
+            if agent.status == HubAgentStatus.ERROR:
+                agent.status = HubAgentStatus.ACTIVE
+                logger.info(f"[HubDaemon] Agent #{agent.id} auto-healed: ERROR → ACTIVE")
+                try:
+                    db.add(HubLog(
+                        user_id=user_id,
+                        agent_id=agent.id,
+                        agent_name=agent.name,
+                        log_type="system",
+                        content=f"[✅ 自愈] {agent.name} 已从错误状态恢复正常运行",
+                    ))
+                except Exception:
+                    pass
         
         # 检查是否产生了交易
         if any(kw in reply for kw in ["order_id", "订单已", "已下单", "已平仓"]):
