@@ -30,6 +30,7 @@ export interface HubAgent {
   provider: string
   model: string
   api_base_url: string | null
+  has_api_key: boolean
   system_prompt: string
   temperature: number
   status: HubAgentStatus
@@ -276,4 +277,9 @@ export function setSecretary(agentId: number | null) {
 /** 获取首席书记员 */
 export function getSecretary() {
   return request.get<{ secretary_agent_id: number | null }>('/hub/settings/secretary')
+}
+
+/** 清空 War Room 日志 */
+export function clearHubLogs() {
+  return request.delete<{ success: boolean }>('/hub/logs')
 }

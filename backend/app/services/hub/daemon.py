@@ -143,12 +143,31 @@ class HubDaemon:
         prompt = self._build_cycle_prompt(agent)
         
         # 调用 AI
-        reply = await hub_brain.chat_once(
-            agent=agent,
-            message=prompt,
-            db=db,
-            user_id=user_id,
-        )
+        try:
+            reply = await hub_brain.chat_once(
+                agent=agent,
+                message=prompt,
+                db=db,
+                user_id=user_id,
+            )
+        except Exception as e:
+            reply = f"[ERROR] AI 调用异常: {str(e)}"
+            logger.error(f"[HubDaemon] Agent #{agent.id} AI call exception: {e}")
+        
+        # 如果有错误，推送到 hub_logs 让前端 War Room 可见
+        if "[ERROR]" in reply:
+            try:
+                from app.models.hub_log import HubLog
+                error_log = HubLog(
+                    user_id=user_id,
+                    agent_id=agent.id,
+                    agent_name=agent.name,
+                    log_type="error",
+                    content=reply,
+                )
+                db.add(error_log)
+            except Exception as log_err:
+                logger.warning(f"[HubDaemon] Failed to save error log: {log_err}")
         
         # 更新状态
         agent.total_runs += 1

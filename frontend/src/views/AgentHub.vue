@@ -12,7 +12,7 @@ import {
 import {
   listHubAgents, createHubAgent, updateHubAgent, deleteHubAgent,
   controlHubAgent, getHubStatus, boardDeliberate, streamChatWithAgent,
-  getHubLogs, saveHubLog, triggerConsolidation, setSecretary, getSecretary,
+  getHubLogs, saveHubLog, triggerConsolidation, setSecretary, getSecretary, clearHubLogs,
   type HubAgent, type HubStatus, type BoardResult,
   type HubAgentCreateRequest, type HubAgentUpdateRequest,
 } from '@/api/hub'
@@ -428,6 +428,16 @@ async function handleConsolidate() {
   }
 }
 
+// 清空 War Room 日志
+async function handleClearLogs() {
+  try {
+    await clearHubLogs()
+    warRoomMessages.value = []
+  } catch (e: any) {
+    console.error('clear logs failed', e)
+  }
+}
+
 // 切换书记员
 async function handleSecretaryChange(val: number | null) {
   secretaryAgentId.value = val
@@ -644,6 +654,10 @@ async function handleSecretaryChange(val: number | null) {
           <NButton size="tiny" quaternary :loading="logSearchLoading" @click="searchLogs">
             查询
           </NButton>
+          <NButton size="tiny" quaternary type="error" @click="handleClearLogs" style="margin-left: auto;">
+            <template #icon><NIcon size="13"><TrashOutline /></NIcon></template>
+            清空
+          </NButton>
         </div>
         <!-- War Room Content -->
         <div ref="warRoomRef" class="flex-1 overflow-auto p-3 space-y-2 custom-scrollbar">
@@ -792,8 +806,11 @@ async function handleSecretaryChange(val: number | null) {
         <!-- Row 3: API Key + Temperature -->
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-[11px] text-gray-500 mb-1 block font-semibold">API Key <span class="text-gray-700">(可选，覆盖全局)</span></label>
-            <NInput v-model:value="editForm.api_key" type="password" show-password-on="click" placeholder="留空则使用全局配置" />
+            <label class="text-[11px] text-gray-500 mb-1 block font-semibold">
+              API Key <span class="text-gray-700">(可选，覆盖全局)</span>
+              <span v-if="editingAgent?.has_api_key" class="text-green-500 ml-1">✓ 已保存</span>
+            </label>
+            <NInput v-model:value="editForm.api_key" type="password" show-password-on="click" :placeholder="editingAgent?.has_api_key ? '•••••• (已保存，留空不修改)' : '留空则使用全局配置'" />
           </div>
           <div>
             <label class="text-[11px] text-gray-500 mb-1 block font-semibold">温度 ({{ editForm.temperature }})</label>

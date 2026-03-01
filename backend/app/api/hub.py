@@ -74,6 +74,7 @@ class HubAgentResponse(BaseModel):
     provider: str
     model: str
     api_base_url: Optional[str]
+    has_api_key: bool = False
     system_prompt: str
     temperature: float
     status: str
@@ -126,6 +127,7 @@ def _agent_to_response(agent: HubAgent) -> HubAgentResponse:
         provider=agent.provider,
         model=agent.model,
         api_base_url=agent.api_base_url,
+        has_api_key=bool(agent.api_key_enc),
         system_prompt=agent.system_prompt,
         temperature=agent.temperature,
         status=agent.status.value if isinstance(agent.status, HubAgentStatus) else agent.status,
@@ -560,6 +562,22 @@ async def save_hub_log(
     db.add(log)
     await db.commit()
     return {"success": True, "id": log.id}
+
+
+@router.delete("/logs")
+async def clear_hub_logs(
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """清空当前用户的所有 War Room 日志"""
+    from app.models.hub_log import HubLog
+    from sqlalchemy import delete
+    
+    await db.execute(
+        delete(HubLog).where(HubLog.user_id == current_user.id)
+    )
+    await db.commit()
+    return {"success": True, "message": "日志已清空"}
 
 
 # ============================================================
