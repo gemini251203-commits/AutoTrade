@@ -36,6 +36,11 @@ let pollFailCount = 0
 // War Room Console
 const warRoomMessages = ref<WRMessage[]>([])
 const warRoomRef = ref<HTMLElement | null>(null)
+function scrollWarRoom() {
+  nextTick(() => {
+    if (warRoomRef.value) warRoomRef.value.scrollTop = 0
+  })
+}
 
 // 编辑弹窗
 const showEditModal = ref(false)
@@ -309,14 +314,7 @@ onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
 })
 
-// Auto-scroll war room
-function scrollWarRoom() {
-  nextTick(() => {
-    if (warRoomRef.value) {
-      warRoomRef.value.scrollTop = warRoomRef.value.scrollHeight
-    }
-  })
-}
+
 
 // ==================== 全局作战指示 ====================
 
