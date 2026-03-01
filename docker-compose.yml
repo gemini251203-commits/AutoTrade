@@ -86,6 +86,7 @@ services:
       - ./data_engine:/app/data_engine
       - ./backend/logs:/app/logs
       - ./backend/risk_config.yaml:/app/risk_config.yaml
+      - risk_configs:/app/risk_configs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -146,3 +147,4 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  risk_configs:

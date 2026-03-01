@@ -53,8 +53,8 @@ class RiskConfigUpdateRequest(BaseModel):
 
 @router.get("/", response_model=RiskConfigResponse)
 async def get_risk_config(current_user: CurrentUser):
-    """读取当前风控配置"""
-    cfg = risk_config.load()
+    """读取当前用户的风控配置"""
+    cfg = risk_config.load_for_user(current_user.id)
     return RiskConfigResponse(**cfg)
 
 
@@ -72,8 +72,8 @@ async def update_risk_config(
     import yaml
     from loguru import logger
     
-    # 读取当前配置
-    current = dict(risk_config.load())
+    # 读取当前用户的配置
+    current = dict(risk_config.load_for_user(current_user.id))
     
     # 合并更新
     update_data = request.model_dump(exclude_none=True)
@@ -82,19 +82,15 @@ async def update_risk_config(
     
     current.update(update_data)
     
-    # 写回 YAML
+    # 写入用户专属配置文件
     try:
-        yaml_content = _generate_yaml(current)
+        risk_config.save_for_user(current_user.id, current, _generate_yaml)
         
-        with open(risk_config._path, "w", encoding="utf-8") as f:
-            f.write(yaml_content)
-        
-        # 强制刷新缓存
-        risk_config._mtime = 0
-        new_cfg = risk_config.load()
+        # 重新加载验证
+        new_cfg = risk_config.load_for_user(current_user.id)
         
         logger.info(
-            f"[RiskConfig] ✅ 配置已由用户 {current_user.id} 更新: "
+            f"[RiskConfig] 用户 {current_user.id} 配置已更新: "
             f"{list(update_data.keys())}"
         )
         
