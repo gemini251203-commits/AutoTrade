@@ -143,6 +143,39 @@ const commandPlaceholder = computed(() => {
   return '输入辩论议题，触发多 AI 董事会... (例: "目前是熊市，不要抢多单，合作帮我赚钱")'
 })
 
+// ========== 日志格式化 ==========
+const TOOL_LABELS: Record<string, string> = {
+  get_balance: '查询余额',
+  get_positions: '查询持仓',
+  get_indicators: '获取技术指标',
+  place_order: '下单交易',
+  close_position: '平仓',
+  get_trade_journal: '查阅交易日志',
+  manage_grid: '管理网格策略',
+  analyze_trend_now: '趋势分析',
+  search_historical_minutes: '检索历史纪要',
+  get_market_overview: '获取市场概览',
+  set_leverage: '设置杠杆',
+  set_stop_loss: '设置止损',
+  set_take_profit: '设置止盈',
+}
+
+function formatToolCall(raw: string): string {
+  // 输入: "[TOOL] get_balance({"symbol":"BTCUSDT"})" 或 "get_balance(...)"
+  const match = raw.replace(/^\[TOOL\]\s*/, '').match(/^(\w+)/)
+  const toolName = match?.[1] || 'unknown'
+  const label = TOOL_LABELS[toolName] || toolName
+  return `正在调用 ${label}...`
+}
+
+function formatToolResult(raw: string): string {
+  // 输入: "[RESULT] {...json...}" 或 "[OK] [RESULT] ..."
+  const cleaned = raw.replace(/^\[(?:OK|RESULT)\]\s*/g, '').trim()
+  // 如果是 JSON，只显示"已完成"
+  if (cleaned.startsWith('{') || cleaned.startsWith('[')) return '已返回结果'
+  return cleaned.slice(0, 80) || '已完成'
+}
+
 // ==================== Data Loading ====================
 
 async function loadData() {
@@ -722,18 +755,17 @@ async function handleSecretaryChange(val: number | null) {
               <div class="text-gray-200 text-[13px] leading-relaxed whitespace-pre-wrap">{{ msg.content }}</div>
             </div>
 
-            <!-- Tool Call -->
-            <div v-else-if="msg.type === 'tool_call'" class="flex items-center gap-2 px-3 py-1.5 rounded bg-blue-500/5 border border-blue-500/10">
-              <span class="text-xs font-mono text-blue-400">[TOOL]</span>
-              <span class="text-[11px] font-mono text-blue-300 truncate">{{ msg.content }}</span>
+            <!-- Tool Call (极简提示) -->
+            <div v-else-if="msg.type === 'tool_call'" class="flex items-center gap-2 px-3 py-1 rounded-md" style="background: rgba(59,130,246,0.04);">
+              <span class="text-[11px] text-gray-600">🔧</span>
+              <span class="text-[11px] text-gray-500">{{ formatToolCall(msg.content) }}</span>
               <span class="text-[10px] text-gray-700 ml-auto font-mono">{{ msg.time }}</span>
             </div>
 
-            <!-- Tool Result -->
-            <div v-else-if="msg.type === 'tool_result'" class="flex items-center gap-2 px-3 py-1.5 rounded bg-green-500/5 border border-green-500/10">
-              <span class="text-xs font-mono text-green-400">[OK]</span>
-              <span class="text-[11px] font-mono text-green-300 truncate">{{ msg.content }}</span>
-              <span class="text-[10px] text-gray-700 ml-auto font-mono">{{ msg.time }}</span>
+            <!-- Tool Result (折叠为极简完成标记) -->
+            <div v-else-if="msg.type === 'tool_result'" class="flex items-center gap-2 px-3 py-0.5">
+              <span class="text-[10px] text-green-600">✓</span>
+              <span class="text-[10px] text-gray-600 truncate" style="max-width: 400px;">{{ formatToolResult(msg.content) }}</span>
             </div>
 
             <!-- Board Opinion (群聊气泡) -->
