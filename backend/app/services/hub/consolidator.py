@@ -180,49 +180,74 @@ class MemoryConsolidator:
         logger.info(f"[MemoryConsolidator] ✅ Minutes saved for user {user_id}, date {target_date}")
         return result
     
-    # ======== 数据抽取 ========
+    # Hub 下单的 source 白名单 — 只统计 Agent Hub 发起的操作
+    _HUB_SOURCES = ('agent', 'hub_board')
     
     async def _extract_trades(
         self, db: AsyncSession, user_id: int, d: date,
     ) -> str:
-        """从 orders 表抽取当日已成交订单"""
-        from app.models.order import Order, OrderStatus
+        """从 positions 表抽取当日 Hub 相关的仓位变动（源隔离 + 真实盈亏）"""
+        from app.models.position import Position, PositionStatus, PositionSide
         
-        # DB 存的是 naive UTC 时间，不要加 tzinfo
         day_start = datetime(d.year, d.month, d.day)
         day_end = day_start + timedelta(days=1)
         
         try:
+            # 1. 当日 Agent Hub 产生的所有仓位（开仓 OR 平仓）
+            from sqlalchemy import or_
             result = await db.execute(
-                select(Order).where(
-                    Order.user_id == user_id,
-                    Order.created_at >= day_start,
-                    Order.created_at < day_end,
-                    Order.status == OrderStatus.FILLED,
-                ).order_by(Order.created_at)
+                select(Position).where(
+                    Position.user_id == user_id,
+                    Position.source.in_(self._HUB_SOURCES),
+                    or_(
+                        # 当日开仓的
+                        and_(Position.created_at >= day_start, Position.created_at < day_end),
+                        # 当日平仓的
+                        and_(Position.closed_at >= day_start, Position.closed_at < day_end),
+                    ),
+                ).order_by(Position.created_at)
             )
-            orders = result.scalars().all()
+            positions = result.scalars().all()
         except Exception as e:
             logger.warning(f"[MemoryConsolidator] extract_trades error: {e}")
             return ""
         
-        if not orders:
+        if not positions:
             return ""
         
+        # 获取实时价格用于计算 OPEN 仓位浮动盈亏
+        live_prices = {}
+        try:
+            from app.services.exchange import BinanceClient
+            client = BinanceClient()
+            symbols = set(p.symbol for p in positions if p.status == PositionStatus.OPEN)
+            for sym in symbols:
+                ticker = await client.get_ticker(sym)
+                if ticker:
+                    live_prices[sym] = float(ticker.get("lastPrice", 0))
+        except Exception:
+            pass
+        
         lines = []
-        for o in orders:
-            pnl_str = ""
-            try:
-                if o.realized_pnl and float(o.realized_pnl) != 0:
-                    pnl_val = float(o.realized_pnl)
-                    pnl_str = f" → {'+' if pnl_val > 0 else ''}{pnl_val:.2f} USDT"
-            except Exception:
-                pass
-            side = o.side.value.upper() if hasattr(o.side, 'value') else str(o.side).upper()
-            symbol = o.symbol or 'UNKNOWN'
-            qty = o.quantity or 0
-            leverage = o.leverage or 1
-            lines.append(f"- {symbol} {side} {qty} 杠杆{leverage}x{pnl_str}")
+        for p in positions:
+            side_str = p.side.value.upper() if hasattr(p.side, 'value') else str(p.side).upper()
+            leverage = p.leverage or 1
+            
+            if p.status == PositionStatus.CLOSED:
+                # 已平仓 → 已实现盈亏
+                pnl = float(p.realized_pnl) if p.realized_pnl else 0
+                pnl_str = f" → 已平仓 {'+' if pnl >= 0 else ''}{pnl:.2f} USDT"
+                lines.append(f"- {p.symbol} {side_str} {p.size} 杠杆{leverage}x{pnl_str} [来源:{p.source}]")
+            else:
+                # 仍持仓 → 浮动盈亏
+                mark = live_prices.get(p.symbol, 0)
+                if mark > 0:
+                    from decimal import Decimal
+                    unrealized = float(p.calculate_unrealized_pnl(Decimal(str(mark))))
+                    pnl_str = f" → 持仓中 浮盈{'+' if unrealized >= 0 else ''}{unrealized:.2f} USDT"
+                else:
+                    pnl_str = " → 持仓中 (无实时价)"
+                lines.append(f"- {p.symbol} {side_str} {p.size} 杠杆{leverage}x{pnl_str} [来源:{p.source}]")
         
         return "\n".join(lines)
     
@@ -286,26 +311,43 @@ class MemoryConsolidator:
     async def _get_trade_stats(
         self, db: AsyncSession, user_id: int, d: date,
     ) -> tuple:
-        """获取当日交易统计"""
-        from app.models.order import Order, OrderStatus
+        """获取当日 Hub 交易统计（基于 Position 表，源隔离 + 真实盈亏）"""
+        from app.models.position import Position, PositionStatus
         
         day_start = datetime(d.year, d.month, d.day)
         day_end = day_start + timedelta(days=1)
         
         try:
-            result = await db.execute(
-                select(
-                    func.count(Order.id),
-                    func.coalesce(func.sum(Order.realized_pnl), 0),
-                ).where(
-                    Order.user_id == user_id,
-                    Order.created_at >= day_start,
-                    Order.created_at < day_end,
-                    Order.status == OrderStatus.FILLED,
+            from sqlalchemy import or_
+            
+            # 当日 Hub 产生的仓位数
+            count_result = await db.execute(
+                select(func.count(Position.id)).where(
+                    Position.user_id == user_id,
+                    Position.source.in_(self._HUB_SOURCES),
+                    or_(
+                        and_(Position.created_at >= day_start, Position.created_at < day_end),
+                        and_(Position.closed_at >= day_start, Position.closed_at < day_end),
+                    ),
                 )
             )
-            row = result.one()
-            return int(row[0]), float(row[1])
+            trade_count = int(count_result.scalar() or 0)
+            
+            # 当日 Hub 已平仓仓位的已实现盈亏
+            pnl_result = await db.execute(
+                select(
+                    func.coalesce(func.sum(Position.realized_pnl), 0),
+                ).where(
+                    Position.user_id == user_id,
+                    Position.source.in_(self._HUB_SOURCES),
+                    Position.status == PositionStatus.CLOSED,
+                    Position.closed_at >= day_start,
+                    Position.closed_at < day_end,
+                )
+            )
+            pnl_total = float(pnl_result.scalar() or 0)
+            
+            return trade_count, pnl_total
         except Exception as e:
             logger.warning(f"[MemoryConsolidator] get_trade_stats error: {e}")
             return 0, 0.0
