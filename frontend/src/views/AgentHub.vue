@@ -59,8 +59,23 @@ function wrMsg(type: WRMessage['type'], content: string, opts: Partial<WRMessage
     id: ++msgIdCounter,
     type,
     content,
-    time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Shanghai' }),
     ...opts,
+  }
+}
+
+/** 后端 UTC 时间 → 北京时间 HH:mm:ss */
+function _utc2beijing(utcStr?: string): string {
+  if (!utcStr) return ''
+  try {
+    // 后端返回 ISO 格式 (如 "2026-03-01T04:30:00")
+    const d = new Date(utcStr.endsWith('Z') ? utcStr : utcStr + 'Z')
+    return d.toLocaleTimeString('zh-CN', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      timeZone: 'Asia/Shanghai',
+    })
+  } catch {
+    return utcStr.slice(11, 19) || ''
   }
 }
 
@@ -81,7 +96,8 @@ const avatarOptions = [
 const providerOptions = [
   { label: 'DeepSeek', value: 'deepseek' },
   { label: 'OpenAI', value: 'openai' },
-  { label: 'Ollama', value: 'ollama' },
+  { label: 'Ollama (本地)', value: 'ollama' },
+  { label: 'Custom (自定义)', value: 'custom' },
 ]
 
 // Computed
@@ -140,7 +156,7 @@ async function loadWarRoomHistory(keyword?: string) {
     warRoomMessages.value = logs.map((log: any) => wrMsg(
       log.log_type as WRMessage['type'],
       log.content,
-      { name: log.agent_name, time: log.created_at?.slice(11, 19) || '' }
+      { name: log.agent_name, time: _utc2beijing(log.created_at) }
     ))
     scrollWarRoom()
   } catch (e) {
@@ -699,6 +715,12 @@ function statusLabel(status: string) {
           </div>
         </div>
 
+        <!-- Row 2b: Base URL (仅 Custom / Ollama) -->
+        <div v-if="editForm.provider === 'custom' || editForm.provider === 'ollama'" class="mt-2">
+          <label class="text-[11px] text-gray-500 mb-1 block font-semibold">Base URL</label>
+          <NInput v-model:value="editForm.api_base_url" placeholder="http://localhost:11434 或 https://your-api.com" />
+        </div>
+
         <!-- Row 3: API Key + Temperature -->
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -722,21 +744,12 @@ function statusLabel(status: string) {
               v-model:value="editForm.system_prompt"
               type="textarea"
               :autosize="{ minRows: 10, maxRows: 20 }"
-              placeholder="示例:
+              placeholder="在这里定义 AI 的角色和目标。例如:
 
-你是 Alpha 猎手，一个激进但精准的短线交易员。
-
-【你的 KPI】
-- 3天内赚 200 USDT
-- 单笔止损不超过 2%
-- 胜率目标 60%+
-- 不追高，只在回调确认后进场
-- 优先交易 BTC 和 ETH
-
-【你的交易风格】
-- 基于技术指标（RSI、MACD、布林带）做决策
-- 只在趋势明确时入场
-- 到达止盈目标后主动平仓"
+你是我的专属交易员。
+目标: 3天内赚 200 USDT。
+风格: 稳健，不追高。
+优先交易 BTC 和 ETH。"
               style="font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.6;"
             />
           </div>

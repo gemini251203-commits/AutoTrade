@@ -300,10 +300,20 @@ class HubBrain:
                     base_url = user_config.api_base_url
         
         if not api_key:
-            return None
+            # Ollama / custom 本地模型通常不需要 API key
+            if agent.provider in ('ollama', 'custom') and base_url:
+                api_key = "ollama"  # placeholder
+            else:
+                return None
         
         if not base_url:
-            base_url = "https://api.deepseek.com"
+            # 根据供应商选择默认 Base URL
+            _PROVIDER_URLS = {
+                'deepseek': 'https://api.deepseek.com',
+                'openai': 'https://api.openai.com',
+                'ollama': 'http://localhost:11434',
+            }
+            base_url = _PROVIDER_URLS.get(agent.provider, 'https://api.deepseek.com')
         
         # 确保 base_url 以 /v1 结尾
         if not base_url.endswith("/v1"):

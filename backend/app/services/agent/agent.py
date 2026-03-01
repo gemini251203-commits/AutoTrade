@@ -338,28 +338,27 @@ async def chat_stream(
             )
 
             if not tool_matches:
-                # 幻觉检测: AI 声称执行了操作但没有输出 TOOL_CALL
-                if (round_i == 0 and not tool_calls_log and
+                # 幻觉检测: AI 声称执行了操作但没有输出 TOOL_CALL (全轮次拦截)
+                if (not tool_calls_log and
                         _HALLUCINATION_KEYWORDS.search(ai_content)):
                     logger.warning(
-                        f"[Agent] HALLUCINATION in-loop for user {user_id}, retrying. "
+                        f"[Agent] HALLUCINATION in-loop R{round_i} for user {user_id}, retrying. "
                         f"preview={ai_content[:150]!r}"
                     )
-                    # 把幻觉回复反馈给 AI，强制要求输出 TOOL_CALL
                     messages.append(ProviderMessage(role="assistant", content=ai_content))
                     messages.append(ProviderMessage(
                         role="user",
                         content=(
-                            "⚠️ 系统检测到你的回复中声称执行了交易操作，但你没有输出任何 "
-                            "[TOOL_CALL: ...] 指令。操作并未真正执行。\n\n"
+                            "⚠️ 系统拦截：禁止仅在文本中描述交易，必须调用底层工具！\n"
+                            "你的回复中声称执行了交易操作，但没有输出任何 [TOOL_CALL: ...] 指令。\n"
+                            "操作并未真正执行。你的资金安全。\n\n"
                             "如果你要下单，必须输出如下格式:\n"
-                            "[TOOL_CALL: place_order(symbol=SOLUSDT, side=buy, order_type=market, "
-                            "quantity=5, leverage=5, stop_loss=80, take_profit=84.5)]\n\n"
-                            "请现在输出正确的 TOOL_CALL 指令来执行你刚才描述的操作。"
+                            "[TOOL_CALL: place_order(symbol=BTCUSDT, side=buy, order_type=market, "
+                            "quantity=0.01, leverage=5, stop_loss=63000, take_profit=68000)]\n\n"
                             "如果你判断不应该下单，直接说明原因即可，不要假装已执行。"
                         ),
                     ))
-                    continue  # 重新让 AI 回答
+                    continue
                 
                 # 没有工具调用 → 这就是最终回复
                 final_content = ai_content
@@ -377,6 +376,25 @@ async def chat_stream(
             for tool_name, args_str in tool_matches:
                 tool_args = _parse_tool_args(args_str)
                 tool_args = _extract_yaml_arg(tool_name, ai_content, tool_args)
+
+                # 强制信息同步: 交易前必须有价格数据
+                if tool_name in ('place_order', 'close_position'):
+                    has_price_data = any(
+                        t['tool'] in ('get_price', 'get_indicators', 'get_balance')
+                        for t in tool_calls_log
+                    )
+                    if not has_price_data:
+                        logger.warning(f"[Agent] BLOCKED {tool_name}: no price context")
+                        messages.append(ProviderMessage(role="assistant", content=ai_content))
+                        messages.append(ProviderMessage(
+                            role="user",
+                            content=(
+                                "⚠️ 系统拦截：你还没有查询过最新行情就想下单！\n"
+                                "必须先调用 get_price 或 get_indicators 获取实时数据，\n"
+                                "确认价格后再下单。请重新操作。"
+                            ),
+                        ))
+                        break  # 中断当前轮次工具执行, 回到循环让 AI 先查价格
 
                 # 发送工具调用事件
                 yield {"type": "tool_call", "tool": tool_name, "args": tool_args}
@@ -537,6 +555,21 @@ async def chat_complete(
             )
 
             if not tool_matches:
+                # 幻觉检测 (chat_complete 也必须拦截)
+                if (not tool_calls_log and
+                        _HALLUCINATION_KEYWORDS.search(ai_content)):
+                    logger.warning(
+                        f"[Agent Complete] HALLUCINATION R{round_i} for user {user_id}"
+                    )
+                    messages.append(ProviderMessage(role="assistant", content=ai_content))
+                    messages.append(ProviderMessage(
+                        role="user",
+                        content=(
+                            "⚠️ 系统拦截：禁止仅在文本中描述交易，必须调用底层工具！\n"
+                            "请输出 [TOOL_CALL: ...] 指令或说明不操作的原因。"
+                        ),
+                    ))
+                    continue
                 final_content = ai_content
                 break
 
@@ -550,6 +583,18 @@ async def chat_complete(
             for tool_name, args_str in tool_matches:
                 tool_args = _parse_tool_args(args_str)
                 tool_args = _extract_yaml_arg(tool_name, ai_content, tool_args)
+
+                # 强制信息同步: 交易前必须有价格数据
+                if tool_name in ('place_order', 'close_position'):
+                    has_price = any(t['tool'] in ('get_price', 'get_indicators', 'get_balance') for t in tool_calls_log)
+                    if not has_price:
+                        logger.warning(f"[Agent Complete] BLOCKED {tool_name}: no price context")
+                        messages.append(ProviderMessage(role="assistant", content=ai_content))
+                        messages.append(ProviderMessage(
+                            role="user",
+                            content="⚠️ 系统拦截：必须先调用 get_price 获取实时数据再下单。",
+                        ))
+                        break
 
                 tool_result = await execute_tool(tool_name, tool_args, db, user_id)
                 results_text_parts.append(

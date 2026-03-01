@@ -97,8 +97,22 @@ class HubDaemon:
                 logger.info(f"[HubDaemon] Agent #{agent_id} loop cancelled")
                 break
             except Exception as e:
+                err_str = str(e).lower()
+                # HTTP 401 / timeout / 连接失败 → 不崩溃，不改状态，短暂等待后继续
+                is_transient = any(kw in err_str for kw in [
+                    '401', 'unauthorized', 'timeout', 'timed out',
+                    'connect', 'connection', 'refused', 'reset',
+                    'ssl', 'eof', 'broken pipe',
+                ])
+                if is_transient:
+                    logger.warning(
+                        f"[HubDaemon] Agent #{agent_id} transient error (will retry): {e}"
+                    )
+                    await asyncio.sleep(15)
+                    continue
+                
+                # 真正的未知错误 → 记录 + 更新状态
                 logger.error(f"[HubDaemon] Agent #{agent_id} loop error: {e}")
-                # 更新错误状态
                 try:
                     from app.db.session import AsyncSessionLocal
                     async with AsyncSessionLocal() as db:
@@ -112,7 +126,7 @@ class HubDaemon:
                             await db.commit()
                 except Exception:
                     pass
-                await asyncio.sleep(30)  # 出错后等久一点
+                await asyncio.sleep(30)
     
     async def _execute_cycle(
         self,
