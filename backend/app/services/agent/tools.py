@@ -545,7 +545,7 @@ async def query_memories(
         }, ensure_ascii=False, default=str)
 
     source_labels = {
-        "manual": "手动", "agent": "AI Agent",
+        "manual": "手动", "agent": "AI Agent", "hub": "AI Hub",
         "signal": "信号助手", "quant": "量化策略",
     }
 

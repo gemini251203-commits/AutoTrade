@@ -463,7 +463,10 @@ class HubBrain:
         user_id: int,
     ) -> str:
         """执行工具并返回结果"""
-        from app.services.agent.tools import TOOL_REGISTRY
+        from app.services.agent.tools import TOOL_REGISTRY, agent_source_var
+        
+        # 设置来源为 hub，让交易日志正确标注
+        agent_source_var.set('hub')
         
         func = TOOL_REGISTRY.get(tool_name)
         if not func:
