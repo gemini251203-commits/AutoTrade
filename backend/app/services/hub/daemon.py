@@ -72,7 +72,7 @@ class HubDaemon:
     
     async def _agent_loop(self, user_id: int, agent_id: int):
         """单个智能体的自主循环"""
-        interval = 60  # 每分钟巡逻一次
+        interval = 300  # 每5分钟巡逻一次
         
         while True:
             try:
