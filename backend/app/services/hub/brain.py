@@ -84,9 +84,14 @@ class HubBrain:
         # 1.5 注入董事会共享记忆 (近期纪要)
         try:
             from app.services.hub.consolidator import load_board_memory
-            board_mem = await load_board_memory(db, user_id, days=3)
+            board_mem = await load_board_memory(db, user_id, days=7)
             if board_mem:
-                full_system_prompt += f"\n\n## 董事会共享记忆 (近期纪要)\n{board_mem}"
+                full_system_prompt += f"\n\n## 董事会共享记忆 (近7天纪要)\n{board_mem}"
+                full_system_prompt += (
+                    "\n\n> 💡 提示: 以上是近7天的\"热记忆\"。如果你遇到罕见的极端行情，"
+                    "或需要更久远的历史经验，请主动调用 search_historical_minutes 工具，"
+                    "搜索过去数月的董事会纪要（冷记忆）。"
+                )
         except Exception as e:
             logger.warning(f"[HubBrain] Board memory injection failed: {e}")
         

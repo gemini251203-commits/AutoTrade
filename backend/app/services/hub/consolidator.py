@@ -26,6 +26,12 @@ from app.core.time_utils import utc_now
 # 北京时区
 _CST = timezone(timedelta(hours=8))
 
+
+def _decrypt_agent_key(encrypted: str) -> str:
+    """解密 Agent 的 API Key"""
+    from app.core.encryption import decrypt_value
+    return decrypt_value(encrypted)
+
 # 书记员 System Prompt
 _SECRETARY_PROMPT = """你是董事会书记员。你的任务是根据今天的交易记录和 AI 辩论记录，写一份精炼的《董事会纪要》。
 
@@ -116,6 +122,7 @@ class MemoryConsolidator:
         self,
         user_id: int,
         target_date: Optional[date] = None,
+        secretary_agent_id: Optional[int] = None,
     ) -> dict:
         """
         核心方法: 为指定用户执行一次记忆坍缩
@@ -123,6 +130,7 @@ class MemoryConsolidator:
         Args:
             user_id: 用户 ID
             target_date: 目标日期 (默认今天)
+            secretary_agent_id: 指定书记员 Agent ID (使用该 Agent 的模型和 API Key)
         
         Returns:
             生成的纪要字典
@@ -132,7 +140,7 @@ class MemoryConsolidator:
         if target_date is None:
             target_date = datetime.now(_CST).date()
         
-        logger.info(f"[MemoryConsolidator] Consolidating for user {user_id}, date {target_date}")
+        logger.info(f"[MemoryConsolidator] Consolidating for user {user_id}, date {target_date}, secretary={secretary_agent_id}")
         
         async with AsyncSessionLocal() as db:
             # 1. 抽取数据
@@ -156,8 +164,11 @@ class MemoryConsolidator:
                     "importance": 1,
                 }
             else:
-                # 3. 调用 AI
-                result = await self._call_secretary_ai(db, user_id, data_block)
+                # 3. 调用 AI (优先使用指定书记员 Agent)
+                result = await self._call_secretary_ai(
+                    db, user_id, data_block,
+                    secretary_agent_id=secretary_agent_id,
+                )
             
             # 4. 存入数据库
             await self._save_minutes(
@@ -323,30 +334,54 @@ class MemoryConsolidator:
     
     async def _call_secretary_ai(
         self, db: AsyncSession, user_id: int, data_block: str,
+        secretary_agent_id: Optional[int] = None,
     ) -> dict:
-        """调用 AI 生成纪要"""
+        """调用 AI 生成纪要 (优先使用指定书记员 Agent)"""
         import openai
         
-        # 复用 Hub brain 的 client 获取逻辑
         api_key = None
         base_url = "https://api.deepseek.com/v1"
+        model = "deepseek-chat"
         
-        # 先读用户全局配置
-        from app.models.user_ai_config import UserAIConfig
-        result = await db.execute(
-            select(UserAIConfig).where(UserAIConfig.user_id == user_id)
-        )
-        user_config = result.scalar_one_or_none()
-        if user_config and user_config.api_key_encrypted:
-            try:
-                from app.core.encryption import decrypt_value
-                api_key = decrypt_value(user_config.api_key_encrypted)
-            except Exception:
-                pass
-            if user_config.api_base_url:
-                base_url = user_config.api_base_url
-                if not base_url.endswith("/v1"):
-                    base_url = base_url.rstrip("/") + "/v1"
+        # 优先：使用指定书记员 Agent 的配置
+        if secretary_agent_id:
+            from app.models.hub_agent import HubAgent
+            agent_result = await db.execute(
+                select(HubAgent).where(HubAgent.id == secretary_agent_id)
+            )
+            agent = agent_result.scalar_one_or_none()
+            if agent:
+                model = agent.model or "deepseek-chat"
+                if agent.api_key_enc:
+                    try:
+                        api_key = _decrypt_agent_key(agent.api_key_enc)
+                    except Exception:
+                        pass
+                if agent.api_base_url:
+                    base_url = agent.api_base_url
+                    if not base_url.endswith("/v1"):
+                        base_url = base_url.rstrip("/") + "/v1"
+                elif agent.provider == "ollama":
+                    base_url = "http://localhost:11434/v1"
+                logger.info(f"[MemoryConsolidator] Using secretary agent #{secretary_agent_id} ({agent.name}), model={model}")
+        
+        # 回退：用户全局 AI 配置
+        if not api_key:
+            from app.models.user_ai_config import UserAIConfig
+            result = await db.execute(
+                select(UserAIConfig).where(UserAIConfig.user_id == user_id)
+            )
+            user_config = result.scalar_one_or_none()
+            if user_config and user_config.api_key_encrypted:
+                try:
+                    from app.core.encryption import decrypt_value
+                    api_key = decrypt_value(user_config.api_key_encrypted)
+                except Exception:
+                    pass
+                if user_config.api_base_url:
+                    base_url = user_config.api_base_url
+                    if not base_url.endswith("/v1"):
+                        base_url = base_url.rstrip("/") + "/v1"
         
         if not api_key:
             logger.warning("[MemoryConsolidator] No API key, using fallback summary")
@@ -360,7 +395,7 @@ class MemoryConsolidator:
         
         try:
             response = await client.chat.completions.create(
-                model="deepseek-chat",
+                model=model,
                 messages=[
                     {"role": "system", "content": _SECRETARY_PROMPT},
                     {"role": "user", "content": data_block},

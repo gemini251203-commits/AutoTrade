@@ -573,11 +573,28 @@ async def trigger_consolidation(
 ):
     """
     手动触发记忆坍缩 — CEO 一键生成今日《董事会纪要》
+    自动读取指定书记员 Agent 的配置
     """
     from app.services.hub.consolidator import memory_consolidator
     
+    # 读取指定书记员
+    secretary_agent_id = None
     try:
-        result = await memory_consolidator.consolidate(current_user.id)
+        import redis.asyncio as aioredis
+        from app.core.config import settings
+        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        val = await r.get(f"hub:secretary:{current_user.id}")
+        await r.close()
+        if val:
+            secretary_agent_id = int(val)
+    except Exception:
+        pass
+    
+    try:
+        result = await memory_consolidator.consolidate(
+            current_user.id,
+            secretary_agent_id=secretary_agent_id,
+        )
         return {
             "success": True,
             "summary": result.get("summary", ""),
@@ -586,6 +603,45 @@ async def trigger_consolidation(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"坍缩失败: {str(e)}")
+
+
+class SecretarySettingRequest(BaseModel):
+    agent_id: Optional[int] = None
+
+
+@router.post("/settings/secretary")
+async def set_secretary(
+    body: SecretarySettingRequest,
+    current_user: CurrentUser,
+):
+    """指定首席书记员 Agent"""
+    import redis.asyncio as aioredis
+    from app.core.config import settings
+    
+    r = aioredis.from_url(settings.redis_url, decode_responses=True)
+    key = f"hub:secretary:{current_user.id}"
+    if body.agent_id:
+        await r.set(key, str(body.agent_id))
+    else:
+        await r.delete(key)
+    await r.close()
+    
+    return {"success": True, "secretary_agent_id": body.agent_id}
+
+
+@router.get("/settings/secretary")
+async def get_secretary(
+    current_user: CurrentUser,
+):
+    """获取当前首席书记员"""
+    import redis.asyncio as aioredis
+    from app.core.config import settings
+    
+    r = aioredis.from_url(settings.redis_url, decode_responses=True)
+    val = await r.get(f"hub:secretary:{current_user.id}")
+    await r.close()
+    
+    return {"secretary_agent_id": int(val) if val else None}
 
 
 @router.get("/memory/minutes")

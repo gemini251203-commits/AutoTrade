@@ -252,7 +252,7 @@ async def chat_stream(
         # 4.5 注入董事会共享记忆
         try:
             from app.services.hub.consolidator import load_board_memory
-            board_mem = await load_board_memory(db, user_id, days=3)
+            board_mem = await load_board_memory(db, user_id, days=7)
             if board_mem:
                 system_prompt += f"\n\n## 董事会共享记忆 (近期纪要)\n{board_mem}"
         except Exception:
@@ -515,7 +515,7 @@ async def chat_complete(
         # 4.5 注入董事会共享记忆
         try:
             from app.services.hub.consolidator import load_board_memory
-            board_mem = await load_board_memory(db, user_id, days=3)
+            board_mem = await load_board_memory(db, user_id, days=7)
             if board_mem:
                 system_prompt += f"\n\n## 董事会共享记忆 (近期纪要)\n{board_mem}"
         except Exception:

@@ -2941,3 +2941,82 @@ async def auto_generate_alerts(
 
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False, default=str)
+
+
+# ==================== 董事会记忆工具 ====================
+
+@register_tool
+async def search_historical_minutes(
+    db: AsyncSession,
+    user_id: int,
+    keyword: str = "",
+    days_back: int = 90,
+) -> str:
+    """
+    搜索历史董事会纪要 — 深层冷记忆检索
+
+    当你遇到罕见的极端行情，或需要更久远的历史经验时，
+    请主动调用此工具搜索过去的董事会纪要。
+
+    参数:
+        keyword: 搜索关键词 (如 "暴跌", "止损", "ETH", "逆势")
+        days_back: 往回搜索天数 (默认 90 天, 最大 365)
+
+    返回:
+        匹配的历史纪要列表 (含日期、摘要、教训、盈亏)
+    """
+    from app.models.board_minutes import BoardMinutes
+    from datetime import date, timedelta
+
+    days_back = min(int(days_back), 365)
+    cutoff = date.today() - timedelta(days=days_back)
+
+    try:
+        query = select(BoardMinutes).where(
+            BoardMinutes.user_id == user_id,
+            BoardMinutes.date >= cutoff,
+        )
+
+        # 如果有关键词，模糊匹配 summary 和 key_lessons
+        if keyword and keyword.strip():
+            kw = f"%{keyword.strip()}%"
+            from sqlalchemy import or_
+            query = query.where(
+                or_(
+                    BoardMinutes.summary.ilike(kw),
+                    BoardMinutes.key_lessons.ilike(kw),
+                )
+            )
+
+        query = query.order_by(BoardMinutes.date.desc()).limit(10)
+        result = await db.execute(query)
+        minutes = result.scalars().all()
+
+        if not minutes:
+            return json.dumps({
+                "results": [],
+                "message": f"过去 {days_back} 天内未找到包含「{keyword}」的纪要",
+            }, ensure_ascii=False, default=str)
+
+        data = []
+        for m in minutes:
+            pnl_sign = "+" if m.pnl_total >= 0 else ""
+            data.append({
+                "date": str(m.date),
+                "importance": m.importance,
+                "trade_count": m.trade_count,
+                "pnl": f"{pnl_sign}{m.pnl_total:.1f} USDT",
+                "summary": m.summary[:200],
+                "key_lessons": m.key_lessons,
+            })
+
+        return json.dumps({
+            "results": data,
+            "total": len(data),
+            "search_range": f"过去 {days_back} 天",
+            "keyword": keyword,
+        }, ensure_ascii=False, default=str)
+
+    except Exception as e:
+        logger.warning(f"[AgentTools] search_historical_minutes error: {e}")
+        return json.dumps({"error": f"搜索失败: {str(e)}"}, ensure_ascii=False, default=str)

@@ -264,3 +264,16 @@ export function getBoardMinutes(days: number = 7) {
     }>
   }>('/hub/memory/minutes', { params: { days } })
 }
+
+/** 设置首席书记员 */
+export function setSecretary(agentId: number | null) {
+  return request.post<{ success: boolean; secretary_agent_id: number | null }>(
+    '/hub/settings/secretary',
+    { agent_id: agentId },
+  )
+}
+
+/** 获取首席书记员 */
+export function getSecretary() {
+  return request.get<{ secretary_agent_id: number | null }>('/hub/settings/secretary')
+}

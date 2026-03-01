@@ -12,7 +12,7 @@ import {
 import {
   listHubAgents, createHubAgent, updateHubAgent, deleteHubAgent,
   controlHubAgent, getHubStatus, boardDeliberate, streamChatWithAgent,
-  getHubLogs, saveHubLog, triggerConsolidation,
+  getHubLogs, saveHubLog, triggerConsolidation, setSecretary, getSecretary,
   type HubAgent, type HubStatus, type BoardResult,
   type HubAgentCreateRequest, type HubAgentUpdateRequest,
 } from '@/api/hub'
@@ -27,6 +27,7 @@ const loading = ref(false)
 const globalCommand = ref('')
 const globalCommandLoading = ref(false)
 const consolidating = ref(false)
+const secretaryAgentId = ref<number | null>(null)
 
 // War Room Console
 const warRoomMessages = ref<WRMessage[]>([])
@@ -105,6 +106,15 @@ const providerOptions = [
 const activeCount = computed(() => hubStatus.value?.active_count ?? 0)
 const mode = computed(() => hubStatus.value?.mode ?? 'idle')
 
+// 书记员下拉选项
+const secretaryOptions = computed(() => {
+  const opts: Array<{ label: string; value: number }> = []
+  for (const a of agents.value) {
+    opts.push({ label: `${a.name} (${a.model})`, value: a.id })
+  }
+  return opts
+})
+
 const modeLabel = computed(() => {
   const map: Record<string, string> = {
     idle: 'STANDBY', dictator: 'DICTATOR', board: 'BOARD',
@@ -138,6 +148,11 @@ async function loadData() {
     ])
     agents.value = (agentRes as any).data?.agents || (agentRes as any).agents || []
     hubStatus.value = (statusRes as any).data || statusRes as any
+    // 加载书记员设置
+    try {
+      const secRes = await getSecretary()
+      secretaryAgentId.value = (secRes as any).data?.secretary_agent_id ?? (secRes as any).secretary_agent_id ?? null
+    } catch {}
   } catch (e) {
     console.error('Failed to load hub data:', e)
   }
@@ -412,6 +427,19 @@ async function handleConsolidate() {
     scrollWarRoom()
   }
 }
+
+// 切换书记员
+async function handleSecretaryChange(val: number | null) {
+  secretaryAgentId.value = val
+  try {
+    await setSecretary(val)
+    const name = agents.value.find(a => a.id === val)?.name || '系统默认'
+    warRoomMessages.value.push(wrMsg('system', `📌 首席书记员已切换为: ${name}`, { name: 'System' }))
+    scrollWarRoom()
+  } catch (e: any) {
+    console.error('set secretary failed', e)
+  }
+}
 </script>
 
 <template>
@@ -430,6 +458,15 @@ async function handleConsolidate() {
         </span>
       </div>
       <div class="flex items-center gap-4 text-xs text-gray-500">
+        <NSelect
+          :value="secretaryAgentId"
+          :options="secretaryOptions"
+          placeholder="指定书记员"
+          clearable
+          size="tiny"
+          style="width: 160px;"
+          @update:value="handleSecretaryChange"
+        />
         <NButton
           size="tiny"
           :loading="consolidating"
