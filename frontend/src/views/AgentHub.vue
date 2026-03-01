@@ -231,7 +231,7 @@ async function loadData() {
 const logSearchKeyword = ref('')
 const logSearchLoading = ref(false)
 const logPage = ref(1)
-const logPageSize = 50
+const logPageSize = 15
 const logHasMore = ref(false)
 const logTotal = ref(0)
 
