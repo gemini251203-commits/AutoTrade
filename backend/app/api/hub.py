@@ -414,18 +414,61 @@ async def chat_with_agent(
     from app.services.hub.brain import hub_brain
     
     async def event_generator():
-        """SSE 事件生成器"""
+        """SSE 事件生成器 (含心跳保活)"""
+        import json as _json
+        import asyncio as _asyncio
+        
+        # 心跳任务: 每15秒发送 ping 防止代理超时
+        last_event = _asyncio.get_event_loop().time()
+        heartbeat_interval = 15  # 秒
+        
+        async def _stream_with_heartbeat():
+            nonlocal last_event
+            try:
+                async for event in hub_brain.chat_stream(
+                    agent=agent,
+                    message=body.message,
+                    db=db,
+                    user_id=user_id,
+                ):
+                    last_event = _asyncio.get_event_loop().time()
+                    yield f"data: {event}\n\n"
+            except Exception as e:
+                yield f"data: {_json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+        
+        # 使用异步队列合并数据事件和心跳
+        queue: _asyncio.Queue = _asyncio.Queue()
+        done = False
+        
+        async def _producer():
+            nonlocal done
+            async for chunk in _stream_with_heartbeat():
+                await queue.put(chunk)
+            done = True
+            await queue.put(None)  # sentinel
+        
+        async def _heartbeat():
+            nonlocal last_event
+            while not done:
+                await _asyncio.sleep(heartbeat_interval)
+                if not done:
+                    elapsed = _asyncio.get_event_loop().time() - last_event
+                    if elapsed >= heartbeat_interval - 1:
+                        await queue.put(f"data: {_json.dumps({'type': 'ping'})}\n\n")
+        
+        producer_task = _asyncio.create_task(_producer())
+        heartbeat_task = _asyncio.create_task(_heartbeat())
+        
         try:
-            async for event in hub_brain.chat_stream(
-                agent=agent,
-                message=body.message,
-                db=db,
-                user_id=user_id,
-            ):
-                yield f"data: {event}\n\n"
-        except Exception as e:
-            import json
-            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield item
+        finally:
+            heartbeat_task.cancel()
+            if not producer_task.done():
+                producer_task.cancel()
     
     return StreamingResponse(
         event_generator(),

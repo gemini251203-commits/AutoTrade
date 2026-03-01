@@ -29,6 +29,10 @@ const globalCommandLoading = ref(false)
 const consolidating = ref(false)
 const secretaryAgentId = ref<number | null>(null)
 
+// 连接健康状态
+const connectionStatus = ref<'connected' | 'reconnecting' | 'error'>('reconnecting')
+let pollFailCount = 0
+
 // War Room Console
 const warRoomMessages = ref<WRMessage[]>([])
 const warRoomRef = ref<HTMLElement | null>(null)
@@ -153,8 +157,13 @@ async function loadData() {
       const secRes = await getSecretary()
       secretaryAgentId.value = (secRes as any).data?.secretary_agent_id ?? (secRes as any).secretary_agent_id ?? null
     } catch {}
+    // 连接成功
+    connectionStatus.value = 'connected'
+    pollFailCount = 0
   } catch (e) {
-    console.error('Failed to load hub data:', e)
+    pollFailCount++
+    connectionStatus.value = pollFailCount >= 3 ? 'error' : 'reconnecting'
+    console.error(`Failed to load hub data (attempt ${pollFailCount}):`, e)
   }
 }
 // ==================== 日志搜索 ====================
@@ -210,7 +219,8 @@ onMounted(async () => {
   loading.value = true
   await Promise.all([loadData(), loadWarRoomHistory()])
   loading.value = false
-  pollTimer = setInterval(loadData, 10000)
+  // 5秒轮询，确保状态及时更新
+  pollTimer = setInterval(loadData, 5000)
 })
 
 onUnmounted(() => {
@@ -374,6 +384,8 @@ async function handleControl(id: number, action: string) {
                 agentId: agent.id, agentName: agent.name,
               })
             }
+          } else if (event.type === 'ping') {
+            // 心跳包，忽略
           } else if (event.type === 'tool_call') {
             // AI 用人话描述工具调用，这里不显示
           } else if (event.type === 'tool_result') {
@@ -637,6 +649,20 @@ async function handleSecretaryChange(val: number | null) {
         <div class="flex items-center gap-2 px-4 py-2.5 border-b border-white/5" style="background: rgba(0,0,0,0.3);">
           <span class="text-green-400 text-xs font-mono animate-pulse">●</span>
           <span class="text-xs font-semibold text-gray-300 tracking-wider font-mono">WAR ROOM CONSOLE</span>
+          <span
+            class="ml-2 inline-block w-2 h-2 rounded-full"
+            :class="{
+              'bg-green-400 animate-pulse': connectionStatus === 'connected',
+              'bg-yellow-400 animate-pulse': connectionStatus === 'reconnecting',
+              'bg-red-500': connectionStatus === 'error',
+            }"
+            :title="connectionStatus === 'connected' ? 'Connected' : connectionStatus === 'reconnecting' ? 'Reconnecting...' : 'Disconnected'"
+          />
+          <span class="text-[10px] font-mono ml-1" :class="{
+            'text-green-500': connectionStatus === 'connected',
+            'text-yellow-500': connectionStatus === 'reconnecting',
+            'text-red-500': connectionStatus === 'error',
+          }">{{ connectionStatus === 'connected' ? 'Live' : connectionStatus === 'reconnecting' ? 'Reconnecting' : 'Offline' }}</span>
           <span class="text-[10px] text-gray-600 ml-auto font-mono">{{ warRoomMessages.length }} events</span>
         </div>
         <!-- 搜索栏 -->
