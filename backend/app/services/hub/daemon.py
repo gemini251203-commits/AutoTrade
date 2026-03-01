@@ -98,34 +98,56 @@ class HubDaemon:
                 break
             except Exception as e:
                 err_str = str(e).lower()
+                err_detail = str(e)[:500]
+                
                 # HTTP 401 / timeout / 连接失败 → 不崩溃，不改状态，短暂等待后继续
                 is_transient = any(kw in err_str for kw in [
                     '401', 'unauthorized', 'timeout', 'timed out',
                     'connect', 'connection', 'refused', 'reset',
                     'ssl', 'eof', 'broken pipe',
                 ])
-                if is_transient:
-                    logger.warning(
-                        f"[HubDaemon] Agent #{agent_id} transient error (will retry): {e}"
-                    )
-                    await asyncio.sleep(15)
-                    continue
                 
-                # 真正的未知错误 → 记录 + 更新状态
-                logger.error(f"[HubDaemon] Agent #{agent_id} loop error: {e}")
+                # ★ 无论瞬态还是致命错误，都推送到 hub_logs 让前端可见
                 try:
                     from app.db.session import AsyncSessionLocal
-                    async with AsyncSessionLocal() as db:
-                        result = await db.execute(
+                    from app.models.hub_log import HubLog
+                    async with AsyncSessionLocal() as err_db:
+                        # 获取 agent 名称
+                        result = await err_db.execute(
                             select(HubAgent).where(HubAgent.id == agent_id)
                         )
                         agent = result.scalar_one_or_none()
-                        if agent:
+                        agent_name = agent.name if agent else f"Agent #{agent_id}"
+                        
+                        if is_transient:
+                            log_content = f"[⚠️ 瞬态错误] {agent_name}: {err_detail} (将自动重试)"
+                        else:
+                            log_content = f"[🔴 致命错误] {agent_name}: {err_detail}"
+                        
+                        error_log = HubLog(
+                            user_id=user_id,
+                            agent_id=agent_id,
+                            agent_name=agent_name,
+                            log_type="error",
+                            content=log_content,
+                        )
+                        err_db.add(error_log)
+                        
+                        # 致命错误还要更新 agent 状态
+                        if not is_transient and agent:
                             agent.status = HubAgentStatus.ERROR
-                            agent.last_error = str(e)[:500]
-                            await db.commit()
-                except Exception:
-                    pass
+                            agent.last_error = err_detail
+                        
+                        await err_db.commit()
+                except Exception as log_err:
+                    logger.warning(f"[HubDaemon] Failed to save error log: {log_err}")
+                
+                if is_transient:
+                    logger.warning(f"[HubDaemon] Agent #{agent_id} transient error (will retry): {e}")
+                    await asyncio.sleep(15)
+                    continue
+                
+                logger.error(f"[HubDaemon] Agent #{agent_id} loop error: {e}")
                 await asyncio.sleep(30)
     
     async def _execute_cycle(
