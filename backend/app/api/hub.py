@@ -557,21 +557,31 @@ async def get_hub_logs(
 ):
     """获取 War Room 历史日志 (支持关键词搜索和分页)"""
     from app.models.hub_log import HubLog
+    from sqlalchemy import func
     
-    query = select(HubLog).where(
-        HubLog.user_id == current_user.id
-    ).order_by(HubLog.created_at.desc())
-    
+    base_filter = [HubLog.user_id == current_user.id]
     if keyword:
-        query = query.where(HubLog.content.ilike(f"%{keyword}%"))
+        base_filter.append(HubLog.content.ilike(f"%{keyword}%"))
     if agent_id:
-        query = query.where(HubLog.agent_id == agent_id)
+        base_filter.append(HubLog.agent_id == agent_id)
     
-    query = query.offset(offset).limit(limit)
+    # 总数
+    count_q = select(func.count(HubLog.id)).where(*base_filter)
+    total = (await db.execute(count_q)).scalar() or 0
+    
+    # 分页查询
+    query = (
+        select(HubLog)
+        .where(*base_filter)
+        .order_by(HubLog.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
     result = await db.execute(query)
     logs = result.scalars().all()
     
     return {
+        "total": total,
         "logs": [
             {
                 "id": log.id,

@@ -227,18 +227,27 @@ async function loadData() {
     console.error(`Failed to load hub data (attempt ${pollFailCount}):`, e)
   }
 }
-// ==================== 日志搜索 ====================
+// ==================== 日志搜索 + 分页 ====================
 const logSearchKeyword = ref('')
 const logSearchLoading = ref(false)
+const logPage = ref(1)
+const logPageSize = 50
+const logHasMore = ref(false)
+const logTotal = ref(0)
 
 /** 从 API 加载历史日志 */
-async function loadWarRoomHistory(keyword?: string) {
+async function loadWarRoomHistory(keyword?: string, page?: number) {
   try {
     logSearchLoading.value = true
-    const params: any = { limit: 200 }
+    const p = page ?? logPage.value
+    const params: any = { limit: logPageSize, offset: (p - 1) * logPageSize }
     if (keyword) params.keyword = keyword
     const res = await getHubLogs(params)
-    const logs = (res as any).data?.logs || (res as any).logs || []
+    const data = (res as any).data || res as any
+    const logs = data?.logs || []
+    logTotal.value = data?.total ?? logs.length
+    logHasMore.value = logs.length >= logPageSize
+    logPage.value = p
     warRoomMessages.value = collapseToolLogs(logs.map((log: any) => wrMsg(
       log.log_type as WRMessage['type'],
       log.content,
@@ -250,6 +259,13 @@ async function loadWarRoomHistory(keyword?: string) {
   } finally {
     logSearchLoading.value = false
   }
+}
+
+function logPrevPage() {
+  if (logPage.value > 1) loadWarRoomHistory(logSearchKeyword.value || undefined, logPage.value - 1)
+}
+function logNextPage() {
+  if (logHasMore.value) loadWarRoomHistory(logSearchKeyword.value || undefined, logPage.value + 1)
 }
 
 /** 推送一条消息到 War Room 并异步保存到后端 */
@@ -846,6 +862,16 @@ async function handleSecretaryChange(val: number | null) {
               <span class="text-xs text-red-400">[ERROR] {{ msg.content }}</span>
             </div>
           </div>
+        </div>
+        <!-- War Room Pagination Footer -->
+        <div v-if="logTotal > logPageSize" class="flex items-center justify-between px-4 py-1.5 border-t border-white/5 text-[10px] text-gray-600 font-mono" style="background: rgba(0,0,0,0.3);">
+          <NButton size="tiny" quaternary :disabled="logPage <= 1" @click="logPrevPage">
+            &lt; 上一页
+          </NButton>
+          <span>第 {{ logPage }} 页 / 共 {{ Math.ceil(logTotal / logPageSize) }} 页 ({{ logTotal }} 条)</span>
+          <NButton size="tiny" quaternary :disabled="!logHasMore" @click="logNextPage">
+            下一页 &gt;
+          </NButton>
         </div>
       </div>
     </div>
