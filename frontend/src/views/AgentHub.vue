@@ -148,6 +148,10 @@ const TOOL_LABELS: Record<string, string> = {
   get_balance: '查询余额',
   get_positions: '查询持仓',
   get_indicators: '获取行情',
+  get_price: '查询价格',
+  get_klines: '获取K线',
+  get_funding_rate: '查询资金费率',
+  get_market_sentiment: '市场情绪',
   place_order: '下单',
   close_position: '平仓',
   get_trade_journal: '查阅日志',
@@ -178,8 +182,8 @@ function collapseToolLogs(msgs: WRMessage[]): WRMessage[] {
 
   function flushChain() {
     if (toolChain.length === 0) return
-    const trace = toolChain.join(' > ')
-    result.push(wrMsg('tool_trace' as any, `${trace}`, { time: chainTime, name: chainName }))
+    const count = toolChain.length
+    result.push(wrMsg('tool_trace' as any, `${count}`, { time: chainTime, name: chainName }))
     toolChain = []
   }
 
@@ -779,11 +783,13 @@ async function handleSecretaryChange(val: number | null) {
               <div class="text-gray-200 text-[13px] leading-relaxed whitespace-pre-wrap">{{ msg.content }}</div>
             </div>
 
-            <!-- Tool Trace (折叠后的工具链摘要) -->
-            <div v-else-if="msg.type === 'tool_trace'" class="flex items-center gap-2 px-3 py-1 text-[10px] text-gray-600 font-mono">
-              <span class="text-gray-700">[工具链]</span>
-              <span class="truncate">{{ msg.content }}</span>
-              <span class="text-gray-700 ml-auto">{{ msg.time }}</span>
+            <!-- Tool Trace (极简分隔线) -->
+            <div v-else-if="msg.type === 'tool_trace'" class="flex items-center justify-center py-1">
+              <div class="flex items-center gap-2 text-[10px] text-gray-700 font-mono">
+                <span class="flex-1 h-px bg-white/5" style="min-width: 40px;"></span>
+                <span>执行了 {{ msg.content }} 项查询</span>
+                <span class="flex-1 h-px bg-white/5" style="min-width: 40px;"></span>
+              </div>
             </div>
 
             <!-- Tool Call (单条残留，极简) -->
