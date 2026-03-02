@@ -29,7 +29,7 @@ const request: AxiosInstance = axios.create({
  * 从 localStorage 获取当前活动会话的 Token
  * 兼容多账户模式 (auth_sessions) 和旧模式 (token)
  */
-function getAuthToken(): string | null {
+export function getAuthToken(): string | null {
   try {
     // 1. 尝试从多账户模式获取
     const sessions = localStorage.getItem('auth_sessions')

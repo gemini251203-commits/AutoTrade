@@ -15,6 +15,9 @@ import request from '@/utils/request'
 
 // ==================== Types ====================
 
+/** 订单状态枚举 (对应后端 OrderStatus) */
+export type OrderStatus = 'pending' | 'open' | 'partial' | 'filled' | 'cancelled' | 'failed' | 'expired'
+
 /** 止盈止损预览请求 */
 export interface TpSlPreviewRequest {
   symbol: string          // 交易对 (如 BTCUSDT)

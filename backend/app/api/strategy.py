@@ -363,8 +363,9 @@ async def start_strategy(
     
     strategy.is_active = True
     await db.commit()
+    await db.refresh(strategy)
     
-    return {"message": f"策略 '{strategy.name}' 已启动", "is_active": True}
+    return _strategy_to_response(strategy)
 
 
 @router.post("/{strategy_id}/stop")
@@ -386,8 +387,9 @@ async def stop_strategy(
     
     strategy.is_active = False
     await db.commit()
+    await db.refresh(strategy)
     
-    return {"message": f"策略 '{strategy.name}' 已停止", "is_active": False}
+    return _strategy_to_response(strategy)
 
 
 @router.post("/{strategy_id}/run-once")
@@ -421,6 +423,7 @@ async def run_strategy_once(
             "reply": reply,
         }
     except Exception as e:
+        logger.exception(f"策略 '{strategy.name}' (#{strategy.id}) 决策执行失败")
         raise HTTPException(status_code=500, detail=f"决策执行失败: {str(e)}")
 
 

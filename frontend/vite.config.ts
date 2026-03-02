@@ -29,11 +29,10 @@ export default defineConfig({
     },
   },
   build: {
-    chunkSizeWarningLimit: 1000,
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         manualChunks: {
-          'naive-ui': ['naive-ui'],
           'vendor': ['vue', 'vue-router', 'pinia'],
           'charts': ['lightweight-charts'],
         },

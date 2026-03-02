@@ -7,13 +7,19 @@ import request from '@/utils/request'
 
 // ==================== Types ====================
 
+/** 仓位状态枚举 (对应后端 PositionStatus) */
+export type PositionStatus = 'open' | 'closed' | 'liquidated'
+
+/** 仓位方向枚举 (对应后端 PositionSide) */
+export type PositionSide = 'long' | 'short'
+
 /** 仓位响应 (对应后端 PositionResponse) */
 export interface PositionResponse {
   id: number
   user_id: number
   symbol: string
-  side: string              // 'long' | 'short'
-  status: string            // 'open' | 'closed' | 'liquidated'
+  side: PositionSide
+  status: PositionStatus
   size: string              // Decimal → string
   entry_price: string       // Decimal → string
   leverage: number

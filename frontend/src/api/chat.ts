@@ -143,8 +143,8 @@ export function sendMessage(
             try {
               const data = JSON.parse(trimmed.slice(6)) as SSEEvent
               onEvent(data)
-            } catch {
-              // 忽略解析失败的行
+            } catch (e) {
+              console.warn('[Chat SSE] Failed to parse line:', trimmed, e)
             }
           }
         }

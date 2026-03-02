@@ -160,7 +160,7 @@ function handleLogout() {
     </aside>
     
     <!-- Main Area -->
-    <div class="relative z-10 flex-1 flex flex-col h-full bg-transparent">
+    <div class="relative z-10 flex-1 flex flex-col h-full min-w-0 overflow-x-hidden bg-transparent">
       <!-- Header -->
       <header 
         class="relative z-50 h-16 px-3 md:px-8 flex items-center justify-between border-b border-white/5 bg-black/20 backdrop-blur-md"
@@ -248,7 +248,7 @@ function handleLogout() {
       </header>
       
       <!-- Route Content -->
-      <main class="flex-1 overflow-auto p-3 md:p-6 scroll-smooth pb-24 md:pb-6 mobile-safe-pb">
+      <main class="flex-1 overflow-auto max-w-full p-3 md:p-6 scroll-smooth pb-24 md:pb-6 mobile-safe-pb">
         <slot />
       </main>
     </div>

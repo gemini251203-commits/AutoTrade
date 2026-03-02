@@ -553,7 +553,7 @@ class AgentAutopilot:
                             )
                         )
                         open_positions = [
-                            {"symbol": p.symbol, "side": p.side.value, "quantity": float(p.quantity)}
+                            {"symbol": p.symbol, "side": p.side.value, "size": float(p.size)}
                             for p in pos_result.scalars().all()
                         ]
 

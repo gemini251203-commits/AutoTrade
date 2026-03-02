@@ -275,6 +275,22 @@ html {
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch;
   }
+
+  /* Prevent NaiveUI tables from expanding parent */
+  .n-data-table {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  .n-data-table table {
+    table-layout: auto !important;
+    min-width: 600px; /* forces horizontal scroll instead of stretching viewport */
+  }
+
+  /* NaiveUI cards: clip overflow */
+  .n-card__content {
+    overflow-x: auto !important;
+    max-width: 100% !important;
+  }
 }
 
 /* ==================== Anti-Overflow Safety Net ==================== */

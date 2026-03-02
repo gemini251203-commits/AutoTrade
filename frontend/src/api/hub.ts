@@ -10,11 +10,12 @@
  *   DELETE /hub/agents/{id}                -> deleteHubAgent()
  *   POST   /hub/agents/{id}/activate       -> controlHubAgent()
  *   GET    /hub/status                     -> getHubStatus()
- *   POST   /hub/agents/{id}/chat           -> chatWithAgent() (SSE)
+ *   POST   /hub/agents/{id}/chat           -> streamChatWithAgent() (SSE)
  *   POST   /hub/board/deliberate           -> boardDeliberate()
  */
 
 import request from '@/utils/request'
+import { getAuthToken } from '@/utils/request'
 
 // ==================== Types (1:1 mirror of Pydantic) ====================
 
@@ -157,38 +158,8 @@ export function boardDeliberate(topic: string, symbol: string = 'BTCUSDT') {
   return request.post<BoardResult>('/hub/board/deliberate', { topic, symbol })
 }
 
-/** SSE 对话 (独裁者模式) */
-export function chatWithAgent(agentId: number, message: string): EventSource {
-  // SSE 需要特殊处理, 使用 fetch + ReadableStream
-  const token = localStorage.getItem('token')
-  const baseUrl = import.meta.env.VITE_API_BASE || ''
-  
-  const eventSource = new EventSource(
-    `${baseUrl}/api/hub/agents/${agentId}/chat?token=${token}`
-  )
-  
-  return eventSource
-}
-
-/**
- * 从 localStorage 获取 auth token (兼容多账户模式)
- * 与 request.ts 中 getAuthToken() 保持一致
- */
-function getHubAuthToken(): string | null {
-  try {
-    const sessions = localStorage.getItem('auth_sessions')
-    const activeIndex = localStorage.getItem('auth_active_index')
-    if (sessions) {
-      const parsed = JSON.parse(sessions)
-      const index = activeIndex ? parseInt(activeIndex, 10) : 0
-      const token = parsed[index]?.token
-      if (token) return token
-    }
-    return localStorage.getItem('token')
-  } catch {
-    return null
-  }
-}
+// chatWithAgent() 已移除: EventSource 只支持 GET，但后端是 POST。
+// 请使用 streamChatWithAgent() (fetch POST + ReadableStream)。
 
 /**
  * SSE 对话 (fetch 方式, 支持 POST body)
@@ -197,9 +168,13 @@ export async function* streamChatWithAgent(
   agentId: number,
   message: string
 ): AsyncGenerator<{ type: string; content?: string; tool?: string; args?: any; result?: string }> {
-  const token = getHubAuthToken()
-  const baseUrl = import.meta.env.VITE_API_BASE || ''
+  const token = getAuthToken()
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
   
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 120_000) // 120s 超时
+  
+  try {
   const response = await fetch(`${baseUrl}/api/hub/agents/${agentId}/chat`, {
     method: 'POST',
     headers: {
@@ -207,6 +182,7 @@ export async function* streamChatWithAgent(
       'Authorization': `Bearer ${token}`,
     },
     body: JSON.stringify({ message }),
+    signal: controller.signal,
   })
   
   if (!response.ok || !response.body) {
@@ -235,6 +211,9 @@ export async function* streamChatWithAgent(
         }
       }
     }
+  }
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
