@@ -358,9 +358,35 @@ async def close_position(
     from app.services.trading import PositionManager, PositionError
 
     try:
-        # PositionManager.close_position 是 @staticmethod
-        # 签名: (db, position_id, close_price, close_quantity=None)
-        # 返回: (position, realized_pnl)
+        # 🔥 Layer 1: 零价格防护 — 自动获取当前市场价
+        if not close_price or close_price <= 0:
+            # 先查询仓位获取 symbol
+            from sqlalchemy import select
+            from app.models.position import Position
+            result = await db.execute(
+                select(Position).where(Position.id == int(position_id))
+            )
+            pos = result.scalar_one_or_none()
+            if pos:
+                try:
+                    from app.services.market_collector import market_collector
+                    price_data = market_collector.get_price(pos.symbol)
+                    if price_data and price_data.get("price"):
+                        close_price = float(price_data["price"])
+                        logger.warning(
+                            f"[AgentTools] close_position: close_price was 0, "
+                            f"auto-fetched market price {close_price} for {pos.symbol}"
+                        )
+                except Exception as price_err:
+                    logger.warning(f"[AgentTools] Failed to auto-fetch price: {price_err}")
+            
+            # 二次检查：如果仍然为 0，拒绝执行
+            if not close_price or close_price <= 0:
+                return json.dumps({
+                    "success": False,
+                    "error": "平仓价格不能为 0！请提供有效的 close_price 参数。",
+                }, ensure_ascii=False)
+
         position, realized_pnl = await PositionManager.close_position(
             db=db,
             position_id=int(position_id),

@@ -75,14 +75,40 @@ class TradeJournal:
             had_sl = position.stop_loss is not None
             had_tp = position.take_profit is not None
             
+            # 🔥 Layer 3: 零价格防护 — 绝不写入 exit_price=0 的污染账单
+            exit_price_val = float(close_price)
+            entry_price_val = float(position.entry_price)
+            
+            if exit_price_val <= 0:
+                logger.error(
+                    f"[TradeJournal] BLOCKED: exit_price={exit_price_val} for "
+                    f"{position.symbol} position #{position.id}. Refusing to create ghost record."
+                )
+                return None
+            
+            if entry_price_val <= 0:
+                logger.error(
+                    f"[TradeJournal] BLOCKED: entry_price={entry_price_val} for "
+                    f"{position.symbol} position #{position.id}. Data corrupted."
+                )
+                return None
+            
+            # 异常盈亏检测: |ROE%| > 1000% 告警 (可能数据错误)
+            roe_check = abs(pnl_float / margin * 100) if margin > 0 else 0
+            if roe_check > 1000:
+                logger.warning(
+                    f"[TradeJournal] ⚠️ SUSPICIOUS: {position.symbol} ROE={roe_check:.0f}% "
+                    f"entry={entry_price_val} exit={exit_price_val} pnl={pnl_float}"
+                )
+            
             memory = TradeMemory(
                 user_id=position.user_id,
                 symbol=position.symbol,
                 source=source,
                 position_id=position.id,
                 side=position.side.value if position.side else None,
-                entry_price=float(position.entry_price),
-                exit_price=float(close_price),
+                entry_price=entry_price_val,
+                exit_price=exit_price_val,
                 leverage=position.leverage,
                 margin_used=margin,
                 trade_result=trade_result,

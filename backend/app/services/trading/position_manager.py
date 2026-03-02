@@ -439,6 +439,18 @@ class PositionManager:
         if position.status != PositionStatus.OPEN:
             raise PositionError(f"Position already closed: {position.status.value}")
         
+        # 🔥 Layer 2: 零价格断言 — 绝不允许以 0 价格平仓
+        if close_price <= 0:
+            logger.error(
+                f"[PositionManager] CRITICAL: Attempted to close position #{position_id} "
+                f"({position.symbol}) at price={close_price}! Refusing."
+            )
+            raise PositionError(
+                f"CRITICAL: close_price={close_price} is invalid! "
+                f"Refusing to close position #{position_id} ({position.symbol}) at zero price. "
+                f"Position preserved."
+            )
+        
         # 确定平仓数量
         if close_quantity is None or close_quantity >= position.size:
             close_quantity = position.size
