@@ -356,16 +356,17 @@ async def get_portfolio_stats(
 
     # 使用数据库层面的时区偏移: closed_at + 8h → 按北京日期分组
     from sqlalchemy import literal_column, text
+    beijing_interval = text("INTERVAL '8 hours'")
     daily_pnl_q = await db.execute(
         select(
-            func.date(Position.closed_at + td(hours=8)).label("day"),
+            func.date(Position.closed_at + beijing_interval).label("day"),
             func.sum(Position.realized_pnl).label("pnl"),
         ).where(
             Position.user_id == current_user.id,
             Position.status == PositionStatus.CLOSED,
             Position.closed_at >= first_day_utc,
             Position.closed_at <= last_day_utc,
-        ).group_by(func.date(Position.closed_at + td(hours=8)))
+        ).group_by(func.date(Position.closed_at + beijing_interval))
     )
     daily_pnl_map = {str(r.day): float(r.pnl) for r in daily_pnl_q.all()}
 
