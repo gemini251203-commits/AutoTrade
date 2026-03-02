@@ -158,6 +158,7 @@ class AgentAutopilot:
         self._tasks: Dict[int, asyncio.Task] = {}
         self._configs: Dict[int, dict] = {}
         self._stats: Dict[int, dict] = {}  # 运行统计
+        self._manually_stopped: set = set()  # 手动停止的用户, scheduler 不自动重启
 
     def is_running(self, user_id: int) -> bool:
         task = self._tasks.get(user_id)
@@ -176,6 +177,9 @@ class AgentAutopilot:
         if self.is_running(user_id):
             logger.warning(f"[Autopilot] Already running for user {user_id}")
             return
+
+        # 手动启动时清除手动停止标记
+        self._manually_stopped.discard(user_id)
 
         self._configs[user_id] = config
         self._stats[user_id] = {
@@ -215,6 +219,8 @@ class AgentAutopilot:
                 
                 # 为每个有活跃策略的用户启动 autopilot
                 for uid, strategies in user_strategies.items():
+                    if uid in self._manually_stopped:
+                        continue  # 用户手动停止过, 不自动重启
                     if not self.is_running(uid):
                         symbols = list(set(s.symbol for s in strategies))
                         intervals = list(set(s.interval for s in strategies))
@@ -233,7 +239,7 @@ class AgentAutopilot:
                 active_user_ids = set(user_strategies.keys())
                 for uid in list(self._tasks.keys()):
                     if uid not in active_user_ids:
-                        await self.stop(uid)
+                        await self.stop(uid, manual=False)
                         logger.info(f"[Autopilot] Auto-stopped for user {uid} (no active strategies)")
                 
             except Exception as e:
@@ -241,7 +247,7 @@ class AgentAutopilot:
             
             await asyncio.sleep(30)
 
-    async def stop(self, user_id: int):
+    async def stop(self, user_id: int, manual: bool = True):
         """停止自动决策"""
         task = self._tasks.pop(user_id, None)
         self._configs.pop(user_id, None)
@@ -252,7 +258,11 @@ class AgentAutopilot:
                 await task
             except asyncio.CancelledError:
                 pass
-        logger.info(f"[Autopilot] Stopped for user {user_id}")
+        if manual:
+            self._manually_stopped.add(user_id)
+            logger.info(f"[Autopilot] Manually stopped for user {user_id} (scheduler will NOT auto-restart)")
+        else:
+            logger.info(f"[Autopilot] Auto-stopped for user {user_id}")
 
     async def run_once(self, user_id: int, symbol: str = "BTCUSDT", strategy_id: int = None) -> str:
         """手动触发一次决策"""
