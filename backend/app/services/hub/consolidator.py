@@ -177,7 +177,7 @@ class MemoryConsolidator:
             )
             await db.commit()
         
-        logger.info(f"[MemoryConsolidator] ✅ Minutes saved for user {user_id}, date {target_date}")
+        logger.info(f"[MemoryConsolidator] Minutes saved for user {user_id}, date {target_date}")
         return result
     
     # Hub 下单的 source 白名单 — 只统计 Agent Hub 发起的操作
@@ -378,14 +378,14 @@ class MemoryConsolidator:
         self, db: AsyncSession, user_id: int, data_block: str,
         secretary_agent_id: Optional[int] = None,
     ) -> dict:
-        """调用 AI 生成纪要 (优先使用指定书记员 Agent)"""
+        """调用 AI 生成纪要 (使用指定书记员 Agent 的 Key)"""
         import openai
         
         api_key = None
         base_url = "https://api.deepseek.com/v1"
         model = "deepseek-chat"
         
-        # 优先：使用指定书记员 Agent 的配置
+        # 使用指定书记员 Agent 的配置 — 谁当书记员就用谁的 Key
         if secretary_agent_id:
             from app.models.hub_agent import HubAgent
             agent_result = await db.execute(
@@ -397,39 +397,46 @@ class MemoryConsolidator:
                 if agent.api_key_enc:
                     try:
                         api_key = _decrypt_agent_key(agent.api_key_enc)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.error(
+                            f"[MemoryConsolidator] FAILED to decrypt API key for "
+                            f"secretary agent #{secretary_agent_id} ({agent.name}): {e}"
+                        )
+                        return {
+                            "summary": f"书记员 {agent.name} 的 API Key 解密失败，请重新配置该 Agent 的 Key。",
+                            "key_lessons": "API Key 配置异常。",
+                            "importance": 3,
+                        }
+                else:
+                    logger.warning(
+                        f"[MemoryConsolidator] Secretary agent #{secretary_agent_id} "
+                        f"({agent.name}) has no API key configured"
+                    )
+                    return {
+                        "summary": f"书记员 {agent.name} 未配置 API Key，请在 Agent 设置中填入。",
+                        "key_lessons": "请为书记员 Agent 配置 API Key。",
+                        "importance": 3,
+                    }
                 if agent.api_base_url:
                     base_url = agent.api_base_url
                     if not base_url.endswith("/v1"):
                         base_url = base_url.rstrip("/") + "/v1"
                 elif agent.provider == "ollama":
                     base_url = "http://localhost:11434/v1"
-                logger.info(f"[MemoryConsolidator] Using secretary agent #{secretary_agent_id} ({agent.name}), model={model}")
-        
-        # 回退：用户全局 AI 配置
-        if not api_key:
-            from app.models.user_ai_config import UserAIConfig
-            result = await db.execute(
-                select(UserAIConfig).where(UserAIConfig.user_id == user_id)
-            )
-            user_config = result.scalar_one_or_none()
-            if user_config and user_config.api_key_encrypted:
-                try:
-                    from app.core.encryption import decrypt_value
-                    api_key = decrypt_value(user_config.api_key_encrypted)
-                except Exception:
-                    pass
-                if user_config.api_base_url:
-                    base_url = user_config.api_base_url
-                    if not base_url.endswith("/v1"):
-                        base_url = base_url.rstrip("/") + "/v1"
+                logger.info(
+                    f"[MemoryConsolidator] Using secretary agent #{secretary_agent_id} "
+                    f"({agent.name}), model={model}"
+                )
+            else:
+                logger.warning(
+                    f"[MemoryConsolidator] Secretary agent #{secretary_agent_id} not found"
+                )
         
         if not api_key:
-            logger.warning("[MemoryConsolidator] No API key, using fallback summary")
+            logger.warning("[MemoryConsolidator] No API key available, using fallback summary")
             return {
-                "summary": f"无法生成纪要（缺少 API Key）。当日数据:\n{data_block[:200]}",
-                "key_lessons": "请配置 API Key 以启用 AI 纪要生成。",
+                "summary": f"无法生成纪要（未指定书记员或缺少 API Key）。当日数据:\n{data_block[:200]}",
+                "key_lessons": "请指定一个配有 API Key 的书记员 Agent。",
                 "importance": 3,
             }
         

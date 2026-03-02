@@ -266,6 +266,22 @@ export function getBoardMinutes(days: number = 7) {
   }>('/hub/memory/minutes', { params: { days } })
 }
 
+/** 获取指定月份的董事会纪要 (日历视图用) */
+export function getMonthlyMinutes(year: number, month: number) {
+  return request.get<{
+    minutes: Array<{
+      id: number
+      date: string
+      summary: string
+      key_lessons: string
+      importance: number
+      trade_count: number
+      pnl_total: number
+      created_at: string
+    }>
+  }>('/hub/memory/minutes', { params: { year, month } })
+}
+
 /** 设置首席书记员 */
 export function setSecretary(agentId: number | null) {
   return request.post<{ success: boolean; secretary_agent_id: number | null }>(

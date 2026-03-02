@@ -13,9 +13,11 @@ import {
   listHubAgents, createHubAgent, updateHubAgent, deleteHubAgent,
   controlHubAgent, getHubStatus, boardDeliberate, streamChatWithAgent,
   getHubLogs, saveHubLog, triggerConsolidation, setSecretary, getSecretary, clearHubLogs,
+  getMonthlyMinutes,
   type HubAgent, type HubStatus, type BoardResult,
   type HubAgentCreateRequest, type HubAgentUpdateRequest,
 } from '@/api/hub'
+import { CalendarOutline, ChevronBackOutline, ChevronForwardOutline } from '@vicons/ionicons5'
 
 // ==================== State ====================
 
@@ -503,12 +505,12 @@ function statusLabel(status: string) {
 // 立刻生成今日复盘
 async function handleConsolidate() {
   consolidating.value = true
-  warRoomMessages.value.push(wrMsg('system', '🧠 正在生成今日《董事会纪要》...', { name: 'System' }))
+  warRoomMessages.value.push(wrMsg('system', '[System] 正在生成今日《董事会纪要》...', { name: 'System' }))
   scrollWarRoom()
   try {
     const res = await triggerConsolidation()
     const data = res.data || res
-    const text = `📋 **今日董事会纪要** (重要性: ${data.importance}/10)\n\n${data.summary}\n\n💡 **核心教训**: ${data.key_lessons}`
+    const text = `[今日董事会纪要] (重要性: ${data.importance}/10)\n\n${data.summary}\n\n[核心教训]: ${data.key_lessons}`
     warRoomMessages.value.push(wrMsg('ai_text', text, { name: '书记员', avatar: 'BRAIN' }))
     // 保存到日志
     try { await saveHubLog({ agent_name: '书记员', log_type: 'ai_text', content: text }) } catch {}
@@ -536,11 +538,99 @@ async function handleSecretaryChange(val: number | null) {
   try {
     await setSecretary(val)
     const name = agents.value.find(a => a.id === val)?.name || '系统默认'
-    warRoomMessages.value.push(wrMsg('system', `📌 首席书记员已切换为: ${name}`, { name: 'System' }))
+    warRoomMessages.value.push(wrMsg('system', `首席书记员已切换为: ${name}`, { name: 'System' }))
     scrollWarRoom()
   } catch (e: any) {
     console.error('set secretary failed', e)
   }
+}
+
+// ==================== 历史纪要日历 ====================
+interface MinutesEntry {
+  id: number; date: string; summary: string; key_lessons: string
+  importance: number; trade_count: number; pnl_total: number
+}
+const showMinutesModal = ref(false)
+const minutesLoading = ref(false)
+const minutesData = ref<MinutesEntry[]>([])
+const calYear = ref(new Date().getFullYear())
+const calMonth = ref(new Date().getMonth() + 1) // 1-12
+const selectedMinute = ref<MinutesEntry | null>(null)
+
+const calMonthLabel = computed(() => `${calYear.value} 年 ${calMonth.value} 月`)
+
+// 日历网格生成
+const calendarWeeks = computed(() => {
+  const y = calYear.value, m = calMonth.value
+  const firstDay = new Date(y, m - 1, 1)
+  const daysInMonth = new Date(y, m, 0).getDate()
+  const startDow = firstDay.getDay()  // 0=Sun
+  const weeks: (number | null)[][] = []
+  let week: (number | null)[] = Array(startDow).fill(null)
+  for (let d = 1; d <= daysInMonth; d++) {
+    week.push(d)
+    if (week.length === 7) { weeks.push(week); week = [] }
+  }
+  if (week.length > 0) {
+    while (week.length < 7) week.push(null)
+    weeks.push(week)
+  }
+  return weeks
+})
+
+// 日期 -> 纪要 map
+const minutesMap = computed(() => {
+  const map: Record<string, MinutesEntry> = {}
+  for (const m of minutesData.value) { map[m.date] = m }
+  return map
+})
+
+function dateStr(day: number): string {
+  return `${calYear.value}-${String(calMonth.value).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+async function openMinutesCalendar() {
+  // 用北京时间的当前月份
+  const now = new Date()
+  const bjNow = new Date(now.getTime() + 8 * 3600000)
+  calYear.value = bjNow.getUTCFullYear()
+  calMonth.value = bjNow.getUTCMonth() + 1
+  showMinutesModal.value = true
+  selectedMinute.value = null
+  await fetchMinutesMonth()
+}
+
+async function fetchMinutesMonth() {
+  minutesLoading.value = true
+  try {
+    const res = await getMonthlyMinutes(calYear.value, calMonth.value)
+    minutesData.value = (res as any).data?.minutes || (res as any).minutes || []
+  } catch (e) {
+    console.error('fetch minutes failed', e)
+    minutesData.value = []
+  } finally {
+    minutesLoading.value = false
+  }
+}
+
+async function calPrev() {
+  if (calMonth.value === 1) { calYear.value--; calMonth.value = 12 }
+  else { calMonth.value-- }
+  selectedMinute.value = null
+  await fetchMinutesMonth()
+}
+
+async function calNext() {
+  if (calMonth.value === 12) { calYear.value++; calMonth.value = 1 }
+  else { calMonth.value++ }
+  selectedMinute.value = null
+  await fetchMinutesMonth()
+}
+
+function selectDay(day: number | null) {
+  if (!day) return
+  const key = dateStr(day)
+  selectedMinute.value = minutesMap.value[key] || null
 }
 </script>
 
@@ -578,6 +668,15 @@ async function handleSecretaryChange(val: number | null) {
         >
           <template #icon><NIcon :component="DocumentTextOutline" /></template>
           立刻生成今日复盘
+        </NButton>
+        <NButton
+          size="tiny"
+          @click="openMinutesCalendar"
+          class="!text-[11px]"
+          style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); border: none; color: white;"
+        >
+          <template #icon><NIcon :component="CalendarOutline" /></template>
+          历史纪要
         </NButton>
         <span>智能体 <b class="text-white">{{ agents.length }}</b></span>
         <span>运行中 <b class="text-green-400">{{ activeCount }}</b></span>
@@ -968,6 +1067,90 @@ async function handleSecretaryChange(val: number | null) {
           </NButton>
         </div>
       </template>
+    </NModal>
+
+    <!-- ========== 历史纪要日历 ========== -->
+    <NModal
+      v-model:show="showMinutesModal"
+      preset="card"
+      title="历史董事会纪要"
+      style="max-width: 720px; max-height: 90vh;"
+    >
+      <div class="space-y-4">
+        <!-- Calendar Header -->
+        <div class="flex items-center justify-between">
+          <button @click="calPrev" class="p-1 rounded hover:bg-white/10 text-gray-400 transition">
+            <NIcon :component="ChevronBackOutline" :size="18" />
+          </button>
+          <span class="text-sm font-bold text-white">{{ calMonthLabel }}</span>
+          <button @click="calNext" class="p-1 rounded hover:bg-white/10 text-gray-400 transition">
+            <NIcon :component="ChevronForwardOutline" :size="18" />
+          </button>
+        </div>
+        <!-- Calendar Grid -->
+        <NSpin :show="minutesLoading">
+          <table class="w-full border-collapse text-center">
+            <thead>
+              <tr>
+                <th v-for="d in ['日','一','二','三','四','五','六']" :key="d" class="text-[10px] text-gray-600 py-1 font-normal">{{ d }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(week, wi) in calendarWeeks" :key="wi">
+                <td
+                  v-for="(day, di) in week"
+                  :key="di"
+                  class="py-1"
+                >
+                  <div
+                    v-if="day"
+                    @click="selectDay(day)"
+                    class="mx-auto w-9 h-9 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all text-xs"
+                    :class="{
+                      'ring-1 ring-purple-500': selectedMinute?.date === dateStr(day),
+                      'hover:bg-white/10': !minutesMap[dateStr(day)],
+                    }"
+                    :style="minutesMap[dateStr(day)] ? {
+                      background: minutesMap[dateStr(day)].pnl_total >= 0 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                      border: '1px solid ' + (minutesMap[dateStr(day)].pnl_total >= 0 ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'),
+                    } : {}"
+                  >
+                    <span class="text-gray-300">{{ day }}</span>
+                    <span
+                      v-if="minutesMap[dateStr(day)]"
+                      class="text-[8px] font-mono"
+                      :class="minutesMap[dateStr(day)].pnl_total >= 0 ? 'text-green-400' : 'text-red-400'"
+                    >
+                      {{ minutesMap[dateStr(day)].pnl_total >= 0 ? '+' : '' }}{{ minutesMap[dateStr(day)].pnl_total.toFixed(1) }}
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </NSpin>
+        <!-- Selected Day Detail -->
+        <div v-if="selectedMinute" class="p-4 rounded-xl border border-white/10 bg-white/[0.03] space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-white">{{ selectedMinute.date }}</span>
+            <div class="flex items-center gap-3 text-xs">
+              <span class="text-gray-500">重要性: <b class="text-purple-400">{{ selectedMinute.importance }}/10</b></span>
+              <span class="text-gray-500">交易: <b class="text-white">{{ selectedMinute.trade_count }}</b> 笔</span>
+              <span :class="selectedMinute.pnl_total >= 0 ? 'text-green-400' : 'text-red-400'" class="font-mono font-bold">
+                {{ selectedMinute.pnl_total >= 0 ? '+' : '' }}{{ selectedMinute.pnl_total.toFixed(2) }} USDT
+              </span>
+            </div>
+          </div>
+          <div class="text-[13px] text-gray-200 leading-relaxed whitespace-pre-wrap">{{ selectedMinute.summary }}</div>
+          <div v-if="selectedMinute.key_lessons" class="p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20">
+            <span class="text-[11px] text-purple-300 font-semibold">核心教训</span>
+            <div class="text-xs text-gray-300 mt-1">{{ selectedMinute.key_lessons }}</div>
+          </div>
+        </div>
+        <div v-else class="text-center text-xs text-gray-600 py-6">
+          点击日历上有色标的日期查看纪要
+        </div>
+      </div>
     </NModal>
   </div>
   </MainLayout>

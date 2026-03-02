@@ -723,18 +723,43 @@ async def get_board_minutes(
     current_user: CurrentUser,
     db: DbSession,
     days: int = 7,
+    year: Optional[int] = None,
+    month: Optional[int] = None,
 ):
-    """获取近 N 天的董事会纪要"""
+    """
+    获取董事会纪要
+    
+    两种模式:
+    - 默认: 近 N 天
+    - 月历: 指定 year + month 返回整月纪要
+    """
     from app.models.board_minutes import BoardMinutes
     from datetime import date, timedelta
+    import calendar as cal_module
     
-    cutoff = date.today() - timedelta(days=days)
-    result = await db.execute(
-        select(BoardMinutes).where(
-            BoardMinutes.user_id == current_user.id,
-            BoardMinutes.date >= cutoff,
-        ).order_by(BoardMinutes.date.desc())
-    )
+    if year and month:
+        # 月历模式: 返回指定月份所有纪要
+        first_day = date(year, month, 1)
+        _, last_day_num = cal_module.monthrange(year, month)
+        last_day = date(year, month, last_day_num)
+        
+        result = await db.execute(
+            select(BoardMinutes).where(
+                BoardMinutes.user_id == current_user.id,
+                BoardMinutes.date >= first_day,
+                BoardMinutes.date <= last_day,
+            ).order_by(BoardMinutes.date.desc())
+        )
+    else:
+        # 近 N 天模式
+        cutoff = date.today() - timedelta(days=days)
+        result = await db.execute(
+            select(BoardMinutes).where(
+                BoardMinutes.user_id == current_user.id,
+                BoardMinutes.date >= cutoff,
+            ).order_by(BoardMinutes.date.desc())
+        )
+    
     minutes = result.scalars().all()
     
     return {
