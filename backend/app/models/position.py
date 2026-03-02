@@ -312,3 +312,30 @@ class Position(Base):
             f"size={self.size}, entry={self.entry_price}, "
             f"leverage={self.leverage}x)>"
         )
+    
+    # ============================================
+    # Layer 0: ORM 安全阀
+    # ============================================
+    
+    @staticmethod
+    def validate_close_sanity(position: "Position") -> bool:
+        """
+        平仓合理性校验 — 在 PositionManager.close_position 写入前调用
+        
+        拒绝 ROE% > 500% 的可疑平仓（正常交易几乎不可能 5 倍保证金盈利）
+        此类异常几乎 100% 是 close_price=0 的幽灵平仓。
+        """
+        from loguru import logger
+        
+        if position.margin and position.margin > 0 and position.realized_pnl:
+            roe = abs(float(position.realized_pnl) / float(position.margin) * 100)
+            if roe > 500:
+                logger.critical(
+                    f"[Position Layer0] BLOCKED GHOST CLOSE: "
+                    f"position #{position.id} {position.symbol} "
+                    f"ROE={roe:.0f}% (realized_pnl={position.realized_pnl}, "
+                    f"margin={position.margin}). "
+                    f"Refusing status change to CLOSED."
+                )
+                return False
+        return True

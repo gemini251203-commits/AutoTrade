@@ -97,7 +97,7 @@ class TradeJournal:
             roe_check = abs(pnl_float / margin * 100) if margin > 0 else 0
             if roe_check > 1000:
                 logger.warning(
-                    f"[TradeJournal] ⚠️ SUSPICIOUS: {position.symbol} ROE={roe_check:.0f}% "
+                    f"[TradeJournal] SUSPICIOUS: {position.symbol} ROE={roe_check:.0f}% "
                     f"entry={entry_price_val} exit={exit_price_val} pnl={pnl_float}"
                 )
             

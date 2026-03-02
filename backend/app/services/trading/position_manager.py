@@ -493,9 +493,17 @@ class PositionManager:
         position.total_commission += commission
         
         if is_full_close:
+            # Layer 0: 平仓前合理性校验
+            position.realized_pnl = pnl  # 暂存以供校验
+            if not Position.validate_close_sanity(position):
+                # 回滚暂存
+                position.realized_pnl = Decimal("0")
+                raise PositionError(
+                    f"BLOCKED by Layer 0: position #{position_id} ({position.symbol}) "
+                    f"has suspicious ROE (ghost close detected). Position preserved."
+                )
             position.status = PositionStatus.CLOSED
             position.closed_at = utc_now()
-            position.realized_pnl = pnl
             
             # 🔥 统一记忆: 平仓时自动生成交易记忆
             try:
