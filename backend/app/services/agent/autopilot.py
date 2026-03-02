@@ -198,12 +198,12 @@ class AgentAutopilot:
 
     async def start_scheduler(self):
         """
-        全局策略调度器 — 在 startup 时调用
+        全局策略调度器 -- 在 startup 时调用
         
-        每 30 秒扫描数据库中 is_active 的策略，
-        为每个策略所属用户自动启动 autopilot。
+        只负责自动停止: 当用户的所有策略被停用时, 自动停止 autopilot。
+        不会自动启动 autopilot -- 用户必须手动点击 Start。
         """
-        logger.info("[Autopilot] Strategy scheduler started")
+        logger.info("[Autopilot] Strategy scheduler started (auto-start DISABLED, manual only)")
         while True:
             try:
                 async with AsyncSessionLocal() as db:
@@ -213,30 +213,9 @@ class AgentAutopilot:
                     active = result.scalars().all()
                 
                 # 按 user_id 分组
-                user_strategies: Dict[int, list] = {}
-                for s in active:
-                    user_strategies.setdefault(s.user_id, []).append(s)
+                active_user_ids = set(s.user_id for s in active)
                 
-                # 为每个有活跃策略的用户启动 autopilot
-                for uid, strategies in user_strategies.items():
-                    if uid in self._manually_stopped:
-                        continue  # 用户手动停止过, 不自动重启
-                    if not self.is_running(uid):
-                        symbols = list(set(s.symbol for s in strategies))
-                        intervals = list(set(s.interval for s in strategies))
-                        # 使用 decision_interval（独立于 K 线周期）
-                        decision_intervals = [getattr(s, 'decision_interval', None) or s.interval for s in strategies]
-                        config = {
-                            "symbols": symbols,
-                            "interval": decision_intervals[0] if decision_intervals else "30m",
-                            "intervals": intervals,
-                            "strategy_ids": [s.id for s in strategies],
-                        }
-                        await self.start(uid, config)
-                        logger.info(f"[Autopilot] Auto-started for user {uid}, strategies={[s.name for s in strategies]}")
-                
-                # 停止没有活跃策略的用户
-                active_user_ids = set(user_strategies.keys())
+                # 只做自动停止: 停止没有活跃策略的用户
                 for uid in list(self._tasks.keys()):
                     if uid not in active_user_ids:
                         await self.stop(uid, manual=False)
