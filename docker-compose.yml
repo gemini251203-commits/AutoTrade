@@ -106,6 +106,9 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    environment:
+      WEB_ACCESS_USERNAME: "${WEB_ACCESS_USERNAME:-admin}"
+      WEB_ACCESS_PASSWORD: "${WEB_ACCESS_PASSWORD:-AutoTrade2026}"
     ports:
       - "80:80"
     networks:
