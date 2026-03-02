@@ -252,9 +252,9 @@ async def chat_stream(
         # 4.5 注入董事会共享记忆
         try:
             from app.services.hub.consolidator import load_board_memory
-            board_mem = await load_board_memory(db, user_id, days=7)
+            board_mem = await load_board_memory(db, user_id, days=1)
             if board_mem:
-                system_prompt += f"\n\n## 董事会共享记忆 (近期纪要)\n{board_mem}"
+                system_prompt += f"\n\n## 董事会共享记忆 (最近24h)\n{board_mem}"
         except Exception:
             pass
 
@@ -460,6 +460,8 @@ async def chat_stream(
                 )
                 final_content += _HALLUCINATION_WARNING
         await memory.save_message(db, conversation_id, "assistant", final_content)
+        # 检查是否需要压缩历史
+        await memory.maybe_summarize_history(db, conversation_id)
         await db.commit()
 
         # 10. 流式输出最终回复
@@ -515,9 +517,9 @@ async def chat_complete(
         # 4.5 注入董事会共享记忆
         try:
             from app.services.hub.consolidator import load_board_memory
-            board_mem = await load_board_memory(db, user_id, days=7)
+            board_mem = await load_board_memory(db, user_id, days=1)
             if board_mem:
-                system_prompt += f"\n\n## 董事会共享记忆 (近期纪要)\n{board_mem}"
+                system_prompt += f"\n\n## 董事会共享记忆 (最近24h)\n{board_mem}"
         except Exception:
             pass
 

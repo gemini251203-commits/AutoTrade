@@ -627,17 +627,38 @@ class AgentAutopilot:
                                 + "\n".join(signals)
                             )
 
-                        # 注入策略完整 YAML 配置 — AI 必须看到用户定义的规则
+                        # 策略摘要注入 (仅名称+核心参数+信号, 禁止全文 YAML)
                         if active_strategies:
-                            strategy_configs = []
+                            strategy_summaries = []
                             for strat in active_strategies:
-                                strategy_configs.append(
-                                    f"\n=== 策略: {strat.name} (ID={strat.id}, 周期={strat.interval}) ===\n"
-                                    f"```yaml\n{strat.config_yaml}\n```"
+                                # 提取核心参数摘要
+                                try:
+                                    config = engine.parse_yaml(strat.config_yaml)
+                                    params = []
+                                    if config.get("entry"):
+                                        entry = config["entry"]
+                                        if entry.get("rsi_below"): params.append(f"RSI<{entry['rsi_below']}")
+                                        if entry.get("rsi_above"): params.append(f"RSI>{entry['rsi_above']}")
+                                        if entry.get("macd_cross"): params.append(f"MACD={entry['macd_cross']}")
+                                    if config.get("risk"):
+                                        risk = config["risk"]
+                                        if risk.get("stop_loss_pct"): params.append(f"SL={risk['stop_loss_pct']}%")
+                                        if risk.get("take_profit_pct"): params.append(f"TP={risk['take_profit_pct']}%")
+                                        if risk.get("max_position_pct"): params.append(f"MaxPos={risk['max_position_pct']}%")
+                                    if config.get("alphas"):
+                                        params.append(f"Pipeline({len(config['alphas'])} alphas)")
+                                    param_str = ", ".join(params[:6]) if params else "custom"
+                                except Exception:
+                                    param_str = "parse error"
+                                
+                                signal_str = strat.last_signal or "N/A"
+                                strategy_summaries.append(
+                                    f"  - {strat.name} (ID={strat.id}, {strat.interval}): "
+                                    f"[{param_str}] signal={signal_str}"
                                 )
                             strategy_text += (
-                                "\n\n用户定义的策略详细配置 (⚠️ 修改请使用 update_strategy 工具):\n"
-                                + "\n".join(strategy_configs)
+                                "\n\n激活策略概要:\n"
+                                + "\n".join(strategy_summaries)
                             )
                 except Exception as e:
                     logger.warning(f"[Autopilot] Strategy evaluation failed: {e}")
