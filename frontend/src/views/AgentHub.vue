@@ -1111,17 +1111,17 @@ function selectDay(day: number | null) {
                       'hover:bg-white/10': !minutesMap[dateStr(day)],
                     }"
                     :style="minutesMap[dateStr(day)] ? {
-                      background: minutesMap[dateStr(day)].pnl_total >= 0 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
-                      border: '1px solid ' + (minutesMap[dateStr(day)].pnl_total >= 0 ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'),
+                      background: (minutesMap[dateStr(day)]?.pnl_total ?? 0) >= 0 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                      border: '1px solid ' + ((minutesMap[dateStr(day)]?.pnl_total ?? 0) >= 0 ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'),
                     } : {}"
                   >
                     <span class="text-gray-300">{{ day }}</span>
                     <span
                       v-if="minutesMap[dateStr(day)]"
                       class="text-[8px] font-mono"
-                      :class="minutesMap[dateStr(day)].pnl_total >= 0 ? 'text-green-400' : 'text-red-400'"
+                      :class="(minutesMap[dateStr(day)]?.pnl_total ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'"
                     >
-                      {{ minutesMap[dateStr(day)].pnl_total >= 0 ? '+' : '' }}{{ minutesMap[dateStr(day)].pnl_total.toFixed(1) }}
+                      {{ (minutesMap[dateStr(day)]?.pnl_total ?? 0) >= 0 ? '+' : '' }}{{ (minutesMap[dateStr(day)]?.pnl_total ?? 0).toFixed(1) }}
                     </span>
                   </div>
                 </td>
