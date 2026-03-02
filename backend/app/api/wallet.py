@@ -343,28 +343,36 @@ async def get_portfolio_stats(
     pnl_7d = float(row[0])
     volume_7d = float(row[1])
 
-    # ---------- 4. 日历 PnL (当月) ----------
-    first_day = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    _, last_day_num = cal_module.monthrange(now.year, now.month)
+    # ---------- 4. 日历 PnL (当月, 北京时间 UTC+8) ----------
+    from datetime import timedelta as td
+    beijing_offset = td(hours=8)
+    now_beijing = now + beijing_offset
+    first_day = now_beijing.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    _, last_day_num = cal_module.monthrange(now_beijing.year, now_beijing.month)
     last_day = first_day.replace(day=last_day_num, hour=23, minute=59, second=59)
+    # 转回 UTC 进行 DB 查询
+    first_day_utc = first_day - beijing_offset
+    last_day_utc = last_day - beijing_offset
 
+    # 使用数据库层面的时区偏移: closed_at + 8h → 按北京日期分组
+    from sqlalchemy import literal_column, text
     daily_pnl_q = await db.execute(
         select(
-            func.date(Position.closed_at).label("day"),
+            func.date(Position.closed_at + td(hours=8)).label("day"),
             func.sum(Position.realized_pnl).label("pnl"),
         ).where(
             Position.user_id == current_user.id,
             Position.status == PositionStatus.CLOSED,
-            Position.closed_at >= first_day,
-            Position.closed_at <= last_day,
-        ).group_by(func.date(Position.closed_at))
+            Position.closed_at >= first_day_utc,
+            Position.closed_at <= last_day_utc,
+        ).group_by(func.date(Position.closed_at + td(hours=8)))
     )
     daily_pnl_map = {str(r.day): float(r.pnl) for r in daily_pnl_q.all()}
 
-    # 填充完整月份
+    # 填充完整月份 (北京时间月份)
     daily_pnl_list = []
     for d in range(1, last_day_num + 1):
-        date_str = f"{now.year}-{now.month:02d}-{d:02d}"
+        date_str = f"{now_beijing.year}-{now_beijing.month:02d}-{d:02d}"
         daily_pnl_list.append(DailyPnlItem(
             date=date_str,
             pnl=daily_pnl_map.get(date_str, 0.0),
