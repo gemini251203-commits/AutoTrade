@@ -372,8 +372,8 @@ class HubBrain:
             user_config = result.scalar_one_or_none()
             if user_config and user_config.api_key_encrypted:
                 try:
-                    from app.core.encryption import decrypt_value
-                    api_key = decrypt_value(user_config.api_key_encrypted)
+                    from app.core.encryption import decrypt_api_key
+                    api_key = decrypt_api_key(user_config.api_key_encrypted)
                 except Exception:
                     pass
                 if not base_url:

@@ -159,8 +159,8 @@ def _encrypt_key(plain: str) -> str:
 def _decrypt_key(encrypted: str) -> str:
     """解密 API Key"""
     try:
-        from app.core.encryption import decrypt_value
-        return decrypt_value(encrypted)
+        from app.core.encryption import decrypt_api_key
+        return decrypt_api_key(encrypted)
     except ImportError:
         import base64
         return base64.b64decode(encrypted.encode()).decode()

@@ -29,8 +29,8 @@ _CST = timezone(timedelta(hours=8))
 
 def _decrypt_agent_key(encrypted: str) -> str:
     """解密 Agent 的 API Key"""
-    from app.core.encryption import decrypt_value
-    return decrypt_value(encrypted)
+    from app.core.encryption import decrypt_api_key
+    return decrypt_api_key(encrypted)
 
 # 书记员 System Prompt
 _SECRETARY_PROMPT = """你是董事会书记员。你的任务是根据今天的交易记录和 AI 辩论记录，写一份精炼的《董事会纪要》。
