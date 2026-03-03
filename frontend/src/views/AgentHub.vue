@@ -122,6 +122,7 @@ const pollingIntervalOptions = [
   { label: '1 分钟', value: 1 },
   { label: '5 分钟', value: 5 },
   { label: '15 分钟', value: 15 },
+  { label: '30 分钟', value: 30 },
   { label: '60 分钟', value: 60 },
 ]
 
