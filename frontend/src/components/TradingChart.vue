@@ -189,7 +189,7 @@ async function initChart() {
         borderColor: 'rgba(255, 255, 255, 0.05)',
         scaleMargins: {
           top: 0.1,
-          bottom: 0.25,  // leave room for volume
+          bottom: 0.35,  // leave room for volume
         },
       },
       timeScale: {
@@ -227,7 +227,7 @@ async function initChart() {
         priceScaleId: 'volume',
       })
       chart.priceScale('volume').applyOptions({
-        scaleMargins: { top: 0.8, bottom: 0 },
+        scaleMargins: { top: 0.7, bottom: 0 },
       })
       volumeSeries.setData(lastVolumeData)
       
