@@ -161,13 +161,27 @@ def _encrypt_key(plain: str) -> str:
 
 
 def _decrypt_key(encrypted: str) -> str:
-    """解密 API Key"""
+    """解密 API Key — 自动兼容多种加密格式"""
+    if not encrypted:
+        return ""
+    # 方法 1: Fernet
     try:
         from app.core.encryption import decrypt_api_key
         return decrypt_api_key(encrypted)
-    except ImportError:
+    except Exception:
+        pass
+    # 方法 2: Base64
+    try:
         import base64
-        return base64.b64decode(encrypted.encode()).decode()
+        decoded = base64.b64decode(encrypted.encode()).decode()
+        if decoded and decoded.isprintable() and len(decoded) > 5:
+            return decoded
+    except Exception:
+        pass
+    # 方法 3: 原始值
+    if encrypted.startswith("sk-") or len(encrypted) > 20:
+        return encrypted
+    raise ValueError("Decryption failed")
 
 
 # ============================================================

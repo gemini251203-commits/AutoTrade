@@ -28,9 +28,32 @@ _CST = timezone(timedelta(hours=8))
 
 
 def _decrypt_agent_key(encrypted: str) -> str:
-    """解密 Agent 的 API Key"""
-    from app.core.encryption import decrypt_api_key
-    return decrypt_api_key(encrypted)
+    """解密 Agent 的 API Key — 自动兼容多种加密格式"""
+    if not encrypted:
+        return ""
+    
+    # 方法 1: Fernet 解密
+    try:
+        from app.core.encryption import decrypt_api_key
+        return decrypt_api_key(encrypted)
+    except Exception:
+        pass
+    
+    # 方法 2: Base64 解密 (hub.py 的 fallback 可能使用了 base64)
+    try:
+        import base64
+        decoded = base64.b64decode(encrypted.encode()).decode()
+        # 验证解出来的看起来像 API Key (非空且可打印)
+        if decoded and decoded.isprintable() and len(decoded) > 5:
+            return decoded
+    except Exception:
+        pass
+    
+    # 方法 3: 原始值 (可能未加密直接存储)
+    if encrypted.startswith("sk-") or len(encrypted) > 20:
+        return encrypted
+    
+    raise ValueError(f"无法解密 API Key (长度={len(encrypted)})")
 
 # 书记员 System Prompt
 _SECRETARY_PROMPT = """你是董事会书记员。你的任务是根据今天的交易记录和 AI 辩论记录，写一份精炼的《董事会纪要》。
