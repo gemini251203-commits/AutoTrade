@@ -387,7 +387,7 @@ class HubBrain:
                 return None
         
         if not base_url:
-            # 根据供应商选择默认 Base URL
+            # 根据供应商选择默认 Base URL (仅当用户未自定义时)
             _PROVIDER_URLS = {
                 'deepseek': 'https://api.deepseek.com',
                 'openai': 'https://api.openai.com',
@@ -395,9 +395,9 @@ class HubBrain:
             }
             base_url = _PROVIDER_URLS.get(agent.provider, 'https://api.deepseek.com')
         
-        # 确保 base_url 以 /v1 结尾
-        if not base_url.endswith("/v1"):
-            base_url = base_url.rstrip("/") + "/v1"
+        # 注意: 不再强制追加 /v1
+        # OpenAI SDK 会自动处理路径, 用户自定义 URL 不应被修改
+        # (例如 Google Gemini: https://generativelanguage.googleapis.com/v1beta/openai/)
         
         return openai.AsyncOpenAI(
             api_key=api_key,

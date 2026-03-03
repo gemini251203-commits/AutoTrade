@@ -409,7 +409,7 @@ class MemoryConsolidator:
         import openai
         
         api_key = None
-        base_url = "https://api.deepseek.com/v1"
+        base_url = "https://api.deepseek.com"  # 默认 (无 /v1, SDK 自动处理)
         model = "deepseek-chat"
         
         # 使用指定书记员 Agent 的配置 — 谁当书记员就用谁的 Key
@@ -446,10 +446,9 @@ class MemoryConsolidator:
                     }
                 if agent.api_base_url:
                     base_url = agent.api_base_url
-                    if not base_url.endswith("/v1"):
-                        base_url = base_url.rstrip("/") + "/v1"
+                    # 不再强制追加 /v1, 用户自定义 URL 原样使用
                 elif agent.provider == "ollama":
-                    base_url = "http://localhost:11434/v1"
+                    base_url = "http://localhost:11434/v1"  # Ollama 需要 /v1 仅限 OpenAI 兼容模式
                 logger.info(
                     f"[MemoryConsolidator] Using secretary agent #{secretary_agent_id} "
                     f"({agent.name}), model={model}"
