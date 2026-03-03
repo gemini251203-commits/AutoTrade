@@ -8,7 +8,7 @@
  * 包含统计卡片 + 记忆列表
  */
 import { ref, onMounted, computed } from 'vue'
-import { NTag, NEmpty, NSpin, NSelect, NTooltip, NIcon, NPopconfirm, useMessage } from 'naive-ui'
+import { NTag, NEmpty, NSpin, NSelect, NTooltip, NIcon, NPopconfirm, NPagination, useMessage } from 'naive-ui'
 import { BookOutline, TrendingUpOutline, TrendingDownOutline, TimeOutline, ShieldCheckmarkOutline, TrashOutline } from '@vicons/ionicons5'
 import MainLayout from '@/layouts/MainLayout.vue'
 import request from '@/utils/request'
@@ -37,6 +37,11 @@ const symbolFilter = ref('')
 const sourceFilter = ref<string | null>(null)
 const resultFilter = ref<string | null>(null)
 const message = useMessage()
+
+// ========== Pagination ==========
+const currentPage = ref(1)
+const pageSize = ref(20)
+const totalItems = ref(0)
 
 // ========== Options ==========
 const sourceOptions = [
@@ -102,7 +107,10 @@ const closeReasonLabels: Record<string, string> = {
 async function fetchAll() {
   loading.value = true
   try {
-    const params: Record<string, string> = {}
+    const params: Record<string, string | number> = {
+      limit: pageSize.value,
+      offset: (currentPage.value - 1) * pageSize.value,
+    }
     if (symbolFilter.value) params.symbol = symbolFilter.value.trim().toUpperCase()
     if (sourceFilter.value) params.source = sourceFilter.value
     if (resultFilter.value) params.result = resultFilter.value
@@ -111,7 +119,8 @@ async function fetchAll() {
       request.get('/journal/', { params }),
       request.get('/journal/stats', { params: symbolFilter.value ? { symbol: symbolFilter.value.trim().toUpperCase() } : {} }),
     ])
-    memories.value = memRes.data
+    memories.value = memRes.data.items
+    totalItems.value = memRes.data.total
     stats.value = statRes.data
   } catch (e) {
     console.error('Failed to fetch journal:', e)
@@ -121,6 +130,12 @@ async function fetchAll() {
 }
 
 function onFilterChange() {
+  currentPage.value = 1
+  fetchAll()
+}
+
+function onPageChange(page: number) {
+  currentPage.value = page
   fetchAll()
 }
 
@@ -437,6 +452,17 @@ onMounted(fetchAll)
             {{ mem.lesson }}
           </div>
         </div>
+      </div>
+
+      <!-- Pagination -->
+      <div class="pagination-container" v-if="totalItems > pageSize">
+        <NPagination
+          :page="currentPage"
+          :page-size="pageSize"
+          :item-count="totalItems"
+          :page-slot="7"
+          @update:page="onPageChange"
+        />
       </div>
     </div>
   </MainLayout>
@@ -826,6 +852,14 @@ onMounted(fetchAll)
 .reason-label {
   color: #4b5563;
   font-weight: 500;
+}
+
+/* Pagination */
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  padding-bottom: 20px;
 }
 
 @media (max-width: 768px) {

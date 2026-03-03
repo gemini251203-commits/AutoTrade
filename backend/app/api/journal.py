@@ -67,36 +67,43 @@ class JournalStatsResponse(BaseModel):
 
 # ==================== Routes ====================
 
-@router.get("/", response_model=List[TradeMemoryResponse])
+@router.get("/")
 async def list_trade_memories(
     current_user: CurrentUser,
     db: DbSession,
     symbol: Optional[str] = None,
     source: Optional[str] = None,
     result: Optional[str] = None,
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=20, le=200),
     offset: int = Query(default=0, ge=0),
 ):
-    """获取交易记忆列表"""
+    """获取交易记忆列表 (带 total 用于分页)"""
+    base_filter = [TradeMemory.user_id == current_user.id]
+    if symbol:
+        base_filter.append(TradeMemory.symbol == symbol.upper())
+    if source:
+        base_filter.append(TradeMemory.source == source)
+    if result:
+        base_filter.append(TradeMemory.trade_result == result)
+
+    # 总数
+    count_result = await db.execute(
+        select(func.count(TradeMemory.id)).where(*base_filter)
+    )
+    total = count_result.scalar() or 0
+
+    # 分页数据
     query = (
         select(TradeMemory)
-        .where(TradeMemory.user_id == current_user.id)
+        .where(*base_filter)
         .order_by(desc(TradeMemory.created_at))
+        .offset(offset)
+        .limit(limit)
     )
-    
-    if symbol:
-        query = query.where(TradeMemory.symbol == symbol.upper())
-    if source:
-        query = query.where(TradeMemory.source == source)
-    if result:
-        query = query.where(TradeMemory.trade_result == result)
-    
-    query = query.offset(offset).limit(limit)
-    
     db_result = await db.execute(query)
     memories = db_result.scalars().all()
     
-    return [
+    items = [
         TradeMemoryResponse(
             id=m.id,
             symbol=m.symbol,
@@ -121,6 +128,8 @@ async def list_trade_memories(
         )
         for m in memories
     ]
+
+    return {"items": items, "total": total}
 
 
 @router.get("/stats", response_model=JournalStatsResponse)
