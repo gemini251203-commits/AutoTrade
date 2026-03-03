@@ -85,6 +85,8 @@ class DeepSeekProvider(BaseProvider):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
+        # 记录实际使用的 base_url, 方便排查
+        logger.info(f"[AIProvider] Initialized: base_url={self.base_url}, model={model}")
     
     async def chat(
         self,
@@ -123,8 +125,8 @@ class DeepSeekProvider(BaseProvider):
                 
                 if resp.status_code != 200:
                     error_text = resp.text
-                    logger.error(f"[DeepSeek] API error {resp.status_code}: {error_text}")
-                    raise Exception(f"DeepSeek API error: {resp.status_code}")
+                    logger.error(f"[AIProvider] API error {resp.status_code} from {self.base_url}: {error_text}")
+                    raise Exception(f"AI API error ({self.base_url}): {resp.status_code}")
                 
                 data = resp.json()
                 
@@ -142,10 +144,10 @@ class DeepSeekProvider(BaseProvider):
                 )
         
         except httpx.TimeoutException:
-            logger.error("[DeepSeek] Request timeout")
-            raise Exception("DeepSeek API timeout")
+            logger.error(f"[AIProvider] Request timeout ({self.base_url})")
+            raise Exception(f"AI API timeout ({self.base_url})")
         except Exception as e:
-            logger.error(f"[DeepSeek] Request failed: {e}")
+            logger.error(f"[AIProvider] Request failed ({self.base_url}): {e}")
             raise
     
     async def chat_streaming(
@@ -181,8 +183,8 @@ class DeepSeekProvider(BaseProvider):
                 ) as resp:
                     if resp.status_code != 200:
                         error_text = await resp.aread()
-                        logger.error(f"[DeepSeek] Stream error {resp.status_code}: {error_text}")
-                        raise Exception(f"DeepSeek stream error: {resp.status_code}")
+                        logger.error(f"[AIProvider] Stream error {resp.status_code} from {self.base_url}: {error_text}")
+                        raise Exception(f"AI stream error ({self.base_url}): {resp.status_code}")
                     
                     async for line in resp.aiter_lines():
                         if not line.startswith("data: "):
@@ -199,11 +201,11 @@ class DeepSeekProvider(BaseProvider):
                         except json.JSONDecodeError:
                             continue
         except httpx.TimeoutException:
-            logger.error("[DeepSeek] Stream timeout")
-            raise Exception("DeepSeek stream timeout")
+            logger.error(f"[AIProvider] Stream timeout ({self.base_url})")
+            raise Exception(f"AI stream timeout ({self.base_url})")
         except Exception as e:
             if "stream error" not in str(e):
-                logger.error(f"[DeepSeek] Stream failed: {e}")
+                logger.error(f"[AIProvider] Stream failed ({self.base_url}): {e}")
             raise
     
     async def health_check(self) -> bool:
