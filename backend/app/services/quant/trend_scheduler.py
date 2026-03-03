@@ -1,18 +1,20 @@
 """
 Trend Analysis Scheduler
 =========================
-定时自动运行趋势分析 (每日一次)
+定时自动运行趋势分析 — 每日北京时间 00:00 执行一次
 
-启动后每 24 小时自动:
-1. 查询所有活跃的 TrendScheme
-2. 对每个方案执行趋势分析
-3. 缓存结果到 TrendScheme.last_result
-4. 写入 TrendSnapshot 历史记录
+启动后自动:
+1. 首次延迟 30 秒后执行一轮
+2. 之后固定在每日 CST 00:00 执行
+3. 查询所有活跃的 TrendScheme
+4. 对每个方案执行趋势分析
+5. 缓存结果到 TrendScheme.last_result
+6. 写入 TrendSnapshot 历史记录
 """
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from sqlalchemy import select
 
@@ -27,15 +29,19 @@ logger = logging.getLogger(__name__)
 # 默认分析的交易对
 DEFAULT_SYMBOLS = ["BTCUSDT"]
 
-# 分析间隔 (秒): 4 小时
-ANALYSIS_INTERVAL = 4 * 60 * 60
+# 北京时区 (UTC+8)
+_CST = timezone(timedelta(hours=8))
+
+# 每日执行时间: 北京时间 00:00
+RUN_HOUR_CST = 0
+RUN_MINUTE_CST = 0
 
 # 启动后首次分析的延迟 (秒): 30 秒
 INITIAL_DELAY = 30
 
 
 class TrendScheduler:
-    """趋势分析定时调度器"""
+    """趋势分析定时调度器 — 每日北京时间 00:00"""
 
     def __init__(self):
         self._running = False
@@ -48,7 +54,7 @@ class TrendScheduler:
             return
         self._running = True
         self._task = asyncio.create_task(self._loop())
-        logger.info("[TrendScheduler] Started (interval=%dh)", ANALYSIS_INTERVAL // 3600)
+        logger.info("[TrendScheduler] Started — daily at %02d:%02d CST", RUN_HOUR_CST, RUN_MINUTE_CST)
 
     async def stop(self):
         """停止调度"""
@@ -58,9 +64,19 @@ class TrendScheduler:
             self._task = None
         logger.info("[TrendScheduler] Stopped")
 
+    def _seconds_until_next_run(self) -> float:
+        """计算距离下次北京时间 00:00 的秒数"""
+        now_cst = datetime.now(_CST)
+        target = now_cst.replace(
+            hour=RUN_HOUR_CST, minute=RUN_MINUTE_CST, second=0, microsecond=0,
+        )
+        if target <= now_cst:
+            target += timedelta(days=1)
+        return (target - now_cst).total_seconds()
+
     async def _loop(self):
-        """主循环"""
-        # 首次延迟，等后台服务就绪
+        """主循环: 启动首跑 + 每日 00:00 CST 定时"""
+        # 首次延迟，等后台服务就绪后立刻跑一次
         await asyncio.sleep(INITIAL_DELAY)
         logger.info("[TrendScheduler] Initial run starting...")
 
@@ -70,12 +86,14 @@ class TrendScheduler:
             except Exception as e:
                 logger.error("[TrendScheduler] Error in analysis cycle: %s", e)
 
-            # 等待下一次
+            # 计算距离下次 00:00 CST 的等待时间
+            wait_secs = self._seconds_until_next_run()
+            wait_hours = wait_secs / 3600
             logger.info(
-                "[TrendScheduler] Next run in %d hours",
-                ANALYSIS_INTERVAL // 3600,
+                "[TrendScheduler] Next run at %02d:%02d CST (in %.1f hours)",
+                RUN_HOUR_CST, RUN_MINUTE_CST, wait_hours,
             )
-            await asyncio.sleep(ANALYSIS_INTERVAL)
+            await asyncio.sleep(wait_secs)
 
     async def _run_all(self):
         """执行一轮: 所有活跃方案 × 所有交易对"""
