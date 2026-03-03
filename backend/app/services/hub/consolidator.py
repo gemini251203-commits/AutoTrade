@@ -203,8 +203,8 @@ class MemoryConsolidator:
         logger.info(f"[MemoryConsolidator] Minutes saved for user {user_id}, date {target_date}")
         return result
     
-    # Hub 下单的 source 白名单 — 只统计 Agent Hub 发起的操作
-    _HUB_SOURCES = ('agent', 'hub_board')
+    # Hub 下单的 source 白名单 — 统计所有 AI 发起的操作
+    _HUB_SOURCES = ('agent', 'hub', 'hub_board', 'autopilot', 'autopilot_reflection')
     
     async def _extract_trades(
         self, db: AsyncSession, user_id: int, d: date,
@@ -212,7 +212,8 @@ class MemoryConsolidator:
         """从 positions 表抽取当日 Hub 相关的仓位变动（源隔离 + 真实盈亏）"""
         from app.models.position import Position, PositionStatus, PositionSide
         
-        day_start = datetime(d.year, d.month, d.day)
+        # 北京时间当天 → UTC 范围 (CST = UTC+8)
+        day_start = datetime(d.year, d.month, d.day) - timedelta(hours=8)
         day_end = day_start + timedelta(days=1)
         
         try:
@@ -280,7 +281,8 @@ class MemoryConsolidator:
         """从 hub_logs 表抽取当日 AI 发言"""
         from app.models.hub_log import HubLog
         
-        day_start = datetime(d.year, d.month, d.day)
+        # 北京时间当天 → UTC 范围
+        day_start = datetime(d.year, d.month, d.day) - timedelta(hours=8)
         day_end = day_start + timedelta(days=1)
         
         result = await db.execute(
@@ -310,7 +312,8 @@ class MemoryConsolidator:
         """从 autopilot_logs 表抽取当日决策"""
         from app.models.autopilot_log import AutopilotLog
         
-        day_start = datetime(d.year, d.month, d.day)
+        # 北京时间当天 → UTC 范围
+        day_start = datetime(d.year, d.month, d.day) - timedelta(hours=8)
         day_end = day_start + timedelta(days=1)
         
         result = await db.execute(
@@ -337,7 +340,8 @@ class MemoryConsolidator:
         """获取当日 Hub 交易统计（基于 Position 表，源隔离 + 真实盈亏）"""
         from app.models.position import Position, PositionStatus
         
-        day_start = datetime(d.year, d.month, d.day)
+        # 北京时间当天 → UTC 范围
+        day_start = datetime(d.year, d.month, d.day) - timedelta(hours=8)
         day_end = day_start + timedelta(days=1)
         
         try:
