@@ -45,6 +45,7 @@ class HubAgentCreateRequest(BaseModel):
     api_key: Optional[str] = None    # 明文入, 后端加密
     system_prompt: str = ""
     temperature: float = 0.7
+    polling_interval: int = 5
 
 
 class HubAgentUpdateRequest(BaseModel):
@@ -58,6 +59,7 @@ class HubAgentUpdateRequest(BaseModel):
     api_key: Optional[str] = None    # 非空时重新加密
     system_prompt: Optional[str] = None
     temperature: Optional[float] = None
+    polling_interval: Optional[int] = None
 
 
 class HubAgentActionRequest(BaseModel):
@@ -83,6 +85,7 @@ class HubAgentResponse(BaseModel):
     last_error: Optional[str]
     total_runs: int
     total_trades: int
+    polling_interval: int = 5
     created_at: str
     updated_at: str
     
@@ -136,6 +139,7 @@ def _agent_to_response(agent: HubAgent) -> HubAgentResponse:
         last_error=agent.last_error,
         total_runs=agent.total_runs,
         total_trades=agent.total_trades,
+        polling_interval=agent.polling_interval if hasattr(agent, 'polling_interval') else 5,
         created_at=agent.created_at.isoformat() if agent.created_at else "",
         updated_at=agent.updated_at.isoformat() if agent.updated_at else "",
     )
@@ -205,6 +209,7 @@ async def create_agent(
         api_key_enc=_encrypt_key(body.api_key) if body.api_key else None,
         system_prompt=body.system_prompt,
         temperature=body.temperature,
+        polling_interval=body.polling_interval,
     )
     db.add(agent)
     await db.commit()

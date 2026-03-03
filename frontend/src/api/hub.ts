@@ -40,6 +40,7 @@ export interface HubAgent {
   last_error: string | null
   total_runs: number
   total_trades: number
+  polling_interval: number
   created_at: string
   updated_at: string
 }
@@ -55,6 +56,7 @@ export interface HubAgentCreateRequest {
   api_key?: string | null
   system_prompt?: string
   temperature?: number
+  polling_interval?: number
 }
 
 /** 更新请求 */
@@ -68,6 +70,7 @@ export interface HubAgentUpdateRequest {
   api_key?: string | null
   system_prompt?: string
   temperature?: number
+  polling_interval?: number
 }
 
 /** Hub 全局状态 */

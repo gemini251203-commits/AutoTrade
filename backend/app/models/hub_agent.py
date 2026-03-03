@@ -140,6 +140,14 @@ class HubAgent(Base):
         comment="累计交易次数",
     )
     
+    # === 轮询间隔 ===
+    polling_interval: Mapped[int] = mapped_column(
+        Integer,
+        default=5,
+        server_default="5",
+        comment="轮询间隔(分钟): 1/5/15/60",
+    )
+    
     # === 时间戳 ===
     created_at: Mapped[datetime] = mapped_column(
         DateTime,

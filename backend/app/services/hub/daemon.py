@@ -72,7 +72,7 @@ class HubDaemon:
     
     async def _agent_loop(self, user_id: int, agent_id: int):
         """单个智能体的自主循环"""
-        interval = 300  # 每5分钟巡逻一次
+        interval = 300  # 默认5分钟, 会被 DB 字段覆盖
         consecutive_errors = 0
         MAX_CONSECUTIVE_FATAL = 3  # 连续致命错误 N 次后熔断
         
@@ -100,6 +100,9 @@ class HubDaemon:
                     
                     await self._execute_cycle(user_id, agent, db)
                     await db.commit()
+                    
+                    # ★ 动态轮询间隔: 从 DB 字段读取 (分钟 → 秒)
+                    interval = max(agent.polling_interval or 5, 1) * 60
                     
                     # ★ 自愈机制: 成功执行后重置错误计数
                     consecutive_errors = 0

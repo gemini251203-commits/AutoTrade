@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { createChart, ColorType, CandlestickSeries, type IChartApi, type ISeriesApi, type CandlestickData, type Time } from 'lightweight-charts'
+import { createChart, ColorType, CandlestickSeries, HistogramSeries, type IChartApi, type ISeriesApi, type CandlestickData, type Time } from 'lightweight-charts'
 import request from '@/utils/request'
 import { NIcon } from 'naive-ui'
 import { ChevronDownOutline } from '@vicons/ionicons5'
@@ -17,6 +17,10 @@ const emit = defineEmits<{
 const chartContainer = ref<HTMLDivElement | null>(null)
 let chart: IChartApi | null = null
 let candlestickSeries: ISeriesApi<'Candlestick'> | null = null
+let volumeSeries: ISeriesApi<'Histogram'> | null = null
+
+// Volume data cache (for updates)
+let lastVolumeData: { time: Time; value: number; color: string }[] = []
 
 // Current price for display
 const currentPrice = ref(0)
@@ -54,6 +58,7 @@ async function handleSymbolChange(symbolCode: string) {
     const klines = await fetchKlines(selectedTimeframe.value)
     if (klines && klines.length > 0) {
       candlestickSeries.setData(klines)
+      if (volumeSeries) volumeSeries.setData(lastVolumeData)
     } else {
       console.warn('[TradingChart] No data to display')
     }
@@ -99,6 +104,15 @@ async function fetchKlines(interval: string = '1h', limit?: number): Promise<Can
       high: k.high,
       low: k.low,
       close: k.close,
+    }))
+    
+    // Volume data for histogram
+    lastVolumeData = data.map((k: any) => ({
+      time: Math.floor(k.open_time / 1000) as Time,
+      value: k.volume || 0,
+      color: k.close >= k.open
+        ? 'rgba(34, 197, 94, 0.35)'   // green (up)
+        : 'rgba(239, 68, 68, 0.35)',   // red (down)
     }))
     
     // 更新当前价格
@@ -163,7 +177,7 @@ async function initChart() {
         borderColor: 'rgba(255, 255, 255, 0.05)',
         scaleMargins: {
           top: 0.1,
-          bottom: 0.1,
+          bottom: 0.25,  // leave room for volume
         },
       },
       timeScale: {
@@ -194,6 +208,17 @@ async function initChart() {
     
     if (klines.length > 0) {
       candlestickSeries.setData(klines)
+      
+      // Add volume histogram series
+      volumeSeries = chart.addSeries(HistogramSeries, {
+        priceFormat: { type: 'volume' },
+        priceScaleId: 'volume',
+      })
+      chart.priceScale('volume').applyOptions({
+        scaleMargins: { top: 0.8, bottom: 0 },
+      })
+      volumeSeries.setData(lastVolumeData)
+      
       chart.timeScale().fitContent()
     } else {
       console.warn('[TradingChart] 没有获取到数据，请运行 binance_spider.py')
@@ -211,6 +236,7 @@ async function changeTimeframe(tf: string) {
     const klines = await fetchKlines(tf)
     if (klines.length > 0 && candlestickSeries && !isDestroyed) {
       candlestickSeries.setData(klines)
+      if (volumeSeries) volumeSeries.setData(lastVolumeData)
       chart?.timeScale().fitContent()
     }
   }
@@ -350,6 +376,16 @@ function startLiveUpdates() {
           low: k.low,
           close: k.close,
         })
+        // Update volume bar
+        if (volumeSeries) {
+          volumeSeries.update({
+            time: Math.floor(k.open_time / 1000) as Time,
+            value: k.volume || 0,
+            color: k.close >= k.open
+              ? 'rgba(34, 197, 94, 0.35)'
+              : 'rgba(239, 68, 68, 0.35)',
+          })
+        }
       }
     } catch {
       // K 线更新失败时静默
@@ -390,6 +426,7 @@ onUnmounted(() => {
     chart = null
   }
   candlestickSeries = null
+  volumeSeries = null
 })
 
 </script>

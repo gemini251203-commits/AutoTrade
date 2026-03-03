@@ -124,11 +124,11 @@ TOOLS_DESCRIPTION = """
     示例: [TOOL_CALL: delete_strategy(strategy_id=6)]
 
 ⚠️ **策略条件中只能使用以下指标** (使用不在列表中的指标会被拒绝):
-  均线: ema_5, ema_10, ema_20, ema_50, ema_100, ma7, ma25, ma99
+  均线: ema_5, ema_10, ema_20, ema_50, ema_100, ema_144, ema_169, ma7, ma25, ma99
   动量: rsi, macd, macd_histogram, macd_signal
   波动: atr, bollinger_upper, bollinger_middle, bollinger_lower, bollinger_width
   随机: kdj_k, kdj_d, kdj_j
-  量能: obv, volume_ratio
+  量能: obv, volume_ratio, volume_surge
   价位: price, close, near_support, near_resistance
 
 ⚠️ **策略构建协议 (四步引导 — 必须遵守)**:
@@ -426,9 +426,9 @@ execution:
 - 布林带: bollinger_upper, bollinger_middle, bollinger_lower, bollinger_width
 - KDJ: kdj_k, kdj_d, kdj_j
 - ATR: atr
-- 均线: ema_5, ema_10, ema_20, ema_50, ema_100, ema_200
+- 均线: ema_5, ema_10, ema_20, ema_50, ema_100, ema_144, ema_169, ema_200
 - 交叉: golden_cross (bool), death_cross (bool)
-- 成交量: volume_ratio (当前/平均)
+- 成交量: volume_ratio (当前/平均), volume_surge (最近3根最大量比)
 - 支撑阻力: near_support (bool), near_resistance (bool), pinbar_at_support (bool)
 - K线形态: pattern_pinbar (bool), pattern_engulfing (bool), pattern_hammer (bool), pattern_doji (bool), pattern_morning_star (bool), pattern_evening_star (bool)
 

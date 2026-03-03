@@ -350,9 +350,19 @@ class IndicatorService:
         ema_20 = self.calculate_ema(closes, 20)
         ema_50 = self.calculate_ema(closes, 50)
         ema_100 = self.calculate_ema(closes, 100)
+        ema_144 = self.calculate_ema(closes, 144)  # Vegas Tunnel
+        ema_169 = self.calculate_ema(closes, 169)  # Vegas Tunnel
         bollinger = self.calculate_bollinger(closes)
         kdj = self.calculate_kdj(klines)
         obv = self.calculate_obv(klines)
+        
+        # Volume Surge: 最近3根K线中最大的量比 (vs 20期均量)
+        volume_surge = None
+        if len(volumes) > 23:
+            avg_vol_20 = sum(volumes[-21:-1]) / 20
+            if avg_vol_20 > 0:
+                recent_ratios = [volumes[-i] / avg_vol_20 for i in range(1, 4)]
+                volume_surge = round(max(recent_ratios), 2)
         
         # 判断趋势 (用 EMA 交叉)
         trend = "neutral"
@@ -376,12 +386,15 @@ class IndicatorService:
             "ema_20": ema_20,
             "ema_50": ema_50,
             "ema_100": ema_100,
+            "ema_144": ema_144,  # Vegas Tunnel
+            "ema_169": ema_169,  # Vegas Tunnel
             **ma,  # ma7, ma25, ma99
             # 波动
             "atr": atr,
             # 量能
             "obv": obv,
             "volume_ratio": volume_ratio,
+            "volume_surge": volume_surge,
         }
         
         # 布林带
@@ -458,7 +471,8 @@ class IndicatorService:
             "",
             f"RSI(14): {ind.get('rsi', 'N/A')} | MACD: {ind.get('macd', 'N/A')} | 柱状: {ind.get('macd_histogram', 'N/A')}",
             f"EMA: 5={ind.get('ema_5', 'N/A')} | 10={ind.get('ema_10', 'N/A')} | 20={ind.get('ema_20', 'N/A')} | 50={ind.get('ema_50', 'N/A')}",
-            f"ATR: {ind.get('atr', 'N/A')} | 量比: {ind.get('volume_ratio', 'N/A')}x",
+            f"Vegas Tunnel: EMA144={ind.get('ema_144', 'N/A')} | EMA169={ind.get('ema_169', 'N/A')}",
+            f"ATR: {ind.get('atr', 'N/A')} | 量比: {ind.get('volume_ratio', 'N/A')}x | 量能脉冲: {ind.get('volume_surge', 'N/A')}x",
         ]
         
         if ind.get("bollinger_upper"):
@@ -479,6 +493,7 @@ AVAILABLE_INDICATORS = frozenset({
     "rsi", "macd", "macd_histogram", "macd_signal",
     # 均线
     "ema_5", "ema_10", "ema_20", "ema_50", "ema_100",
+    "ema_144", "ema_169",  # Vegas Tunnel
     "ma7", "ma25", "ma99",
     # 波动
     "atr",
@@ -486,7 +501,7 @@ AVAILABLE_INDICATORS = frozenset({
     # 随机
     "kdj_k", "kdj_d", "kdj_j",
     # 量能
-    "obv", "volume_ratio",
+    "obv", "volume_ratio", "volume_surge",
     # 价位 (策略中常用的伪指标)
     "price", "close",
     "near_support", "near_resistance",

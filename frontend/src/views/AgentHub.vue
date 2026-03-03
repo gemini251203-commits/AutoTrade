@@ -50,7 +50,7 @@ const editingAgent = ref<HubAgent | null>(null)
 const editForm = ref<HubAgentCreateRequest & { id?: number }>({
   name: '', role: 'trader', avatar: 'BOT', provider: 'deepseek',
   model: 'deepseek-chat', api_base_url: null, api_key: null,
-  system_prompt: '', temperature: 0.7,
+  system_prompt: '', temperature: 0.7, polling_interval: 5,
 })
 
 // 轮询
@@ -117,6 +117,12 @@ const providerOptions = [
   { label: 'OpenAI', value: 'openai' },
   { label: 'Ollama (本地)', value: 'ollama' },
   { label: 'Custom (自定义)', value: 'custom' },
+]
+const pollingIntervalOptions = [
+  { label: '1 分钟', value: 1 },
+  { label: '5 分钟', value: 5 },
+  { label: '15 分钟', value: 15 },
+  { label: '60 分钟', value: 60 },
 ]
 
 // Computed
@@ -395,7 +401,7 @@ function openCreate() {
   editForm.value = {
     name: '', role: 'trader', avatar: 'BOT', provider: 'deepseek',
     model: 'deepseek-chat', api_base_url: null, api_key: null,
-    system_prompt: '', temperature: 0.7,
+    system_prompt: '', temperature: 0.7, polling_interval: 5,
   }
   showEditModal.value = true
 }
@@ -408,6 +414,7 @@ function openEdit(agent: HubAgent) {
     provider: agent.provider, model: agent.model,
     api_base_url: agent.api_base_url, api_key: null,
     system_prompt: agent.system_prompt, temperature: agent.temperature,
+    polling_interval: agent.polling_interval || 5,
   }
   showEditModal.value = true
 }
@@ -417,7 +424,7 @@ async function handleSave() {
   try {
     if (editingAgent.value) {
       const data: HubAgentUpdateRequest = {}
-      const fields: (keyof HubAgentUpdateRequest)[] = ['name', 'role', 'avatar', 'provider', 'model', 'api_base_url', 'api_key', 'system_prompt', 'temperature']
+      const fields: (keyof HubAgentUpdateRequest)[] = ['name', 'role', 'avatar', 'provider', 'model', 'api_base_url', 'api_key', 'system_prompt', 'temperature', 'polling_interval']
       for (const f of fields) {
         const v = (editForm.value as any)[f]
         if (v !== null && v !== undefined && v !== '') (data as any)[f] = v
@@ -1021,8 +1028,7 @@ function selectDay(day: number | null) {
           <NInput v-model:value="editForm.api_base_url" placeholder="http://localhost:11434 或 https://your-api.com" />
         </div>
 
-        <!-- Row 3: API Key + Temperature -->
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-3 gap-3">
           <div>
             <label class="text-[11px] text-gray-500 mb-1 block font-semibold">
               API Key <span class="text-gray-700">(可选，覆盖全局)</span>
@@ -1033,6 +1039,10 @@ function selectDay(day: number | null) {
           <div>
             <label class="text-[11px] text-gray-500 mb-1 block font-semibold">温度 ({{ editForm.temperature }})</label>
             <NSlider v-model:value="editForm.temperature" :min="0" :max="2" :step="0.1" class="mt-2" />
+          </div>
+          <div>
+            <label class="text-[11px] text-gray-500 mb-1 block font-semibold">轮询间隔</label>
+            <NSelect v-model:value="editForm.polling_interval" :options="pollingIntervalOptions" />
           </div>
         </div>
 
