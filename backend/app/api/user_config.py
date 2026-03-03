@@ -225,7 +225,7 @@ async def test_ai_connection(
         
         elif request.provider in ("deepseek", "openai"):
             # 测试 Cloud API 连接
-            base_url = request.api_base_url or "https://api.deepseek.com"
+            base_url = (request.api_base_url or "https://api.deepseek.com").rstrip("/")
             api_key = request.api_key
             
             if not api_key:
@@ -243,29 +243,61 @@ async def test_ai_connection(
                     message="请提供 API Key",
                 )
             
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(
-                    f"{base_url}/models",
-                    headers={"Authorization": f"Bearer {api_key}"},
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    models = data.get("data", [])
-                    model_names = [m.get("id") for m in models]
-                    return AIConfigTestResponse(
-                        success=True,
-                        message=f"API 连接成功，发现 {len(models)} 个模型",
-                        model_info={"available_models": model_names[:10]},
+            headers = {"Authorization": f"Bearer {api_key}"}
+            model_name = request.api_model or "deepseek-chat"
+            
+            async with httpx.AsyncClient(timeout=15) as client:
+                # 方案1: 先尝试 /models 端点
+                try:
+                    resp = await client.get(f"{base_url}/models", headers=headers)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        models = data.get("data", [])
+                        model_names = [m.get("id") for m in models]
+                        return AIConfigTestResponse(
+                            success=True,
+                            message=f"API 连接成功，发现 {len(models)} 个模型",
+                            model_info={"available_models": model_names[:10]},
+                        )
+                    elif resp.status_code == 401:
+                        return AIConfigTestResponse(
+                            success=False,
+                            message="API Key 无效或已过期",
+                        )
+                except Exception:
+                    pass  # /models 不可用, 继续尝试 chat
+                
+                # 方案2: /models 不可用 (如 Google Gemini), 用最小 chat 请求测试
+                try:
+                    resp = await client.post(
+                        f"{base_url}/chat/completions",
+                        headers={**headers, "Content-Type": "application/json"},
+                        json={
+                            "model": model_name,
+                            "messages": [{"role": "user", "content": "hi"}],
+                            "max_tokens": 5,
+                        },
                     )
-                elif resp.status_code == 401:
+                    if resp.status_code == 200:
+                        return AIConfigTestResponse(
+                            success=True,
+                            message=f"API 连接成功 (model: {model_name})",
+                            model_info={"tested_model": model_name},
+                        )
+                    elif resp.status_code == 401:
+                        return AIConfigTestResponse(
+                            success=False,
+                            message="API Key 无效或已过期",
+                        )
+                    else:
+                        return AIConfigTestResponse(
+                            success=False,
+                            message=f"API 连接失败: HTTP {resp.status_code}",
+                        )
+                except Exception as chat_err:
                     return AIConfigTestResponse(
                         success=False,
-                        message="API Key 无效或已过期",
-                    )
-                else:
-                    return AIConfigTestResponse(
-                        success=False,
-                        message=f"API 连接失败: HTTP {resp.status_code}",
+                        message=f"API 连接失败: {str(chat_err)}",
                     )
         
         else:
