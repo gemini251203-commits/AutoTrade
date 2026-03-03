@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { createChart, ColorType, CandlestickSeries, HistogramSeries, type IChartApi, type ISeriesApi, type CandlestickData, type Time } from 'lightweight-charts'
+import { createChart, ColorType, CandlestickSeries, HistogramSeries, LineSeries, type IChartApi, type ISeriesApi, type CandlestickData, type Time } from 'lightweight-charts'
 import request from '@/utils/request'
 import { NIcon } from 'naive-ui'
 import { ChevronDownOutline } from '@vicons/ionicons5'
@@ -30,8 +30,16 @@ const isLoading = ref(true)
 
 // 支撑阻力线
 const showSR = ref(false)
-const srLines: any[] = []  // 保存 priceLine 引用以便清除
+const srLines: any[] = []
 const srData = ref<any>(null)
+
+// Vegas Tunnel (EMA 144 / 169)
+const showVegas = ref(false)
+const vegasInterval = ref('1h')  // 可切换级别
+const vegasIntervals = ['15m', '1h', '4h', '1d']
+let vegasEma144Series: ISeriesApi<'Line'> | null = null
+let vegasEma169Series: ISeriesApi<'Line'> | null = null
+let lastKlineRaw: any[] = []  // 缓存原始 kline 数据用于 EMA 计算
 
 // 当前选中的时间周期
 const selectedTimeframe = ref('1h')
@@ -63,21 +71,22 @@ async function handleSymbolChange(symbolCode: string) {
       console.warn('[TradingChart] No data to display')
     }
   }
-  // 刷新支撑阻力线
+  // 刷新支撑阻力线 & Vegas
   if (showSR.value) await refreshSR()
+  if (showVegas.value) await drawVegas()
 }
 
 // 使用封装的 request (自动携带 Token 和处理认证)
 
 // 根据时间周期智能选择 K 线数量
 const KLINE_LIMITS: Record<string, number> = {
-  '1m': 10000,  // 7天 ≈ 10,080根
-  '5m': 25920,  // 90天 ≈ 25,920根
-  '15m': 35040, // 1年 ≈ 35,040根
-  '30m': 17520, // 1年 ≈ 17,520根
-  '1h': 8760,   // 1年 ≈ 8,760根
-  '4h': 4380,   // 2年 ≈ 4,380根
-  '1d': 1095,   // 3年 ≈ 1,095根
+  '1m': 1440,   // 1天
+  '5m': 2016,   // 7天
+  '15m': 2016,  // 3周
+  '30m': 1440,  // 1月
+  '1h': 2016,   // 3月
+  '4h': 1095,   // 6月
+  '1d': 365,    // 1年
 }
 
 // 从后端获取 K 线数据
@@ -106,13 +115,16 @@ async function fetchKlines(interval: string = '1h', limit?: number): Promise<Can
       close: k.close,
     }))
     
-    // Volume data for histogram
+    // 缓存原始数据用于 EMA 计算
+    lastKlineRaw = data
+    
+    // Volume data for histogram (higher opacity for visibility)
     lastVolumeData = data.map((k: any) => ({
       time: Math.floor(k.open_time / 1000) as Time,
       value: k.volume || 0,
       color: k.close >= k.open
-        ? 'rgba(34, 197, 94, 0.35)'   // green (up)
-        : 'rgba(239, 68, 68, 0.35)',   // red (down)
+        ? 'rgba(34, 197, 94, 0.6)'    // green (up) — more visible
+        : 'rgba(239, 68, 68, 0.6)',    // red (down) — more visible
     }))
     
     // 更新当前价格
@@ -240,8 +252,9 @@ async function changeTimeframe(tf: string) {
       chart?.timeScale().fitContent()
     }
   }
-  // 刷新支撑阻力线
+  // 刷新支撑阻力线 & Vegas
   if (showSR.value) await refreshSR()
+  if (showVegas.value) drawVegas()
 }
 
 // ==================== 支撑阻力线 ====================
@@ -320,6 +333,103 @@ async function refreshSR() {
   drawSR(data)
 }
 
+// ==================== Vegas Tunnel ====================
+
+function calcEMA(closes: number[], period: number): (number | null)[] {
+  const k = 2 / (period + 1)
+  const result: (number | null)[] = []
+  let ema: number | null = null
+  for (const c of closes) {
+    if (ema === null) {
+      ema = c
+    } else {
+      ema = c * k + ema * (1 - k)
+    }
+    // 需要足够数据才有意义
+    result.push(result.length >= period ? ema : null)
+  }
+  return result
+}
+
+async function drawVegas() {
+  if (!chart || isDestroyed) return
+  clearVegas()
+
+  // 如果 Vegas 级别和当前图表级别不同，需要单独请求数据
+  let rawData = lastKlineRaw
+  if (vegasInterval.value !== selectedTimeframe.value) {
+    try {
+      const limit = KLINE_LIMITS[vegasInterval.value] ?? 2016
+      const res = await request.get('/market/klines', {
+        params: { symbol: symbolStore.currentSymbol, interval: vegasInterval.value, limit }
+      })
+      rawData = res.data.data || []
+    } catch (e) {
+      console.warn('[Vegas] fetch failed:', e)
+      return
+    }
+  }
+
+  if (rawData.length < 169) return
+
+  const closes = rawData.map((k: any) => k.close as number)
+  const ema144 = calcEMA(closes, 144)
+  const ema169 = calcEMA(closes, 169)
+
+  const lineData144: { time: Time; value: number }[] = []
+  const lineData169: { time: Time; value: number }[] = []
+  for (let i = 0; i < rawData.length; i++) {
+    const t = Math.floor(rawData[i].open_time / 1000) as Time
+    if (ema144[i] !== null) lineData144.push({ time: t, value: ema144[i]! })
+    if (ema169[i] !== null) lineData169.push({ time: t, value: ema169[i]! })
+  }
+
+  vegasEma144Series = chart!.addSeries(LineSeries, {
+    color: 'rgba(255, 165, 0, 0.8)',  // orange
+    lineWidth: 2,
+    priceLineVisible: false,
+    lastValueVisible: false,
+    title: `EMA144 (${vegasInterval.value})`,
+  })
+  vegasEma169Series = chart!.addSeries(LineSeries, {
+    color: 'rgba(0, 191, 255, 0.8)',  // deepskyblue
+    lineWidth: 2,
+    priceLineVisible: false,
+    lastValueVisible: false,
+    title: `EMA169 (${vegasInterval.value})`,
+  })
+
+  vegasEma144Series.setData(lineData144)
+  vegasEma169Series.setData(lineData169)
+}
+
+function clearVegas() {
+  if (chart && vegasEma144Series) {
+    try { chart.removeSeries(vegasEma144Series) } catch {}
+  }
+  if (chart && vegasEma169Series) {
+    try { chart.removeSeries(vegasEma169Series) } catch {}
+  }
+  vegasEma144Series = null
+  vegasEma169Series = null
+}
+
+async function toggleVegas() {
+  showVegas.value = !showVegas.value
+  if (showVegas.value) {
+    await drawVegas()
+  } else {
+    clearVegas()
+  }
+}
+
+async function changeVegasInterval(interval: string) {
+  vegasInterval.value = interval
+  if (showVegas.value) {
+    await drawVegas()
+  }
+}
+
 // Handle resize
 function handleResize() {
   if (chart && chartContainer.value) {
@@ -382,8 +492,8 @@ function startLiveUpdates() {
             time: Math.floor(k.open_time / 1000) as Time,
             value: k.volume || 0,
             color: k.close >= k.open
-              ? 'rgba(34, 197, 94, 0.35)'
-              : 'rgba(239, 68, 68, 0.35)',
+              ? 'rgba(34, 197, 94, 0.6)'
+              : 'rgba(239, 68, 68, 0.6)',
           })
         }
       }
@@ -425,6 +535,7 @@ onUnmounted(() => {
     chart.remove()
     chart = null
   }
+  clearVegas()
   candlestickSeries = null
   volumeSeries = null
 })
@@ -509,6 +620,32 @@ onUnmounted(() => {
       >
         S/R
       </button>
+
+      <!-- Vegas Tunnel Toggle + Level -->
+      <div class="flex items-center gap-1">
+        <button
+          @click="toggleVegas"
+          class="sr-toggle-btn"
+          :class="{ active: showVegas }"
+          title="Vegas Tunnel (EMA 144/169)"
+        >
+          VGS
+        </button>
+        <div v-if="showVegas" class="flex gap-0.5">
+          <button
+            v-for="vi in vegasIntervals"
+            :key="vi"
+            @click="changeVegasInterval(vi)"
+            class="px-1.5 py-0.5 text-[10px] rounded transition-colors cursor-pointer"
+            :style="{
+              background: vi === vegasInterval ? 'rgba(255, 165, 0, 0.2)' : 'transparent',
+              color: vi === vegasInterval ? '#ffa500' : '#6b7280',
+            }"
+          >
+            {{ vi }}
+          </button>
+        </div>
+      </div>
 
       <!-- Timeframe Selector -->
       <div class="flex gap-1">
