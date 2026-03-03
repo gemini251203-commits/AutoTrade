@@ -930,6 +930,9 @@ def _make_indicator_registry() -> Dict[str, Any]:
         "ema_20": lambda klines: calculate_ema([k["close"] for k in klines], 20),
         "ema_50": lambda klines: calculate_ema([k["close"] for k in klines], 50),
         "ema_99": lambda klines: calculate_ema([k["close"] for k in klines], 99),
+        "ema_100": lambda klines: calculate_ema([k["close"] for k in klines], 100),
+        "ema_144": lambda klines: calculate_ema([k["close"] for k in klines], 144),
+        "ema_169": lambda klines: calculate_ema([k["close"] for k in klines], 169),
         "ema_200": lambda klines: calculate_ema([k["close"] for k in klines], 200),
         
         "sma_20": lambda klines: calculate_sma([k["close"] for k in klines], 20),
@@ -1038,6 +1041,21 @@ def get_indicator_at(name: str, klines: List[Dict], offset: int = 0) -> Any:
     return get_indicator(name, truncated)
 
 
+def _calc_volume_surge(klines: List[Dict], lookback: int = 3, avg_period: int = 20) -> Optional[float]:
+    """
+    成交量放大倍数 = 最近 lookback 根 K 线最大量 / 过去 avg_period 期均量
+    > 2.0 表示显著放量
+    """
+    if len(klines) < avg_period + lookback:
+        return None
+    volumes = [k.get("volume", 0) for k in klines]
+    recent_max = max(volumes[-lookback:]) if volumes[-lookback:] else 0
+    avg_vol = sum(volumes[-(avg_period + lookback):-lookback]) / avg_period
+    if avg_vol == 0:
+        return None
+    return round(recent_max / avg_vol, 2)
+
+
 def calculate_all_indicators(klines: List[Dict]) -> Dict[str, Any]:
     """
     一次性计算所有常用指标快照
@@ -1058,11 +1076,14 @@ def calculate_all_indicators(klines: List[Dict]) -> Dict[str, Any]:
         "ema": {
             "ema_20": calculate_ema(closes, 20),
             "ema_50": calculate_ema(closes, 50),
+            "ema_144": calculate_ema(closes, 144),
+            "ema_169": calculate_ema(closes, 169),
         },
         "bollinger": calculate_bollinger(closes),
         "kdj": calculate_kdj(klines),
         "atr": calculate_atr(klines),
         "volume_ratio": calculate_volume_ratio(klines),
+        "volume_surge": _calc_volume_surge(klines),
         "support_resistance": find_support_resistance(klines),
     }
     

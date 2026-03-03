@@ -494,11 +494,16 @@ async def get_indicators(
                         "kdj": indicators.get("kdj"),
                         "atr": indicators.get("atr"),
                         "volume_ratio": indicators.get("volume_ratio"),
+                        "volume_surge": indicators.get("volume_surge"),
                         "support_resistance": {
                             "nearest_support": indicators.get("support_resistance", {}).get("nearest_support"),
                             "nearest_resistance": indicators.get("support_resistance", {}).get("nearest_resistance"),
                         },
                         "ema": indicators.get("ema"),
+                        "vegas_tunnel": {
+                            "ema_144": (indicators.get("ema") or {}).get("ema_144"),
+                            "ema_169": (indicators.get("ema") or {}).get("ema_169"),
+                        },
                         "patterns": {k: v for k, v in (indicators.get("patterns") or {}).items() if v},
                     }
 
