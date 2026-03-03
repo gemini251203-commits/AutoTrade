@@ -61,6 +61,7 @@ const mobileNavItems = computed(() => navItems)
 
 // Navigate to route
 function handleNav(item: typeof navItems[0]) {
+  if (route.path === item.route) return  // already here
   router.push(item.route)
 }
 
@@ -115,6 +116,7 @@ function handleLogout() {
           placement="right"
           :show-arrow="false"
           trigger="hover"
+          :delay="500"
         >
           <template #trigger>
             <button
