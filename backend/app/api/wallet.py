@@ -288,7 +288,7 @@ class PortfolioStatsResponse(BaseModel):
     maker_fee_rate: str = "0.02%"
 
 
-@router.get("/portfolio-stats")
+@router.get("/portfolio-stats", response_model=PortfolioStatsResponse)
 async def get_portfolio_stats(
     current_user: CurrentUser,
     db: DbSession,
@@ -572,7 +572,7 @@ async def reset_wallet(
     from app.models.trend_scheme import TrendScheme, TrendSnapshot
     from app.models.scratchpad import AnalysisScratchpad
     import os
-    
+
     user_id = current_user.id
     
     logger.info(f"[Wallet] User {user_id} starting full account reset...")
@@ -698,8 +698,16 @@ async def reset_wallet(
     )
     db.add(tx)
     
-    await db.commit()
-    await db.refresh(wallet)
+    try:
+        await db.commit()
+        await db.refresh(wallet)
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"[Wallet] Reset failed for user {user_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"账户重置失败: {str(e)}",
+        )
     
     logger.info(f"[Wallet] User {user_id} account fully reset to {initial} USDT (cleared 15 tables, strategies preserved)")
     return wallet
@@ -729,40 +737,54 @@ async def fix_frozen_funds(
     
     old_frozen = wallet.frozen
     
-    # 2. 计算活跃订单数
+    # 2. 计算活跃订单冻结金额
     result = await db.execute(
-        select(func.count(Order.id)).where(
+        select(func.coalesce(func.sum(Order.frozen_margin), 0)).where(
             Order.user_id == user_id,
             Order.status.in_([OrderStatus.PENDING, OrderStatus.OPEN, OrderStatus.PARTIAL]),
         )
     )
-    active_order_count = result.scalar() or 0
+    orders_frozen = result.scalar() or Decimal("0")
     
-    # 3. 如果没有活跃订单, 冻结应该为 0
-    if active_order_count == 0 and old_frozen > 0:
-        diff = old_frozen
-        wallet.frozen = Decimal("0")
+    # 3. 计算活跃持仓保证金
+    from app.models.position import Position, PositionStatus
+    pos_result = await db.execute(
+        select(func.coalesce(func.sum(Position.margin), 0)).where(
+            Position.user_id == user_id,
+            Position.status == PositionStatus.OPEN,
+        )
+    )
+    positions_margin = pos_result.scalar() or Decimal("0")
+    
+    expected_frozen = orders_frozen + positions_margin
+    
+    # 4. 如果实际冻结与期望不符，修正
+    if old_frozen != expected_frozen:
+        diff = old_frozen - expected_frozen
+        wallet.frozen = expected_frozen
         wallet.balance = wallet.balance + diff
         await db.commit()
         await db.refresh(wallet)
         logger.warning(
             f"[Wallet] Fixed frozen for user {user_id}: "
-            f"{old_frozen} -> 0 (returned {diff} to balance, "
-            f"no active orders)"
+            f"{old_frozen} -> {expected_frozen} "
+            f"(orders={orders_frozen}, positions={positions_margin}, returned {diff})"
         )
         return {
-            "message": f"冻结金额已修复: 归还 {diff} USDT",
+            "message": f"冻结金额已修复: {old_frozen} -> {expected_frozen}",
             "old_frozen": str(old_frozen),
-            "new_frozen": "0",
+            "new_frozen": str(expected_frozen),
+            "orders_frozen": str(orders_frozen),
+            "positions_margin": str(positions_margin),
             "returned": str(diff),
-            "active_orders": 0,
             "new_balance": str(wallet.balance),
         }
     
     return {
-        "message": f"当前有 {active_order_count} 个活跃订单, 冻结 {old_frozen} USDT",
+        "message": f"冻结金额正常: {old_frozen} USDT (订单={orders_frozen}, 持仓={positions_margin})",
         "old_frozen": str(old_frozen),
-        "active_orders": active_order_count,
+        "orders_frozen": str(orders_frozen),
+        "positions_margin": str(positions_margin),
         "balance": str(wallet.balance),
     }
 

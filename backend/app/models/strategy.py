@@ -184,6 +184,7 @@ class StrategyLog(Base):
     # 交易结果
     order_id: Mapped[Optional[int]] = mapped_column(
         Integer,
+        ForeignKey("orders.id", ondelete="SET NULL"),
         nullable=True,
         comment="关联的订单 ID",
     )

@@ -20,6 +20,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, status, Query
+from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import select, desc, func
 

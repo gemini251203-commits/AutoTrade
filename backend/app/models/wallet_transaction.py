@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 
-from sqlalchemy import String, Numeric, DateTime, Text, ForeignKey, Index
+from sqlalchemy import String, Numeric, DateTime, Text, ForeignKey, Index, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -59,7 +59,7 @@ class WalletTransaction(Base):
     
     # 交易类型
     type: Mapped[str] = mapped_column(
-        String(20),
+        SQLEnum(TransactionType, name="transaction_type_enum", native_enum=False),
         nullable=False,
     )
     
@@ -76,8 +76,14 @@ class WalletTransaction(Base):
     )
     
     # 关联订单/仓位 ID (可选)
-    related_order_id: Mapped[int] = mapped_column(nullable=True)
-    related_position_id: Mapped[int] = mapped_column(nullable=True)
+    related_order_id: Mapped[int] = mapped_column(
+        ForeignKey("orders.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    related_position_id: Mapped[int] = mapped_column(
+        ForeignKey("positions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     
     # 备注
     note: Mapped[str] = mapped_column(Text, nullable=True)
