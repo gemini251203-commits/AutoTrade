@@ -17,6 +17,29 @@
 import request from '@/utils/request'
 import { getAuthToken } from '@/utils/request'
 
+// ==================== Tool Types ====================
+
+/** 单个工具信息 */
+export interface ToolInfo {
+  name: string
+  description: string
+  category: string
+  access_type: 'read' | 'execute'
+  parameters: Array<{ name: string; type: string; default?: string; required: boolean }>
+}
+
+/** 工具全集响应 */
+export interface ToolListResponse {
+  tools: ToolInfo[]
+  total: number
+  categories: Record<string, number>
+}
+
+/** 获取系统所有工具 */
+export function listAllTools() {
+  return request.get<ToolListResponse>('/tools/')
+}
+
 // ==================== Types (1:1 mirror of Pydantic) ====================
 
 /** 智能体状态 */
@@ -41,6 +64,7 @@ export interface HubAgent {
   total_runs: number
   total_trades: number
   polling_interval: number
+  allowed_tools: string[] | null
   created_at: string
   updated_at: string
 }
@@ -57,6 +81,7 @@ export interface HubAgentCreateRequest {
   system_prompt?: string
   temperature?: number
   polling_interval?: number
+  allowed_tools?: string[] | null
 }
 
 /** 更新请求 */
@@ -71,6 +96,7 @@ export interface HubAgentUpdateRequest {
   system_prompt?: string
   temperature?: number
   polling_interval?: number
+  allowed_tools?: string[] | null
 }
 
 /** Hub 全局状态 */

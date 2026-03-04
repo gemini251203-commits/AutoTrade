@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import MainLayout from '@/layouts/MainLayout.vue'
 import {
   NButton, NModal, NInput, NSelect, NSlider, NTag, NSpin,
-  NEmpty, NIcon, NTooltip, NScrollbar,
+  NEmpty, NIcon, NTooltip, NScrollbar, NCheckbox,
 } from 'naive-ui'
 import {
   AddOutline, TrashOutline, PlayOutline, StopOutline,
@@ -13,9 +13,9 @@ import {
   listHubAgents, createHubAgent, updateHubAgent, deleteHubAgent,
   controlHubAgent, getHubStatus, boardDeliberate, streamChatWithAgent,
   getHubLogs, saveHubLog, triggerConsolidation, setSecretary, getSecretary, clearHubLogs,
-  getMonthlyMinutes,
+  getMonthlyMinutes, listAllTools,
   type HubAgent, type HubStatus, type BoardResult,
-  type HubAgentCreateRequest, type HubAgentUpdateRequest,
+  type HubAgentCreateRequest, type HubAgentUpdateRequest, type ToolInfo,
 } from '@/api/hub'
 import { CalendarOutline, ChevronBackOutline, ChevronForwardOutline } from '@vicons/ionicons5'
 
@@ -51,7 +51,93 @@ const editForm = ref<HubAgentCreateRequest & { id?: number }>({
   name: '', role: 'trader', avatar: 'BOT', provider: 'deepseek',
   model: 'deepseek-chat', api_base_url: null, api_key: null,
   system_prompt: '', temperature: 0.7, polling_interval: 5,
+  allowed_tools: null,
 })
+
+// 工具权限
+const allTools = ref<ToolInfo[]>([])
+const toolsLoading = ref(false)
+
+async function loadTools() {
+  if (allTools.value.length > 0) return // 已加载
+  toolsLoading.value = true
+  try {
+    const res = await listAllTools()
+    allTools.value = (res as any).data?.tools || (res as any).tools || []
+  } catch (e) {
+    console.error('Failed to load tools:', e)
+  } finally {
+    toolsLoading.value = false
+  }
+}
+
+// 工具按分类分组
+const toolsByCategory = computed(() => {
+  const map: Record<string, ToolInfo[]> = {}
+  for (const t of allTools.value) {
+    if (!map[t.category]) map[t.category] = []
+    map[t.category]!.push(t)
+  }
+  return map
+})
+
+// 工具权限: 切换单个工具
+function toggleTool(name: string) {
+  const form = editForm.value
+  if (form.allowed_tools === null || form.allowed_tools === undefined) {
+    // 从"全部"切换到"去掉这一个"
+    form.allowed_tools = allTools.value.map(t => t.name).filter(n => n !== name)
+  } else if (form.allowed_tools.includes(name)) {
+    form.allowed_tools = form.allowed_tools.filter(n => n !== name)
+  } else {
+    form.allowed_tools = [...form.allowed_tools, name]
+  }
+}
+
+// 工具权限: 切换整个分类
+function toggleCategory(category: string) {
+  const form = editForm.value
+  const catTools = toolsByCategory.value[category]?.map(t => t.name) || []
+  if (!catTools.length) return
+  const allChecked = catTools.every(n => isToolChecked(n))
+  if (allChecked) {
+    // 取消全部
+    if (form.allowed_tools === null || form.allowed_tools === undefined) {
+      form.allowed_tools = allTools.value.map(t => t.name).filter(n => !catTools.includes(n))
+    } else {
+      form.allowed_tools = form.allowed_tools.filter(n => !catTools.includes(n))
+    }
+  } else {
+    // 勾选全部
+    if (form.allowed_tools === null || form.allowed_tools === undefined) return // 已是全部
+    form.allowed_tools = [...new Set([...form.allowed_tools, ...catTools])]
+  }
+}
+
+// 工具是否被勾选
+function isToolChecked(name: string): boolean {
+  const list = editForm.value.allowed_tools
+  return list === null || list === undefined || list.includes(name)
+}
+
+// 分类是否全部勾选
+function isCategoryAllChecked(category: string): boolean {
+  const catTools = toolsByCategory.value[category]?.map(t => t.name) || []
+  return catTools.every(n => isToolChecked(n))
+}
+function isCategoryPartialChecked(category: string): boolean {
+  const catTools = toolsByCategory.value[category]?.map(t => t.name) || []
+  const checkedCount = catTools.filter(n => isToolChecked(n)).length
+  return checkedCount > 0 && checkedCount < catTools.length
+}
+
+// 全选 / 全不选
+function selectAllTools() {
+  editForm.value.allowed_tools = null // null = 全部
+}
+function deselectAllTools() {
+  editForm.value.allowed_tools = []
+}
 
 // 轮询
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -403,8 +489,10 @@ function openCreate() {
     name: '', role: 'trader', avatar: 'BOT', provider: 'deepseek',
     model: 'deepseek-chat', api_base_url: null, api_key: null,
     system_prompt: '', temperature: 0.7, polling_interval: 5,
+    allowed_tools: null,
   }
   showEditModal.value = true
+  loadTools()
 }
 
 function openEdit(agent: HubAgent) {
@@ -416,8 +504,10 @@ function openEdit(agent: HubAgent) {
     api_base_url: agent.api_base_url, api_key: null,
     system_prompt: agent.system_prompt, temperature: agent.temperature,
     polling_interval: agent.polling_interval || 5,
+    allowed_tools: agent.allowed_tools ? [...agent.allowed_tools] : null,
   }
   showEditModal.value = true
+  loadTools()
 }
 
 async function handleSave() {
@@ -430,6 +520,8 @@ async function handleSave() {
         const v = (editForm.value as any)[f]
         if (v !== null && v !== undefined && v !== '') (data as any)[f] = v
       }
+      // allowed_tools 始终显式传递（null = 全部，[] = 禁用，[...] = 指定）
+      data.allowed_tools = editForm.value.allowed_tools
       await updateHubAgent(editingAgent.value.id, data)
     } else {
       await createHubAgent(editForm.value)
@@ -1066,6 +1158,72 @@ function selectDay(day: number | null) {
 优先交易 BTC 和 ETH。"
               style="font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.6;"
             />
+          </div>
+        </div>
+
+        <!-- Row 5: 工具权限 Checkbox 面板 -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-[11px] text-gray-500 font-semibold">
+              工具权限
+              <span class="text-gray-700 font-normal ml-2">— 勾选授权此 Agent 使用的工具，未勾选的工具不会发送给 AI</span>
+            </label>
+            <div class="flex gap-2">
+              <NButton size="tiny" quaternary @click="selectAllTools" class="!text-[10px]">全选</NButton>
+              <NButton size="tiny" quaternary @click="deselectAllTools" class="!text-[10px]">全不选</NButton>
+              <NTag v-if="editForm.allowed_tools !== null && editForm.allowed_tools !== undefined" size="small" type="info">
+                {{ editForm.allowed_tools.length }}/{{ allTools.length }}
+              </NTag>
+              <NTag v-else size="small" type="success">全部</NTag>
+            </div>
+          </div>
+
+          <div v-if="toolsLoading" class="flex items-center justify-center py-4">
+            <NSpin size="small" />
+          </div>
+
+          <div v-else class="rounded-lg border border-white/10 overflow-hidden" style="background: rgba(0,0,0,0.2); max-height: 280px; overflow-y: auto;">
+            <div v-for="(tools, category) in toolsByCategory" :key="category" class="border-b border-white/5 last:border-b-0">
+              <!-- 分类头 -->
+              <div
+                class="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-white/5 transition-colors"
+                @click="toggleCategory(category as string)"
+              >
+                <NCheckbox
+                  :checked="isCategoryAllChecked(category as string)"
+                  :indeterminate="isCategoryPartialChecked(category as string)"
+                  @update:checked="toggleCategory(category as string)"
+                  @click.stop
+                />
+                <span class="text-[11px] font-semibold text-gray-300">{{ category }}</span>
+                <span class="text-[10px] text-gray-600 ml-auto">{{ tools.length }} 个工具</span>
+              </div>
+              <!-- 工具列表 -->
+              <div class="grid grid-cols-2 gap-0 px-3 pb-1.5">
+                <div
+                  v-for="tool in tools"
+                  :key="tool.name"
+                  class="flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-white/5 cursor-pointer transition-colors"
+                  @click="toggleTool(tool.name)"
+                >
+                  <NCheckbox
+                    :checked="isToolChecked(tool.name)"
+                    @update:checked="toggleTool(tool.name)"
+                    @click.stop
+                    size="small"
+                  />
+                  <span class="text-[11px] text-gray-400 truncate" :title="tool.description">
+                    {{ tool.description.length > 14 ? tool.description.slice(0, 14) + '...' : tool.description }}
+                  </span>
+                  <span
+                    class="text-[9px] px-1 rounded ml-auto flex-shrink-0"
+                    :class="tool.access_type === 'execute' ? 'bg-red-500/15 text-red-400' : 'bg-blue-500/15 text-blue-400'"
+                  >
+                    {{ tool.access_type === 'execute' ? '执行' : '只读' }}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
