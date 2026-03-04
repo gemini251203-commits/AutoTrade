@@ -68,6 +68,31 @@ class OrderResponse(BaseModel):
     created_at: str
     filled_at: Optional[str]
 
+    @classmethod
+    def from_order(cls, o) -> "OrderResponse":
+        return cls(
+            id=o.id,
+            user_id=o.user_id,
+            symbol=o.symbol,
+            side=o.side,
+            order_type=o.order_type,
+            status=o.status,
+            leverage=o.leverage,
+            position_side=o.position_side,
+            reduce_only=o.reduce_only,
+            quantity=o.quantity,
+            filled_quantity=o.filled_quantity,
+            price=o.price,
+            trigger_price=o.trigger_price,
+            avg_fill_price=o.avg_fill_price,
+            stop_loss=o.stop_loss,
+            take_profit=o.take_profit,
+            commission=o.commission,
+            realized_pnl=o.realized_pnl,
+            created_at=o.created_at.isoformat() + "Z",
+            filled_at=o.filled_at.isoformat() + "Z" if o.filled_at else None,
+        )
+
 
 # ==================== Routes ====================
 
@@ -91,28 +116,7 @@ async def list_orders(
     )
     
     return [
-        OrderResponse(
-            id=o.id,
-            user_id=o.user_id,
-            symbol=o.symbol,
-            side=o.side,
-            order_type=o.order_type,
-            status=o.status,
-            leverage=o.leverage,
-            position_side=o.position_side,
-            reduce_only=o.reduce_only,
-            quantity=o.quantity,
-            filled_quantity=o.filled_quantity,
-            price=o.price,
-            trigger_price=o.trigger_price,
-            avg_fill_price=o.avg_fill_price,
-            stop_loss=o.stop_loss,
-            take_profit=o.take_profit,
-            commission=o.commission,
-            realized_pnl=o.realized_pnl,
-            created_at=o.created_at.isoformat() + "Z",
-            filled_at=o.filled_at.isoformat() + "Z" if o.filled_at else None,
-        )
+        OrderResponse.from_order(o)
         for o in orders
     ]
 
@@ -192,28 +196,7 @@ async def create_order(
         await db.commit()
         await db.refresh(order)
         
-        return OrderResponse(
-            id=order.id,
-            user_id=order.user_id,
-            symbol=order.symbol,
-            side=order.side,
-            order_type=order.order_type,
-            status=order.status,
-            leverage=order.leverage,
-            position_side=order.position_side,
-            reduce_only=order.reduce_only,
-            quantity=order.quantity,
-            filled_quantity=order.filled_quantity,
-            price=order.price,
-            trigger_price=order.trigger_price,
-            avg_fill_price=order.avg_fill_price,
-            stop_loss=order.stop_loss,
-            take_profit=order.take_profit,
-            commission=order.commission,
-            realized_pnl=order.realized_pnl,
-            created_at=order.created_at.isoformat() + "Z",
-            filled_at=order.filled_at.isoformat() + "Z" if order.filled_at else None,
-        )
+        return OrderResponse.from_order(order)
         
     except OrderError as e:
         raise HTTPException(
@@ -245,28 +228,7 @@ async def cancel_order(
         await db.commit()
         await db.refresh(order)
         
-        return OrderResponse(
-            id=order.id,
-            user_id=order.user_id,
-            symbol=order.symbol,
-            side=order.side,
-            order_type=order.order_type,
-            status=order.status,
-            leverage=order.leverage,
-            position_side=order.position_side,
-            reduce_only=order.reduce_only,
-            quantity=order.quantity,
-            filled_quantity=order.filled_quantity,
-            price=order.price,
-            trigger_price=order.trigger_price,
-            avg_fill_price=order.avg_fill_price,
-            stop_loss=order.stop_loss,
-            take_profit=order.take_profit,
-            commission=order.commission,
-            realized_pnl=order.realized_pnl,
-            created_at=order.created_at.isoformat() + "Z",
-            filled_at=order.filled_at.isoformat() + "Z" if order.filled_at else None,
-        )
+        return OrderResponse.from_order(order)
         
     except OrderNotFoundError:
         raise HTTPException(
@@ -295,13 +257,15 @@ class TpSlPreviewRequest(BaseModel):
 
 class TpSlPreviewResponse(BaseModel):
     """止盈止损盈亏预览响应"""
-    take_profit_pnl: float  # 止盈盈亏 (USDT)
-    take_profit_pct: float  # 止盈收益率 (%)
-    stop_loss_pnl: float    # 止损盈亏 (USDT)
-    stop_loss_pct: float    # 止损收益率 (%)
-    risk_reward_ratio: float  # 风险回报比
-    margin_required: float  # 所需保证金
-    notional: float         # 名义价值
+    model_config = {"json_encoders": {Decimal: str}}
+
+    take_profit_pnl: Decimal  # 止盈盈亏 (USDT)
+    take_profit_pct: Decimal  # 止盈收益率 (%)
+    stop_loss_pnl: Decimal    # 止损盈亏 (USDT)
+    stop_loss_pct: Decimal    # 止损收益率 (%)
+    risk_reward_ratio: Decimal  # 风险回报比
+    margin_required: Decimal  # 所需保证金
+    notional: Decimal         # 名义价值
 
 
 @router.post("/tp-sl-preview", response_model=TpSlPreviewResponse)

@@ -73,6 +73,26 @@ class PositionResponse(BaseModel):
     realized_pnl: Decimal
     created_at: str
 
+    @classmethod
+    def from_position(cls, p) -> "PositionResponse":
+        return cls(
+            id=p.id,
+            user_id=p.user_id,
+            symbol=p.symbol,
+            side=p.side,
+            status=p.status,
+            size=p.size,
+            entry_price=p.entry_price,
+            leverage=p.leverage,
+            margin=p.margin,
+            margin_mode=p.margin_mode,
+            liquidation_price=p.liquidation_price,
+            stop_loss=p.stop_loss,
+            take_profit=p.take_profit,
+            realized_pnl=p.realized_pnl,
+            created_at=p.created_at.isoformat() + "Z",
+        )
+
 
 class PositionWithPnlResponse(PositionResponse):
     """带未实现盈亏的仓位响应"""
@@ -104,23 +124,7 @@ async def list_positions(
     )
     
     return [
-        PositionResponse(
-            id=p.id,
-            user_id=p.user_id,
-            symbol=p.symbol,
-            side=p.side,
-            status=p.status,
-            size=p.size,
-            entry_price=p.entry_price,
-            leverage=p.leverage,
-            margin=p.margin,
-            margin_mode=p.margin_mode,
-            liquidation_price=p.liquidation_price,
-            stop_loss=p.stop_loss,
-            take_profit=p.take_profit,
-            realized_pnl=p.realized_pnl,
-            created_at=p.created_at.isoformat() + "Z",
-        )
+        PositionResponse.from_position(p)
         for p in positions
     ]
 
@@ -166,23 +170,7 @@ async def open_position(
             await db.commit()
             await db.refresh(position)
             
-            return PositionResponse(
-                id=position.id,
-                user_id=position.user_id,
-                symbol=position.symbol,
-                side=position.side,
-                status=position.status,
-                size=position.size,
-                entry_price=position.entry_price,
-                leverage=position.leverage,
-                margin=position.margin,
-                margin_mode=position.margin_mode,
-                liquidation_price=position.liquidation_price,
-                stop_loss=position.stop_loss,
-                take_profit=position.take_profit,
-                realized_pnl=position.realized_pnl,
-                created_at=position.created_at.isoformat() + "Z",
-            )
+            return PositionResponse.from_position(position)
         else:
             # 正常开仓模式
             
@@ -250,23 +238,7 @@ async def open_position(
             await db.commit()
             await db.refresh(position)
             
-            return PositionResponse(
-                id=position.id,
-                user_id=position.user_id,
-                symbol=position.symbol,
-                side=position.side,
-                status=position.status,
-                size=position.size,
-                entry_price=position.entry_price,
-                leverage=position.leverage,
-                margin=position.margin,
-                margin_mode=position.margin_mode,
-                liquidation_price=position.liquidation_price,
-                stop_loss=position.stop_loss,
-                take_profit=position.take_profit,
-                realized_pnl=position.realized_pnl,
-                created_at=position.created_at.isoformat() + "Z",
-            )
+            return PositionResponse.from_position(position)
         
     except InsufficientMarginError as e:
         await db.rollback()
@@ -333,23 +305,7 @@ async def close_position(
         await db.refresh(position)
         
         return ClosePositionResponse(
-            position=PositionResponse(
-                id=position.id,
-                user_id=position.user_id,
-                symbol=position.symbol,
-                side=position.side,
-                status=position.status,
-                size=position.size,
-                entry_price=position.entry_price,
-                leverage=position.leverage,
-                margin=position.margin,
-                margin_mode=position.margin_mode,
-                liquidation_price=position.liquidation_price,
-                stop_loss=position.stop_loss,
-                take_profit=position.take_profit,
-                realized_pnl=position.realized_pnl,
-                created_at=position.created_at.isoformat() + "Z",
-            ),
+            position=PositionResponse.from_position(position),
             realized_pnl=pnl,
         )
         
@@ -460,23 +416,7 @@ async def set_tp_sl(
     await db.commit()
     await db.refresh(position)
     
-    return PositionResponse(
-        id=position.id,
-        user_id=position.user_id,
-        symbol=position.symbol,
-        side=position.side,
-        status=position.status,
-        size=position.size,
-        entry_price=position.entry_price,
-        leverage=position.leverage,
-        margin=position.margin,
-        margin_mode=position.margin_mode,
-        liquidation_price=position.liquidation_price,
-        stop_loss=position.stop_loss,
-        take_profit=position.take_profit,
-        realized_pnl=position.realized_pnl,
-        created_at=position.created_at.isoformat() + "Z",
-    )
+    return PositionResponse.from_position(position)
 
 
 # ==================== 动态强平价格 (Cross Margin) ====================

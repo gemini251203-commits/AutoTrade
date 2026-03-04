@@ -20,8 +20,8 @@ Wallet Model (简化版)
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from sqlalchemy import Numeric, DateTime, CheckConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Numeric, DateTime, CheckConstraint, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.core.time_utils import utc_now
@@ -47,7 +47,13 @@ class Wallet(Base):
     __tablename__ = "wallets"
     
     # 主键: 用户 ID (一个用户一个钱包)
-    user_id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    
+    # ORM 关联
+    user = relationship("User", lazy="noload")
     
     # 可用余额 (使用 Numeric 确保精度, 严禁 float!)
     # precision=20: 总共 20 位数字
