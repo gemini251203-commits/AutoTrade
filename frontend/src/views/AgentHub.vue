@@ -1083,7 +1083,7 @@ function selectDay(day: number | null) {
       v-model:show="showEditModal"
       preset="card"
       :title="editingAgent ? `Edit ${editingAgent.name}` : 'Create Agent'"
-      style="max-width: 600px; max-height: 90vh;"
+      style="max-width: 760px; max-height: 90vh;"
       :mask-closable="false"
     >
       <div class="space-y-4 overflow-auto" style="max-height: 70vh;">
@@ -1165,28 +1165,30 @@ function selectDay(day: number | null) {
         <div>
           <div class="flex items-center justify-between mb-2">
             <label class="text-[11px] text-gray-500 font-semibold">
-              工具权限
-              <span class="text-gray-700 font-normal ml-2">— 勾选授权此 Agent 使用的工具，未勾选的工具不会发送给 AI</span>
+              🔒 工具权限
+              <span class="text-gray-600 font-normal ml-1">勾选授权工具，未勾选工具不会发送给 AI</span>
             </label>
-            <div class="flex gap-2">
-              <NButton size="tiny" quaternary @click="selectAllTools" class="!text-[10px]">全选</NButton>
-              <NButton size="tiny" quaternary @click="deselectAllTools" class="!text-[10px]">全不选</NButton>
-              <NTag v-if="editForm.allowed_tools !== null && editForm.allowed_tools !== undefined" size="small" type="info">
-                {{ editForm.allowed_tools.length }}/{{ allTools.length }}
+            <div class="flex items-center gap-2">
+              <NButton size="tiny" quaternary @click="selectAllTools" class="!text-[10px] !text-blue-400">全选</NButton>
+              <span class="text-gray-700">|</span>
+              <NButton size="tiny" quaternary @click="deselectAllTools" class="!text-[10px] !text-gray-500">全不选</NButton>
+              <NTag v-if="editForm.allowed_tools !== null && editForm.allowed_tools !== undefined" size="small" :bordered="false" style="background: rgba(99,102,241,0.15); color: #818cf8;">
+                {{ editForm.allowed_tools.length }} / {{ allTools.length }}
               </NTag>
-              <NTag v-else size="small" type="success">全部</NTag>
+              <NTag v-else size="small" :bordered="false" style="background: rgba(34,197,94,0.15); color: #4ade80;">全部可用</NTag>
             </div>
           </div>
 
-          <div v-if="toolsLoading" class="flex items-center justify-center py-4">
+          <div v-if="toolsLoading" class="flex items-center justify-center py-6">
             <NSpin size="small" />
           </div>
 
-          <div v-else class="rounded-lg border border-white/10 overflow-hidden" style="background: rgba(0,0,0,0.2); max-height: 280px; overflow-y: auto;">
-            <div v-for="(tools, category) in toolsByCategory" :key="category" class="border-b border-white/5 last:border-b-0">
+          <div v-else class="rounded-lg border border-white/8 overflow-hidden" style="background: rgba(0,0,0,0.15); max-height: 320px; overflow-y: auto;">
+            <div v-for="(tools, category) in toolsByCategory" :key="category">
               <!-- 分类头 -->
               <div
-                class="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-white/5 transition-colors"
+                class="flex items-center gap-2 px-3 py-1.5 cursor-pointer select-none"
+                style="background: rgba(255,255,255,0.03); border-bottom: 1px solid rgba(255,255,255,0.04);"
                 @click="toggleCategory(category as string)"
               >
                 <NCheckbox
@@ -1195,15 +1197,16 @@ function selectDay(day: number | null) {
                   @update:checked="toggleCategory(category as string)"
                   @click.stop
                 />
-                <span class="text-[11px] font-semibold text-gray-300">{{ category }}</span>
-                <span class="text-[10px] text-gray-600 ml-auto">{{ tools.length }} 个工具</span>
+                <span class="text-[11px] font-semibold text-gray-300 tracking-wide">{{ category }}</span>
+                <span class="text-[10px] text-gray-600 ml-auto">{{ tools.length }}工具</span>
               </div>
-              <!-- 工具列表 -->
-              <div class="grid grid-cols-2 gap-0 px-3 pb-1.5">
+              <!-- 工具列表: 三列卡片式 -->
+              <div class="grid grid-cols-3 gap-x-1 gap-y-0 px-2 py-1" style="border-bottom: 1px solid rgba(255,255,255,0.03);">
                 <div
                   v-for="tool in tools"
                   :key="tool.name"
-                  class="flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-white/5 cursor-pointer transition-colors"
+                  class="flex items-center gap-1.5 py-1 px-1.5 rounded cursor-pointer transition-colors"
+                  :class="isToolChecked(tool.name) ? 'hover:bg-white/5' : 'opacity-50 hover:opacity-80 hover:bg-white/5'"
                   @click="toggleTool(tool.name)"
                 >
                   <NCheckbox
@@ -1212,18 +1215,22 @@ function selectDay(day: number | null) {
                     @click.stop
                     size="small"
                   />
-                  <span class="text-[11px] text-gray-400 truncate" :title="tool.description">
-                    {{ tool.description.length > 14 ? tool.description.slice(0, 14) + '...' : tool.description }}
-                  </span>
                   <span
-                    class="text-[9px] px-1 rounded ml-auto flex-shrink-0"
-                    :class="tool.access_type === 'execute' ? 'bg-red-500/15 text-red-400' : 'bg-blue-500/15 text-blue-400'"
-                  >
-                    {{ tool.access_type === 'execute' ? '执行' : '只读' }}
+                    class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    :style="{ background: tool.access_type === 'execute' ? '#f87171' : '#60a5fa' }"
+                    :title="tool.access_type === 'execute' ? '执行类' : '只读类'"
+                  />
+                  <span class="text-[11px] text-gray-400 truncate" :title="tool.description">
+                    {{ tool.description }}
                   </span>
                 </div>
               </div>
             </div>
+          </div>
+          <!-- 图例 -->
+          <div class="flex items-center gap-4 mt-1.5 text-[10px] text-gray-600">
+            <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block"></span> 只读查询</span>
+            <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-red-400 inline-block"></span> 执行操作</span>
           </div>
         </div>
       </div>
