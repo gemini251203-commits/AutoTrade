@@ -187,8 +187,8 @@ class StrategyLog(Base):
         nullable=True,
         comment="关联的订单 ID",
     )
-    pnl: Mapped[Optional[float]] = mapped_column(
-        Float,
+    pnl: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 8),
         nullable=True,
         comment="盈亏 (USDT)",
     )
@@ -254,13 +254,13 @@ class TradeMemory(Base):
         nullable=True,
         comment="方向: long/short",
     )
-    entry_price: Mapped[Optional[float]] = mapped_column(
-        Float,
+    entry_price: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 8),
         nullable=True,
         comment="开仓价格",
     )
-    exit_price: Mapped[Optional[float]] = mapped_column(
-        Float,
+    exit_price: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 8),
         nullable=True,
         comment="平仓价格",
     )
@@ -269,8 +269,8 @@ class TradeMemory(Base):
         nullable=True,
         comment="杠杆倍数",
     )
-    margin_used: Mapped[Optional[float]] = mapped_column(
-        Float,
+    margin_used: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 8),
         nullable=True,
         comment="使用保证金 (USDT)",
     )
@@ -280,19 +280,19 @@ class TradeMemory(Base):
         String(10),
         comment="win / loss / breakeven",
     )
-    pnl_pct: Mapped[float] = mapped_column(
-        Float,
+    pnl_pct: Mapped[Decimal] = mapped_column(
+        Numeric(20, 8),
         comment="盈亏百分比 (ROE)",
     )
-    pnl_usdt: Mapped[Optional[float]] = mapped_column(
-        Float,
+    pnl_usdt: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 8),
         nullable=True,
         comment="盈亏金额 (USDT)",
     )
-    commission: Mapped[Optional[float]] = mapped_column(
-        Float,
+    commission: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 8),
         nullable=True,
-        default=0,
+        default=Decimal("0"),
         comment="手续费 (USDT)",
     )
     duration_minutes: Mapped[Optional[int]] = mapped_column(

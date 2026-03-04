@@ -47,12 +47,15 @@ async def validate_startup_config():
     
     # ==================== 安全检查 ====================
     
-    # JWT Secret
-    if settings.jwt_secret_key == "your-secret-key":
-        if settings.env_type == "production":
-            issues.append("JWT_SECRET_KEY is using default value in PRODUCTION!")
-        else:
-            warnings.append("JWT_SECRET_KEY is using default value (ok for development)")
+    # JWT Secret — 空值或已知不安全默认值
+    _unsafe_jwt_keys = {"", "your-secret-key", "your-secret-key-change-in-production"}
+    if settings.jwt_secret_key in _unsafe_jwt_keys:
+        issues.append(
+            "JWT_SECRET_KEY is empty or using a known insecure default! "
+            "Please set a random key (e.g. python -c \"import secrets; print(secrets.token_hex(32))\")"
+        )
+    elif len(settings.jwt_secret_key) < 32:
+        warnings.append("JWT_SECRET_KEY is shorter than 32 characters, consider using a longer key")
     
     # ==================== 交易所配置 ====================
     

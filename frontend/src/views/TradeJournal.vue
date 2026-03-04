@@ -162,11 +162,13 @@ function formatDuration(min: number | null): string {
   return `${days}天${remHours}小时`
 }
 
-function formatPrice(price: number | null): string {
+function formatPrice(price: string | number | null | undefined): string {
   if (price === null || price === undefined) return '-'
-  if (price >= 1000) return price.toFixed(1)
-  if (price >= 1) return price.toFixed(2)
-  return price.toFixed(4)
+  const n = typeof price === 'string' ? parseFloat(price) : price
+  if (isNaN(n)) return '-'
+  if (n >= 1000) return n.toFixed(1)
+  if (n >= 1) return n.toFixed(2)
+  return n.toFixed(4)
 }
 
 const formatTime = formatDateTimeBJ
@@ -290,7 +292,7 @@ onMounted(fetchAll)
               if(!acc[m.symbol]) acc[m.symbol] = { w:0, t:0, pnl:0 };
               acc[m.symbol]!.t++;
               if(m.trade_result === 'win') acc[m.symbol]!.w++;
-              acc[m.symbol]!.pnl += (m.pnl_usdt || 0);
+              acc[m.symbol]!.pnl += parseFloat(String(m.pnl_usdt || 0));
               return acc;
             }, {} as Record<string, any>)).sort((a,b) => {
               const d = memories.reduce((acc, m) => { acc[m.symbol] = (acc[m.symbol] || 0) + 1; return acc; }, {} as Record<string, number>);
@@ -302,8 +304,8 @@ onMounted(fetchAll)
             <div class="sym-name mono">{{ sym }}</div>
             <div class="sym-data">
               <span class="sym-rate">{{ Math.round((memories.filter(m => m.symbol === sym && m.trade_result === 'win').length / memories.filter(m => m.symbol === sym).length) * 100) }}% 胜率</span>
-              <span class="sym-pnl mono" :style="{ color: memories.filter(m => m.symbol === sym).reduce((s, m) => s + (m.pnl_usdt || 0), 0)! >= 0 ? '#22c55e' : '#ef4444' }">
-                {{ memories.filter(m => m.symbol === sym).reduce((s, m) => s + (m.pnl_usdt || 0), 0)! >= 0 ? '+' : '' }}{{ memories.filter(m => m.symbol === sym).reduce((s, m) => s + (m.pnl_usdt || 0), 0)!.toFixed(2) }}
+              <span class="sym-pnl mono" :style="{ color: memories.filter(m => m.symbol === sym).reduce((s, m) => s + parseFloat(String(m.pnl_usdt || 0)), 0)! >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ memories.filter(m => m.symbol === sym).reduce((s, m) => s + parseFloat(String(m.pnl_usdt || 0)), 0)! >= 0 ? '+' : '' }}{{ memories.filter(m => m.symbol === sym).reduce((s, m) => s + parseFloat(String(m.pnl_usdt || 0)), 0)!.toFixed(2) }}
               </span>
             </div>
           </div>
@@ -381,9 +383,9 @@ onMounted(fetchAll)
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
               <div class="mem-pnl" :class="mem.trade_result">
-                <span class="pnl-pct">{{ mem.pnl_pct >= 0 ? '+' : '' }}{{ mem.pnl_pct.toFixed(2) }}%</span>
+                <span class="pnl-pct">{{ parseFloat(String(mem.pnl_pct)) >= 0 ? '+' : '' }}{{ parseFloat(String(mem.pnl_pct)).toFixed(2) }}%</span>
                 <span class="pnl-usdt" v-if="mem.pnl_usdt !== null">
-                  {{ mem.pnl_usdt >= 0 ? '+' : '' }}{{ mem.pnl_usdt.toFixed(2) }} USDT
+                  {{ parseFloat(String(mem.pnl_usdt)) >= 0 ? '+' : '' }}{{ parseFloat(String(mem.pnl_usdt)).toFixed(2) }} USDT
                 </span>
               </div>
               <NPopconfirm @positive-click="deleteMemory(mem.id)">

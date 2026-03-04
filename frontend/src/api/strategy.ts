@@ -64,7 +64,7 @@ export interface StrategyLogResponse {
   risk_passed: boolean | null
   risk_reason: string | null
   order_id: number | null
-  pnl: number | null
+  pnl: string | null           // Decimal → string
   created_at: string
 }
 
@@ -85,13 +85,13 @@ export interface TradeMemoryResponse {
   symbol: string
   source: string | null
   side: string | null
-  entry_price: number | null
-  exit_price: number | null
+  entry_price: string | null    // Decimal → string
+  exit_price: string | null     // Decimal → string
   leverage: number | null
-  margin_used: number | null
+  margin_used: string | null    // Decimal → string
   trade_result: string
-  pnl_pct: number
-  pnl_usdt: number | null
+  pnl_pct: string               // Decimal → string
+  pnl_usdt: string | null       // Decimal → string
   duration_minutes: number | null
   close_reason: string | null
   had_stop_loss: boolean | null

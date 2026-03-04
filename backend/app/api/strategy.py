@@ -88,11 +88,10 @@ class StrategyLogResponse(BaseModel):
     risk_passed: Optional[bool] = None
     risk_reason: Optional[str] = None
     order_id: Optional[int] = None
-    pnl: Optional[float] = None
+    pnl: Optional[Decimal] = None
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True, "json_encoders": {Decimal: str}}
 
 
 class TemplateResponse(BaseModel):

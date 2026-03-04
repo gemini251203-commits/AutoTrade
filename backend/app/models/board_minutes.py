@@ -14,11 +14,12 @@ Board Minutes Model
 """
 
 from datetime import datetime, date
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
     String, Integer, Float, Text, DateTime, Date,
-    ForeignKey, Index, JSON, UniqueConstraint,
+    ForeignKey, Index, JSON, UniqueConstraint, Numeric,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -73,9 +74,9 @@ class BoardMinutes(Base):
         default=0,
         comment="当日交易笔数",
     )
-    pnl_total: Mapped[float] = mapped_column(
-        Float,
-        default=0.0,
+    pnl_total: Mapped[Decimal] = mapped_column(
+        Numeric(20, 8),
+        default=Decimal("0"),
         comment="当日总盈亏 USDT",
     )
     agents_mentioned: Mapped[Optional[list]] = mapped_column(

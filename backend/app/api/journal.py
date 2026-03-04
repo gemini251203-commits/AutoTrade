@@ -32,13 +32,13 @@ class TradeMemoryResponse(BaseModel):
     symbol: str
     source: Optional[str] = None
     side: Optional[str] = None
-    entry_price: Optional[float] = None
-    exit_price: Optional[float] = None
+    entry_price: Optional[Decimal] = None
+    exit_price: Optional[Decimal] = None
     leverage: Optional[int] = None
-    margin_used: Optional[float] = None
+    margin_used: Optional[Decimal] = None
     trade_result: str
-    pnl_pct: float
-    pnl_usdt: Optional[float] = None
+    pnl_pct: Decimal
+    pnl_usdt: Optional[Decimal] = None
     duration_minutes: Optional[int] = None
     close_reason: Optional[str] = None
     had_stop_loss: Optional[bool] = None
@@ -49,8 +49,7 @@ class TradeMemoryResponse(BaseModel):
     strategy_name: Optional[str] = None
     created_at: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True, "json_encoders": {Decimal: str}}
 
 
 class JournalStatsResponse(BaseModel):

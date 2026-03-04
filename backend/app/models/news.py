@@ -10,11 +10,12 @@ News Models
 """
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
     String, Integer, Float, Text, Boolean, DateTime,
-    ForeignKey, Index, JSON,
+    ForeignKey, Index, JSON, Numeric,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -253,9 +254,9 @@ class NewsAlert(Base):
         default=0,
         comment="亏损次数",
     )
-    total_pnl: Mapped[float] = mapped_column(
-        Float,
-        default=0.0,
+    total_pnl: Mapped[Decimal] = mapped_column(
+        Numeric(20, 8),
+        default=Decimal("0"),
         comment="总盈亏 (USDT)",
     )
     last_triggered_at: Mapped[Optional[datetime]] = mapped_column(
@@ -353,8 +354,8 @@ class NewsThinking(Base):
         nullable=True,
         comment="交易结果: win/loss/breakeven (平仓后回填)",
     )
-    trade_pnl: Mapped[Optional[float]] = mapped_column(
-        Float,
+    trade_pnl: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 8),
         nullable=True,
         comment="盈亏金额 USDT (平仓后回填)",
     )

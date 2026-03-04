@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     https_proxy: str = ""
     
     # 数据库 (默认使用 PostgreSQL)
-    database_url: str = "postgresql+asyncpg://autotrade:autotrade_secret_2026@127.0.0.1:5432/autotrade"
+    database_url: str = ""
     
     # Redis
     redis_url: str = "redis://127.0.0.1:6379/0"
@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     binance_testnet: bool = True
     
     # JWT 配置
-    jwt_secret_key: str = "your-secret-key"
+    jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440
     
