@@ -1449,8 +1449,8 @@ onMounted(() => {
             <span v-if="log.risk_passed !== null">
               风控: {{ log.risk_passed ? '通过' : '拦截' }}
             </span>
-            <span v-if="log.pnl !== null" :style="{ color: pnlColor(log.pnl) }">
-              PnL: {{ log.pnl >= 0 ? '+' : '' }}{{ log.pnl.toFixed(2) }}
+            <span v-if="log.pnl !== null" :style="{ color: pnlColor(parseFloat(String(log.pnl))) }">
+              PnL: {{ parseFloat(String(log.pnl)) >= 0 ? '+' : '' }}{{ parseFloat(String(log.pnl)).toFixed(2) }}
             </span>
           </div>
           <div v-if="log.ai_reason" class="text-xs text-gray-600 mt-1 truncate">{{ log.ai_reason }}</div>
