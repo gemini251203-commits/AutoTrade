@@ -86,7 +86,7 @@ class OrderExecutor:
         price: Optional[Decimal] = None,
         trigger_price: Optional[Decimal] = None,
         leverage: int = 1,
-        position_side: Optional[PositionSideEnum] = None,
+        position_side: Optional[PositionSide] = None,
         reduce_only: bool = False,
         stop_loss: Optional[Decimal] = None,
         take_profit: Optional[Decimal] = None,
@@ -119,7 +119,7 @@ class OrderExecutor:
         
         # 确定仓位方向
         if position_side is None:
-            position_side = PositionSideEnum.LONG if side == OrderSide.BUY else PositionSideEnum.SHORT
+            position_side = PositionSide.LONG if side == OrderSide.BUY else PositionSide.SHORT
         
         logger.info(
             f"[OrderExecutor] Creating order: user={user_id}, "
@@ -529,14 +529,14 @@ class OrderExecutor:
             
             if order.order_type in (OrderType.STOP_MARKET, OrderType.STOP_LIMIT):
                 # 止损单: 多单价格跌破触发价 / 空单价格涨破触发价
-                if order.position_side == PositionSideEnum.LONG:
+                if order.position_side == PositionSide.LONG:
                     triggered = current_price <= order.trigger_price
                 else:
                     triggered = current_price >= order.trigger_price
                     
             elif order.order_type in (OrderType.TAKE_PROFIT_MARKET, OrderType.TAKE_PROFIT_LIMIT):
                 # 止盈单: 多单价格涨破触发价 / 空单价格跌破触发价
-                if order.position_side == PositionSideEnum.LONG:
+                if order.position_side == PositionSide.LONG:
                     triggered = current_price >= order.trigger_price
                 else:
                     triggered = current_price <= order.trigger_price
