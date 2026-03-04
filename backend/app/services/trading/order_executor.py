@@ -24,7 +24,7 @@ from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from loguru import logger
 
-from app.models.order import Order, OrderSide, OrderType, OrderStatus, PositionSideEnum
+from app.models.order import Order, OrderSide, OrderType, OrderStatus
 from app.models.position import Position, PositionSide, PositionStatus
 from app.services.trading import PositionManager, InsufficientMarginError
 from app.services.wallet import WalletManager, InsufficientFundsError

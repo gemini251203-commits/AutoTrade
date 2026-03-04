@@ -232,7 +232,7 @@ app.include_router(pipeline.router, prefix="/api/pipeline", tags=["Pipeline"])
 app.include_router(trend.router, prefix="/api/trend", tags=["Trend"])
 app.include_router(funding.router, prefix="/api/funding", tags=["Funding"])
 app.include_router(risk_config.router, prefix="/api/risk-config", tags=["RiskConfig"])
-app.include_router(hub.router, prefix="/api", tags=["Agent Hub"])
+app.include_router(hub.router, prefix="/api/hub", tags=["Agent Hub"])
 
 
 

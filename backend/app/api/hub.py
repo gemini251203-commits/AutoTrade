@@ -27,7 +27,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.models.hub_agent import HubAgent, HubAgentStatus
 from app.core.time_utils import utc_now
 
-router = APIRouter(prefix="/hub", tags=["Agent Hub"])
+router = APIRouter(tags=["Agent Hub"])
 
 
 # ============================================================

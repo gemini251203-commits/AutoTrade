@@ -75,8 +75,8 @@ class ExecutionModel:
             # 4. 可选参数
             position_side = None
             if hasattr(target, 'position_side') and target.position_side:
-                from app.models.order import PositionSideEnum
-                position_side = PositionSideEnum(target.position_side)
+                from app.models.position import PositionSide
+                position_side = PositionSide(target.position_side)
             
             reduce_only = getattr(target, 'reduce_only', False)
             price = getattr(target, 'price', None)

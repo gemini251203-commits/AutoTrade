@@ -559,158 +559,22 @@ async def reset_wallet(
     - 删除所有趋势分析快照
     - 重置钱包余额
     """
-    from sqlalchemy import delete, update, select
-    from app.models.wallet_transaction import WalletTransaction, TransactionType
-    from app.models.order import Order
-    from app.models.position import Position
-    from app.models.grid_bot import GridBot
-    from app.models.task import TaskTicket
-    from app.models.strategy import Strategy, StrategyLog, TradeMemory
-    from app.models.autopilot_log import AutopilotLog
-    from app.models.news import NewsAlert, NewsThinking
-    from app.models.agent import ChatConversation, ChatMessage
-    from app.models.trend_scheme import TrendScheme, TrendSnapshot
-    from app.models.scratchpad import AnalysisScratchpad
-    import os
-
-    user_id = current_user.id
+    from app.services.wallet.reset_service import ResetService
     
-    logger.info(f"[Wallet] User {user_id} starting full account reset...")
-    
-    # ==================== 清空所有用户数据 ====================
-    
-    # 1. 订单
-    await db.execute(delete(Order).where(Order.user_id == user_id))
-    logger.info(f"[Wallet] Deleted all orders")
-    
-    # 2. 仓位
-    await db.execute(delete(Position).where(Position.user_id == user_id))
-    logger.info(f"[Wallet] Deleted all positions")
-    
-    # 3. 网格机器人
-    await db.execute(delete(GridBot).where(GridBot.user_id == user_id))
-    logger.info(f"[Wallet] Deleted all grid bots")
-    
-    # 4. AI 任务
-    await db.execute(delete(TaskTicket).where(TaskTicket.user_id == user_id))
-    logger.info(f"[Wallet] Deleted all AI tasks")
-    
-    # 5. 交易记忆 / 日记
-    await db.execute(delete(TradeMemory).where(TradeMemory.user_id == user_id))
-    logger.info(f"[Wallet] Deleted all trade memories")
-    
-    # 6. 钱包流水
-    await db.execute(delete(WalletTransaction).where(WalletTransaction.user_id == user_id))
-    logger.info(f"[Wallet] Deleted all transactions")
-    
-    # 7. 策略日志
-    # 先删日志再删策略 (外键依赖)
-    user_strategy_ids = (
-        await db.execute(
-            select(Strategy.id).where(Strategy.user_id == user_id)
-        )
-    ).scalars().all()
-    if user_strategy_ids:
-        await db.execute(
-            delete(StrategyLog).where(StrategyLog.strategy_id.in_(user_strategy_ids))
-        )
-    logger.info(f"[Wallet] Deleted all strategy logs")
-    
-    # 8. 策略 → 保留定义, 只清日志
-    # (Strategy 不删除, 保留用户创建的策略配置)
-    logger.info(f"[Wallet] Strategies preserved (only logs cleared)")
-    
-    # 9. 自动交易日志
-    await db.execute(delete(AutopilotLog).where(AutopilotLog.user_id == user_id))
-    logger.info(f"[Wallet] Deleted all autopilot logs")
-    
-    # 10. 新闻 AI 思考记录
-    await db.execute(delete(NewsThinking).where(NewsThinking.user_id == user_id))
-    logger.info(f"[Wallet] Deleted all news thinkings")
-    
-    # 11. 新闻监控规则
-    await db.execute(delete(NewsAlert).where(NewsAlert.user_id == user_id))
-    logger.info(f"[Wallet] Deleted all news alerts")
-    
-    # 12. AI 对话消息 (先删消息再删会话)
-    user_conv_ids = (
-        await db.execute(
-            select(ChatConversation.id).where(ChatConversation.user_id == user_id)
-        )
-    ).scalars().all()
-    if user_conv_ids:
-        await db.execute(
-            delete(ChatMessage).where(ChatMessage.conversation_id.in_(user_conv_ids))
-        )
-    await db.execute(delete(ChatConversation).where(ChatConversation.user_id == user_id))
-    logger.info(f"[Wallet] Deleted all chat conversations and messages")
-    
-    # 13. 趋势分析快照
-    user_scheme_ids = (
-        await db.execute(
-            select(TrendScheme.id).where(TrendScheme.user_id == user_id)
-        )
-    ).scalars().all()
-    if user_scheme_ids:
-        await db.execute(
-            delete(TrendSnapshot).where(TrendSnapshot.scheme_id.in_(user_scheme_ids))
-        )
-    logger.info(f"[Wallet] Deleted all trend snapshots")
-    
-    # 14. 重置趋势方案缓存 (保留方案本身，但清空结果)
-    await db.execute(
-        update(TrendScheme).where(TrendScheme.user_id == user_id).values(
-            last_result=None,
-            last_run_at=None,
-        )
-    )
-    logger.info(f"[Wallet] Reset all trend scheme results")
-    
-    # 15. AI 分析记事本 (Autopilot / AI Reviewer 的跨周期记忆)
-    await db.execute(delete(AnalysisScratchpad).where(AnalysisScratchpad.user_id == user_id))
-    logger.info(f"[Wallet] Deleted all analysis scratchpads")
-    
-    # ==================== 重置钱包 ====================
-    initial = req.initial_balance if (req and req.initial_balance) else Decimal(
-        os.getenv("SIMULATION_INITIAL_BALANCE", "100")
-    )
-    
-    wallet = await WalletManager.get_wallet(db, user_id)
-    if not wallet:
-        wallet = await WalletManager.initialize_wallet(db, user_id)
-    
-    # 记录重置前余额
-    old_balance = wallet.balance + wallet.frozen
-    
-    wallet.balance = initial
-    wallet.frozen = Decimal("0")
-    wallet.total_pnl = Decimal("0")
-    # total_equity 是 @property (= balance + frozen)，无需赋值
-    # unrealized_pnl 是实时计算值，不存储在数据库中
-    
-    # 记录重置流水
-    tx = WalletTransaction(
-        user_id=user_id,
-        type=TransactionType.RESET.value,
-        amount=initial,
-        balance_after=initial,
-        note=f"Full account reset to {initial} USDT (was {old_balance} USDT)",
-    )
-    db.add(tx)
+    initial = req.initial_balance if (req and req.initial_balance) else None
     
     try:
-        await db.commit()
-        await db.refresh(wallet)
+        wallet = await ResetService.full_reset(
+            db=db,
+            user_id=current_user.id,
+            initial_balance=initial,
+        )
+        return wallet
     except Exception as e:
-        await db.rollback()
-        logger.error(f"[Wallet] Reset failed for user {user_id}: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"账户重置失败: {str(e)}",
         )
-    
-    logger.info(f"[Wallet] User {user_id} account fully reset to {initial} USDT (cleared 15 tables, strategies preserved)")
-    return wallet
 
 
 # ==================== Admin: Fix Frozen Funds ====================

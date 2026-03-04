@@ -74,7 +74,7 @@ class InvalidTransitionError(Exception):
 # 仓位方向统一使用 position.py 中的 PositionSide
 from app.models.position import PositionSide
 from app.core.time_utils import utc_now
-PositionSideEnum = PositionSide  # 向后兼容别名
+# PositionSideEnum 已废弃，请直接使用 PositionSide
 
 
 class Order(Base):
