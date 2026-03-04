@@ -119,8 +119,8 @@ class HubBrain:
             yield json.dumps({"type": "error", "content": "无法初始化 AI 客户端"})
             return
         
-        # 4. 获取工具定义
-        tools_spec = self._get_tools_spec()
+        # 4. 获取工具定义 (根据 agent 的 allowed_tools 过滤)
+        tools_spec = self._get_tools_spec(allowed_tools=agent.allowed_tools)
         
         # 5. 调用 AI (支持多轮 tool_call)
         max_rounds = 15
@@ -158,9 +158,10 @@ class HubBrain:
                         "args": tool_args,
                     })
                     
-                    # 执行工具
+                    # 执行工具 (传入 allowed_tools 进行授权检查)
                     tool_result = await self._execute_tool(
                         tool_name, tool_args, db, user_id,
+                        allowed_tools=agent.allowed_tools,
                     )
                     
                     yield json.dumps({
@@ -404,13 +405,24 @@ class HubBrain:
             base_url=base_url,
         )
     
-    def _get_tools_spec(self) -> list:
-        """获取工具定义 (OpenAI function calling format)"""
+    def _get_tools_spec(self, allowed_tools: list | None = None) -> list:
+        """获取工具定义 (OpenAI function calling format)
+        
+        Args:
+            allowed_tools: 授权工具列表.
+                None = 全部工具可用 (默认/向后兼容)
+                [] = 禁用所有工具
+                ['get_price', 'place_order'] = 仅指定工具
+        """
         from app.services.agent.tools import TOOL_REGISTRY
         import inspect
         
         tools = []
         for name, func in TOOL_REGISTRY.items():
+            # 🔒 权限过滤: 如果 allowed_tools 不为 None, 只保留列表内的工具
+            if allowed_tools is not None and name not in allowed_tools:
+                continue
+            
             # 从函数签名提取参数
             sig = inspect.signature(func)
             properties = {}
@@ -461,9 +473,15 @@ class HubBrain:
         tool_args: dict,
         db: AsyncSession,
         user_id: int,
+        allowed_tools: list | None = None,
     ) -> str:
         """执行工具并返回结果"""
         from app.services.agent.tools import TOOL_REGISTRY, agent_source_var
+        
+        # 🔒 授权检查: 拒绝未授权的工具调用
+        if allowed_tools is not None and tool_name not in allowed_tools:
+            logger.warning(f"[HubBrain] Tool '{tool_name}' blocked by allowed_tools policy")
+            return json.dumps({"error": f"工具 '{tool_name}' 未授权，请在 Agent 配置中启用"})
         
         # 设置来源为 hub，让交易日志正确标注
         agent_source_var.set('hub')

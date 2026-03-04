@@ -46,6 +46,7 @@ class HubAgentCreateRequest(BaseModel):
     system_prompt: str = ""
     temperature: float = 0.7
     polling_interval: int = 5
+    allowed_tools: Optional[List[str]] = None  # null=全部, []=禁用, ["get_price",...]=指定
 
 
 class HubAgentUpdateRequest(BaseModel):
@@ -60,6 +61,7 @@ class HubAgentUpdateRequest(BaseModel):
     system_prompt: Optional[str] = None
     temperature: Optional[float] = None
     polling_interval: Optional[int] = None
+    allowed_tools: Optional[List[str]] = None  # 显式设置, 覆盖旧值
 
 
 class HubAgentActionRequest(BaseModel):
@@ -86,6 +88,7 @@ class HubAgentResponse(BaseModel):
     total_runs: int
     total_trades: int
     polling_interval: int = 5
+    allowed_tools: Optional[List[str]] = None
     created_at: str
     updated_at: str
     
@@ -140,6 +143,7 @@ def _agent_to_response(agent: HubAgent) -> HubAgentResponse:
         total_runs=agent.total_runs,
         total_trades=agent.total_trades,
         polling_interval=agent.polling_interval if hasattr(agent, 'polling_interval') else 5,
+        allowed_tools=agent.allowed_tools if hasattr(agent, 'allowed_tools') else None,
         created_at=agent.created_at.isoformat() if agent.created_at else "",
         updated_at=agent.updated_at.isoformat() if agent.updated_at else "",
     )
@@ -224,6 +228,7 @@ async def create_agent(
         system_prompt=body.system_prompt,
         temperature=body.temperature,
         polling_interval=body.polling_interval,
+        allowed_tools=body.allowed_tools,
     )
     db.add(agent)
     await db.commit()

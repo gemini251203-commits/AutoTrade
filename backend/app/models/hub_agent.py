@@ -12,7 +12,7 @@ from typing import Optional
 
 from sqlalchemy import (
     String, Integer, Float, Text, DateTime, Boolean,
-    ForeignKey, Index, Enum as SQLEnum,
+    ForeignKey, Index, Enum as SQLEnum, JSON,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -146,6 +146,14 @@ class HubAgent(Base):
         default=5,
         server_default="5",
         comment="轮询间隔(分钟): 1/5/15/60",
+    )
+    
+    # === 工具权限 ===
+    allowed_tools: Mapped[Optional[list]] = mapped_column(
+        JSON,
+        nullable=True,
+        default=None,
+        comment="授权工具列表 (JSON数组). null=全部, []=禁用, ['get_price','place_order']=指定",
     )
     
     # === 时间戳 ===
