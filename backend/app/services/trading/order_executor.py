@@ -369,9 +369,33 @@ class OrderExecutor:
             elif note.startswith("[AutoPilot]"):
                 source = "autopilot"
                 open_reason = note[11:].strip()
+            elif note.startswith("[Hub]"):
+                source = "hub"
+                open_reason = note[5:].strip()
+            elif note.startswith("[Pipeline:hub]"):
+                source = "hub"
+                open_reason = note[14:].strip()
+            elif note.startswith("[Pipeline:autopilot]"):
+                source = "autopilot"
+                open_reason = note[20:].strip()
+            elif note.startswith("[Pipeline:agent]"):
+                source = "agent"
+                open_reason = note[16:].strip()
+            elif note.startswith("[Pipeline:"):
+                # 通用 Pipeline source 提取: [Pipeline:xxx]
+                import re
+                m = re.match(r'\[Pipeline:(\w+)\]', note)
+                if m:
+                    source = m.group(1)
+                    open_reason = note[len(m.group(0)):].strip()
+                else:
+                    open_reason = note
             elif note.startswith("[Signal]"):
                 source = "signal"
                 open_reason = note[8:].strip()
+            elif note.startswith("[Quant]"):
+                source = "quant"
+                open_reason = note[7:].strip()
             else:
                 open_reason = note
         

@@ -210,6 +210,10 @@ class HubDaemon:
         # ★ 核心改造: 直接遍历 chat_stream, 逐事件推送到 hub_logs
         full_reply = ""
         has_error = False
+        has_trade = False  # ★ 追踪是否产生了交易
+        
+        # ★ 交易检测关键词 — 在 tool_result 中检测更可靠
+        TRADE_KEYWORDS = ["order_id", "订单已", "已下单", "已平仓", '"success": true', '"success":true', "Pipeline"]
         
         try:
             async for event_str in hub_brain.chat_stream(
@@ -252,10 +256,14 @@ class HubDaemon:
                         log_type="tool_call",
                         content=f"[TOOL] {tool_name}({args_str})",
                     ))
+                    # ★ 检测交易工具调用
+                    if tool_name in ("place_order", "close_position"):
+                        has_trade = True  # 调用了下单/平仓工具
                 
                 elif ev_type == "tool_result":
                     # 工具结果 — 写入 hub_logs
-                    result_preview = event.get("result", str(ev_content))[:300]
+                    result_str = event.get("result", str(ev_content))
+                    result_preview = result_str[:300]
                     db.add(HubLog(
                         user_id=user_id,
                         agent_id=agent.id,
@@ -263,9 +271,15 @@ class HubDaemon:
                         log_type="tool_result",
                         content=f"[RESULT] {result_preview}",
                     ))
+                    # ★ 在 tool_result 中检测交易成功（比 full_reply 可靠得多）
+                    if not has_trade and any(kw in result_str for kw in TRADE_KEYWORDS):
+                        has_trade = True
                 
                 elif ev_type == "done":
                     full_reply = ev_content or ""
+                    # ★ 兜底：也在 final reply 中检测
+                    if not has_trade and any(kw in full_reply for kw in TRADE_KEYWORDS):
+                        has_trade = True
                 
                 elif ev_type == "error":
                     has_error = True
@@ -316,13 +330,14 @@ class HubDaemon:
                 except Exception:
                     pass
         
-        # 检查是否产生了交易
-        if any(kw in full_reply for kw in ["order_id", "订单已", "已下单", "已平仓"]):
+        # ★ 检查是否产生了交易 — 多层检测（tool_call 名称 + tool_result 内容 + final reply）
+        if has_trade:
             agent.total_trades += 1
         
         logger.info(
             f"[HubDaemon] Agent #{agent.id} cycle done. "
             f"Runs={agent.total_runs}, Trades={agent.total_trades}"
+            f"{' [TRADED]' if has_trade else ''}"
         )
     
     def _build_cycle_prompt(self, agent: HubAgent) -> str:
