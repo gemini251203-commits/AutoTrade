@@ -21,6 +21,7 @@ from .trend_scheme import TrendScheme, TrendSnapshot
 from .hub_agent import HubAgent, HubAgentStatus
 from .hub_log import HubLog
 from .board_minutes import BoardMinutes
+from .intercepted_order import InterceptedOrder
 
 
 __all__ = [
@@ -60,6 +61,7 @@ __all__ = [
     "HubAgentStatus",
     "HubLog",
     "BoardMinutes",
+    "InterceptedOrder",
 ]
 
 

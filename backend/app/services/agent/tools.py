@@ -30,6 +30,8 @@ from app.core.time_utils import utc_now
 # ==================== 来源上下文 ====================
 # Autopilot 调用前设置此变量，tools 自动使用正确的 note 前缀
 agent_source_var = contextvars.ContextVar('agent_source', default='agent')
+# Agent 名称上下文 — 由 brain.py 设置，用于订单归属追踪
+agent_name_var = contextvars.ContextVar('agent_name', default='')
 
 # ==================== 工具注册表 ====================
 
@@ -291,8 +293,15 @@ async def place_order(
         sl = Decimal(str(stop_loss)) if stop_loss and float(stop_loss) > 0 else None
         tp = Decimal(str(take_profit)) if take_profit and float(take_profit) > 0 else None
 
-        # 根据来源上下文确定 source
+        # 根据来源上下文确定 source 和 agent 名称
         source_label = agent_source_var.get('agent')
+        current_agent_name = agent_name_var.get('')
+        
+        # note 格式: [Hub:deepseek] 下单 或 [Agent] 下单
+        if current_agent_name:
+            note_prefix = f"[{source_label.title()}:{current_agent_name}]"
+        else:
+            note_prefix = f"[{source_label.title()}]"
 
         # ==================== 通过 Pipeline 统一下单 ====================
         from app.core.pipeline import get_pipeline
@@ -329,7 +338,7 @@ async def place_order(
             stop_loss=sl,
             take_profit=tp,
             source=source_label,
-            note=f"[{source_label.title()}] 下单",
+            note=f"{note_prefix} 下单",
             available_balance=available_balance,
             total_equity=total_equity,
             open_positions=open_positions,

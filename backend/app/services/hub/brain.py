@@ -164,6 +164,7 @@ class HubBrain:
                     tool_result = await self._execute_tool(
                         tool_name, tool_args, db, user_id,
                         allowed_tools=agent.allowed_tools,
+                        agent_name=agent.name,
                     )
                     
                     yield json.dumps({
@@ -513,9 +514,10 @@ class HubBrain:
         db: AsyncSession,
         user_id: int,
         allowed_tools: list | None = None,
+        agent_name: str = "",
     ) -> str:
         """执行工具并返回结果"""
-        from app.services.agent.tools import TOOL_REGISTRY, agent_source_var
+        from app.services.agent.tools import TOOL_REGISTRY, agent_source_var, agent_name_var
         
         # 🔒 授权检查: 拒绝未授权的工具调用
         if allowed_tools is not None and tool_name not in allowed_tools:
@@ -524,6 +526,9 @@ class HubBrain:
         
         # 设置来源为 hub，让交易日志正确标注
         agent_source_var.set('hub')
+        # ★ 设置 Agent 名称，用于订单归属追踪
+        if agent_name:
+            agent_name_var.set(agent_name)
         
         func = TOOL_REGISTRY.get(tool_name)
         if not func:

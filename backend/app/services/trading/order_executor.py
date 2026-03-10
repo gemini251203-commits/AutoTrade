@@ -358,32 +358,26 @@ class OrderExecutor:
         # 确定交易来源 (从 order.note 解析)
         source = "manual"
         open_reason = None
+        agent_name = None  # ★ Agent 归属名称
         if order.note:
             note = order.note
-            if note.startswith("[Agent]"):
+            # ★ 新格式: [Hub:deepseek] 下单 → source=hub, agent_name=deepseek
+            import re
+            agent_match = re.match(r'\[(\w+):([^\]]+)\](.*)', note)
+            if agent_match:
+                source = agent_match.group(1).lower()
+                agent_name = agent_match.group(2).strip()
+                open_reason = agent_match.group(3).strip() or None
+            elif note.startswith("[Agent]"):
                 source = "agent"
                 open_reason = note[7:].strip()
-            elif note.startswith("[Autopilot]"):
-                source = "autopilot"
-                open_reason = note[11:].strip()
-            elif note.startswith("[AutoPilot]"):
+            elif note.startswith("[Autopilot]") or note.startswith("[AutoPilot]"):
                 source = "autopilot"
                 open_reason = note[11:].strip()
             elif note.startswith("[Hub]"):
                 source = "hub"
                 open_reason = note[5:].strip()
-            elif note.startswith("[Pipeline:hub]"):
-                source = "hub"
-                open_reason = note[14:].strip()
-            elif note.startswith("[Pipeline:autopilot]"):
-                source = "autopilot"
-                open_reason = note[20:].strip()
-            elif note.startswith("[Pipeline:agent]"):
-                source = "agent"
-                open_reason = note[16:].strip()
             elif note.startswith("[Pipeline:"):
-                # 通用 Pipeline source 提取: [Pipeline:xxx]
-                import re
                 m = re.match(r'\[Pipeline:(\w+)\]', note)
                 if m:
                     source = m.group(1)
@@ -415,6 +409,10 @@ class OrderExecutor:
             commission=commission,
             pre_frozen_margin=margin_for_position,  # 🔥 跳过 PositionManager 重复冻结
         )
+        
+        # ★ 写入 Agent 归属名称
+        if agent_name:
+            position.agent_name = agent_name
         
         order.position_id = position.id
         logger.info(

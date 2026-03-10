@@ -337,6 +337,42 @@ class TradingPipeline:
         if not verdict.approved:
             self._stats["risk_rejected"] += 1
             logger.warning(f"[Pipeline] ❌ Risk rejected submit_order: {verdict.reason}")
+            
+            # ★ 写入拦截日志 ("死海古卷")
+            try:
+                import re
+                from app.models.intercepted_order import InterceptedOrder
+                
+                # 从 note 解析 agent_name
+                intercept_agent_name = None
+                if note:
+                    agent_match = re.match(r'\[(\w+):([^\]]+)\]', note)
+                    if agent_match:
+                        intercept_agent_name = agent_match.group(2).strip()
+                
+                intercepted = InterceptedOrder(
+                    user_id=self._user_id,
+                    symbol=symbol,
+                    side=side,
+                    quantity=quantity,
+                    leverage=leverage,
+                    price_at_intercept=price,
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
+                    intercept_reason=verdict.reason,
+                    intercept_source="pipeline_risk",
+                    source=source or "unknown",
+                    agent_name=intercept_agent_name,
+                )
+                db.add(intercepted)
+                # 不 commit, 让调用方决定事务
+                logger.info(
+                    f"[Pipeline] 📜 Intercepted order logged: {symbol} {side} "
+                    f"agent={intercept_agent_name} reason={verdict.reason[:50]}"
+                )
+            except Exception as e:
+                logger.warning(f"[Pipeline] Failed to log intercepted order: {e}")
+            
             return {
                 "success": False,
                 "error": f"风控拒绝: {verdict.reason}",

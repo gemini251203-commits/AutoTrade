@@ -239,6 +239,14 @@ class Position(Base):
         comment="开仓理由 (AI分析/策略信号/手动备注)",
     )
     
+    agent_name: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+        default=None,
+        server_default=None,
+        comment="下单 Agent 名称 (如 deepseek/gemini), 用于 Leaderboard 归属",
+    )
+    
     # ============================================
     # 约束
     # ============================================
