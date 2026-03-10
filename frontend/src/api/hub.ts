@@ -310,11 +310,13 @@ export function clearHubLogs() {
 
 /** 每日复盘一键导出 (返回 Markdown 纯文本) */
 export async function getDailyRecap(date?: string): Promise<string> {
-  const params = date ? { date } : {}
-  const res = await request.get<string>('/hub/daily-recap', {
-    params,
-    responseType: 'text' as any,
-    transformResponse: [(data: any) => data],
+  // 直接用 axios 获取纯文本，绕过拦截器的 JSON 处理
+  const { getAuthToken } = await import('@/utils/request')
+  const token = getAuthToken()
+  const params = date ? `?date=${date}` : ''
+  const resp = await fetch(`/api/hub/daily-recap${params}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
-  return typeof res === 'string' ? res : (res as any).data || ''
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  return await resp.text()
 }
