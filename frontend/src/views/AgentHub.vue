@@ -741,20 +741,17 @@ async function exportDailyRecap(date: string) {
   recapExporting.value = true
   try {
     const markdown = await getDailyRecap(date)
-    // Clipboard API 仅 HTTPS 可用，使用 fallback
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(markdown)
-    } else {
-      const ta = document.createElement('textarea')
-      ta.value = markdown
-      ta.style.position = 'fixed'
-      ta.style.left = '-9999px'
-      document.body.appendChild(ta)
-      ta.select()
-      document.execCommand('copy')
-      document.body.removeChild(ta)
-    }
-    message.success('复盘素材已复制到剪贴板，可直接粘贴给 ChatGPT')
+    // 下载为 .md 文件
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `复盘_${date}.md`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    message.success('复盘素材已下载')
   } catch (e: any) {
     message.error(`导出失败: ${e?.message || e}`)
   } finally {
