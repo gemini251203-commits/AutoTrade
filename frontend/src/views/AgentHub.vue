@@ -1335,7 +1335,7 @@ async function exportDailyRecap(date: string) {
           </table>
         </NSpin>
         <!-- Selected Day Detail -->
-        <div v-if="selectedMinute" class="p-4 rounded-xl border border-white/10 bg-white/[0.03] space-y-3">
+        <div v-if="selectedMinute" class="p-4 rounded-xl border border-white/10 bg-white/[0.03] space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold text-white">{{ selectedMinute.date }}</span>
             <div class="flex items-center gap-3 text-xs">
