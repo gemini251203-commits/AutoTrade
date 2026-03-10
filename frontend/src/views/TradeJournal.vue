@@ -48,7 +48,7 @@ const sourceOptions = [
   { label: '全部来源', value: '' },
   { label: '手动交易', value: 'manual' },
   { label: 'AI Agent', value: 'agent' },
-  { label: 'AI Hub', value: 'hub_board' },
+  { label: 'AI Hub', value: 'hub' },
   { label: 'Autopilot', value: 'autopilot' },
   { label: '信号助手', value: 'signal' },
   { label: '量化策略', value: 'quant' },
@@ -68,7 +68,7 @@ const resultOptions = [
 const sourceLabels: Record<string, string> = {
   manual: '手动',
   agent: 'AI Agent',
-  hub_board: 'AI Hub',
+  hub: 'AI Hub',
   autopilot: 'Autopilot',
   signal: '信号助手',
   quant: '量化策略',
@@ -80,7 +80,7 @@ const sourceLabels: Record<string, string> = {
 const sourceColors: Record<string, string> = {
   manual: '#6b7280',
   agent: '#8b5cf6',
-  hub_board: '#6366f1',
+  hub: '#6366f1',
   autopilot: '#f97316',
   signal: '#3b82f6',
   quant: '#10b981',
