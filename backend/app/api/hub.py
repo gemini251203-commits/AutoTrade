@@ -1001,7 +1001,7 @@ async def daily_recap(
     
     # ============ 尾注 ============
     lines.append("---")
-    lines.append("*以上为系统原始数据导出，可直接复制粘贴给 ChatGPT 要求润色成"交易日记"、"复盘战报"等爆款格式。*")
+    lines.append('*以上为系统原始数据导出，可直接复制粘贴给 ChatGPT 要求润色成"交易日记"、"复盘战报"等爆款格式。*')
     
     from fastapi.responses import PlainTextResponse
     return PlainTextResponse("\n".join(lines), media_type="text/markdown; charset=utf-8")
