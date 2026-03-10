@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import MainLayout from '@/layouts/MainLayout.vue'
 import {
   NButton, NModal, NInput, NSelect, NSlider, NTag, NSpin,
-  NEmpty, NIcon, NTooltip, NScrollbar, NCheckbox,
+  NEmpty, NIcon, NTooltip, NScrollbar, NCheckbox, useMessage,
 } from 'naive-ui'
 import {
   AddOutline, TrashOutline, PlayOutline, StopOutline,
@@ -735,15 +735,16 @@ function selectDay(day: number | null) {
 
 // ==================== 每日复盘一键导出 ====================
 const recapExporting = ref(false)
+const message = useMessage()
 
 async function exportDailyRecap(date: string) {
   recapExporting.value = true
   try {
     const markdown = await getDailyRecap(date)
     await navigator.clipboard.writeText(markdown)
-    window.$message?.success('复盘素材已复制到剪贴板，可直接粘贴给 ChatGPT')
+    message.success('复盘素材已复制到剪贴板，可直接粘贴给 ChatGPT')
   } catch (e: any) {
-    window.$message?.error(`导出失败: ${e?.message || e}`)
+    message.error(`导出失败: ${e?.message || e}`)
   } finally {
     recapExporting.value = false
   }
