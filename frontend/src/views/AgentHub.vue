@@ -13,7 +13,7 @@ import {
   listHubAgents, createHubAgent, updateHubAgent, deleteHubAgent,
   controlHubAgent, getHubStatus, boardDeliberate, streamChatWithAgent,
   getHubLogs, saveHubLog, triggerConsolidation, setSecretary, getSecretary, clearHubLogs,
-  getMonthlyMinutes, listAllTools,
+  getMonthlyMinutes, listAllTools, getDailyRecap,
   type HubAgent, type HubStatus, type BoardResult,
   type HubAgentCreateRequest, type HubAgentUpdateRequest, type ToolInfo,
 } from '@/api/hub'
@@ -732,6 +732,22 @@ function selectDay(day: number | null) {
   const key = dateStr(day)
   selectedMinute.value = minutesMap.value[key] || null
 }
+
+// ==================== 每日复盘一键导出 ====================
+const recapExporting = ref(false)
+
+async function exportDailyRecap(date: string) {
+  recapExporting.value = true
+  try {
+    const markdown = await getDailyRecap(date)
+    await navigator.clipboard.writeText(markdown)
+    window.$message?.success('复盘素材已复制到剪贴板，可直接粘贴给 ChatGPT')
+  } catch (e: any) {
+    window.$message?.error(`导出失败: ${e?.message || e}`)
+  } finally {
+    recapExporting.value = false
+  }
+}
 </script>
 
 <template>
@@ -1315,12 +1331,19 @@ function selectDay(day: number | null) {
               <span :class="selectedMinute.pnl_total >= 0 ? 'text-green-400' : 'text-red-400'" class="font-mono font-bold">
                 {{ selectedMinute.pnl_total >= 0 ? '+' : '' }}{{ selectedMinute.pnl_total.toFixed(2) }} USDT
               </span>
+              <button
+                class="px-2 py-0.5 rounded text-[11px] bg-blue-500/20 text-blue-300 border border-blue-500/30 hover:bg-blue-500/40 transition-colors"
+                @click="exportDailyRecap(selectedMinute.date)"
+                :disabled="recapExporting"
+              >
+                {{ recapExporting ? '导出中...' : '导出复盘' }}
+              </button>
             </div>
           </div>
-          <div class="text-[13px] text-gray-200 leading-relaxed whitespace-pre-wrap">{{ selectedMinute.summary }}</div>
+          <div class="text-[13px] text-gray-200 leading-relaxed whitespace-pre-wrap max-h-[320px] overflow-y-auto custom-scrollbar">{{ selectedMinute.summary }}</div>
           <div v-if="selectedMinute.key_lessons" class="p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20">
             <span class="text-[11px] text-purple-300 font-semibold">核心教训</span>
-            <div class="text-xs text-gray-300 mt-1">{{ selectedMinute.key_lessons }}</div>
+            <div class="text-xs text-gray-300 mt-1 max-h-[100px] overflow-y-auto custom-scrollbar">{{ selectedMinute.key_lessons }}</div>
           </div>
         </div>
         <div v-else class="text-center text-xs text-gray-600 py-6">

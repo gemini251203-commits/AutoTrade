@@ -307,3 +307,14 @@ export function getSecretary() {
 export function clearHubLogs() {
   return request.delete<{ success: boolean }>('/hub/logs')
 }
+
+/** 每日复盘一键导出 (返回 Markdown 纯文本) */
+export async function getDailyRecap(date?: string): Promise<string> {
+  const params = date ? { date } : {}
+  const res = await request.get<string>('/hub/daily-recap', {
+    params,
+    responseType: 'text' as any,
+    transformResponse: [(data: any) => data],
+  })
+  return typeof res === 'string' ? res : (res as any).data || ''
+}
