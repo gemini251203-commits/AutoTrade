@@ -802,3 +802,207 @@ async def get_board_minutes(
         ]
     }
 
+
+# ============================================
+# 每日复盘一键导出 (Markdown)
+# ============================================
+
+@router.get("/daily-recap")
+async def daily_recap(
+    db: DbSession,
+    current_user: CurrentUser,
+    date: Optional[str] = None,
+):
+    """
+    一键提取当天 "冲突、遗憾与战绩"，返回 Markdown 纯文本。
+    用于丢给 ChatGPT / 大模型进行二次爆款润色。
+    
+    Query params:
+        date: 可选日期 YYYY-MM-DD (默认今天 CST)
+    """
+    from datetime import timedelta, timezone, date as date_type
+    from decimal import Decimal
+    from sqlalchemy import or_, and_
+    from app.models.position import Position, PositionStatus
+    from app.models.hub_log import HubLog
+    from app.models.intercepted_order import InterceptedOrder
+    
+    _CST = timezone(timedelta(hours=8))
+    
+    # 解析目标日期
+    if date:
+        try:
+            target = date_type.fromisoformat(date)
+        except ValueError:
+            raise HTTPException(400, "日期格式错误，请使用 YYYY-MM-DD")
+    else:
+        target = datetime.now(_CST).date()
+    
+    # 北京时间 → UTC 范围
+    day_start = datetime(target.year, target.month, target.day) - timedelta(hours=8)
+    day_end = day_start + timedelta(days=1)
+    
+    lines = [
+        f"# 📊 每日复盘素材 — {target}",
+        f"> 自动生成于 {datetime.now(_CST).strftime('%Y-%m-%d %H:%M CST')}，可直接丢给 AI 润色成爆款文案。",
+        "",
+    ]
+    
+    # ============ 1. 今日财务看板 ============
+    lines.append("---")
+    lines.append("## 💰 今日财务看板")
+    lines.append("")
+    
+    # 查询已平仓仓位
+    closed_result = await db.execute(
+        select(Position).where(
+            Position.user_id == current_user.id,
+            Position.status == PositionStatus.CLOSED,
+            Position.closed_at >= day_start,
+            Position.closed_at < day_end,
+        ).order_by(Position.closed_at)
+    )
+    closed_positions = closed_result.scalars().all()
+    
+    # 查询仍持仓的
+    open_result = await db.execute(
+        select(Position).where(
+            Position.user_id == current_user.id,
+            Position.status == PositionStatus.OPEN,
+            Position.created_at >= day_start,
+            Position.created_at < day_end,
+        )
+    )
+    open_positions = open_result.scalars().all()
+    
+    if closed_positions:
+        total_pnl = sum(float(p.realized_pnl or 0) for p in closed_positions)
+        win_count = sum(1 for p in closed_positions if (p.realized_pnl or 0) > 0)
+        loss_count = sum(1 for p in closed_positions if (p.realized_pnl or 0) < 0)
+        total_count = len(closed_positions)
+        win_rate = (win_count / total_count * 100) if total_count > 0 else 0
+        
+        pnls = [float(p.realized_pnl or 0) for p in closed_positions]
+        max_win = max(pnls) if pnls else 0
+        max_loss = min(pnls) if pnls else 0
+        total_commission = sum(float(p.total_commission or 0) for p in closed_positions)
+        
+        pnl_emoji = "🟢" if total_pnl >= 0 else "🔴"
+        lines.append(f"| 指标 | 数值 |")
+        lines.append(f"|------|------|")
+        lines.append(f"| 已平仓笔数 | {total_count} |")
+        lines.append(f"| 胜 / 负 | {win_count} / {loss_count} |")
+        lines.append(f"| 胜率 | {win_rate:.1f}% |")
+        lines.append(f"| {pnl_emoji} 净盈亏 | {total_pnl:+.2f} USDT |")
+        lines.append(f"| 最大单笔盈利 | {max_win:+.2f} USDT |")
+        lines.append(f"| 最大单笔亏损 | {max_loss:+.2f} USDT |")
+        lines.append(f"| 总手续费 | {total_commission:.4f} USDT |")
+        lines.append("")
+        
+        # 逐笔交易明细
+        lines.append("### 交易明细")
+        lines.append("")
+        for p in closed_positions:
+            side = p.side.value.upper() if hasattr(p.side, 'value') else str(p.side).upper()
+            pnl = float(p.realized_pnl or 0)
+            pnl_sign = "+" if pnl >= 0 else ""
+            entry = float(p.entry_price or 0)
+            close = float(p.close_price or 0) if hasattr(p, 'close_price') and p.close_price else 0
+            leverage = p.leverage or 1
+            agent = p.agent_name or p.source or "manual"
+            open_t = (p.created_at + timedelta(hours=8)).strftime("%H:%M") if p.created_at else "-"
+            close_t = (p.closed_at + timedelta(hours=8)).strftime("%H:%M") if p.closed_at else "-"
+            emoji = "✅" if pnl >= 0 else "❌"
+            lines.append(
+                f"- {emoji} **{p.symbol}** {side} {p.size} × {leverage}x "
+                f"| {open_t}→{close_t} | 入{entry:.1f}→出{close:.1f} "
+                f"| **{pnl_sign}{pnl:.2f} USDT** | 由 `{agent}` 发起"
+            )
+        lines.append("")
+    else:
+        lines.append("今日无已平仓交易。")
+        lines.append("")
+    
+    if open_positions:
+        lines.append(f"### 🔓 仍持仓中 ({len(open_positions)} 笔)")
+        for p in open_positions:
+            side = p.side.value.upper() if hasattr(p.side, 'value') else str(p.side).upper()
+            agent = p.agent_name or p.source or "manual"
+            lines.append(
+                f"- {p.symbol} {side} {p.size} × {p.leverage}x "
+                f"入场 {float(p.entry_price):.1f} | 由 `{agent}` 发起"
+            )
+        lines.append("")
+    
+    # ============ 2. 决策角斗场 ============
+    lines.append("---")
+    lines.append("## ⚔️ 决策角斗场（AI 辩论精华）")
+    lines.append("")
+    
+    log_result = await db.execute(
+        select(HubLog).where(
+            HubLog.user_id == current_user.id,
+            HubLog.created_at >= day_start,
+            HubLog.created_at < day_end,
+            HubLog.log_type == "ai_text",
+        ).order_by(HubLog.created_at).limit(50)
+    )
+    logs = log_result.scalars().all()
+    
+    if logs:
+        for lg in logs:
+            name = lg.agent_name or "Unknown"
+            content = (lg.content or "")[:400]
+            time_str = (lg.created_at + timedelta(hours=8)).strftime("%H:%M:%S") if lg.created_at else ""
+            lines.append(f"**[{time_str}] {name}:**")
+            lines.append(f"> {content}")
+            lines.append("")
+    else:
+        lines.append("今日无 AI 辩论记录。")
+        lines.append("")
+    
+    # ============ 3. 意难平清单 ============
+    lines.append("---")
+    lines.append("## 😤 意难平清单（被风控拦截的交易申请）")
+    lines.append("")
+    
+    intercept_result = await db.execute(
+        select(InterceptedOrder).where(
+            InterceptedOrder.user_id == current_user.id,
+            InterceptedOrder.created_at >= day_start,
+            InterceptedOrder.created_at < day_end,
+        ).order_by(InterceptedOrder.created_at)
+    )
+    intercepted = intercept_result.scalars().all()
+    
+    if intercepted:
+        lines.append(f"今日共 **{len(intercepted)}** 笔交易被风控无情拦截：")
+        lines.append("")
+        for i, order in enumerate(intercepted, 1):
+            time_str = (order.created_at + timedelta(hours=8)).strftime("%H:%M:%S") if order.created_at else ""
+            price = float(order.price_at_intercept or 0)
+            agent = order.agent_name or "unknown"
+            lines.append(
+                f"{i}. **[{time_str}]** `{agent}` 想 {order.side.upper()} "
+                f"**{order.symbol}** {order.quantity} × {order.leverage}x "
+                f"@ {price:.1f}"
+            )
+            lines.append(f"   - 🚫 拦截原因：{order.intercept_reason}")
+            if order.verdict:
+                verdict_map = {
+                    "dodged_bullet": "🛡️ 幸免于难",
+                    "missed_opportunity": "😭 踏空了",
+                    "neutral": "😐 无所谓",
+                }
+                lines.append(f"   - 事后裁定：{verdict_map.get(order.verdict, order.verdict)}")
+            lines.append("")
+    else:
+        lines.append("今日无被拦截的交易。风平浪静 🌊")
+        lines.append("")
+    
+    # ============ 尾注 ============
+    lines.append("---")
+    lines.append("*以上为系统原始数据导出，可直接复制粘贴给 ChatGPT 要求润色成"交易日记"、"复盘战报"等爆款格式。*")
+    
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse("\n".join(lines), media_type="text/markdown; charset=utf-8")
