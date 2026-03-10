@@ -55,22 +55,32 @@ def _decrypt_agent_key(encrypted: str) -> str:
     
     raise ValueError(f"无法解密 API Key (长度={len(encrypted)})")
 
-# 书记员 System Prompt
-_SECRETARY_PROMPT = """你是董事会书记员。你的任务是根据今天的交易记录和 AI 辩论记录，写一份精炼的《董事会纪要》。
+# 华尔街级书记员 System Prompt
+_SECRETARY_PROMPT = """你是一位顶级对冲基金的首席合规与复盘官。你的任务是根据提供的今日系统原始数据，生成一份极度结构化的复盘报告。
 
-要求:
-1. 点名指出哪个 AI 提出了什么观点
-2. 总结最终做出了什么决策
-3. 标明每笔交易赚了还是亏了
-4. 提炼出一条核心教训
-5. 给出重要性评分 (1-10)
-6. 全文字数严格控制在 300 字以内
-7. 全程中文
+必须包含以下模块：
+
+1.【核心数据】：总交易笔数、胜率（盈利笔数/总笔数）、净盈亏、最大单笔盈利/亏损、资金费率消耗、最大回撤。
+
+2.【交易时间轴】：列出每笔交易的精确时间（北京时间）、标的、方向、杠杆、入场价/出场价、持仓时长、触发逻辑与最终盈亏结果。
+
+3.【AI 逻辑审计】：审查今日各 Trader Agent 的决策过程。点名指出：
+   - 优秀的预判（提前捕捉到信号的决策）
+   - 冲动或草率的决策（缺乏充分分析就下单）
+   - 逻辑错误（判断方向与指标信号矛盾）
+   - 错失的机会（有明确信号但未行动）
+
+4.【系统健康教训】：一段话总结今日得失，给出明日具体的参数调整建议（如止损幅度、杠杆倍数、交易频率等）。
+
+规则：
+- 全程中文，专业但易懂
+- 没有交易时照实说"今日无交易"，但仍需审计 AI 的分析质量
+- 给出重要性评分 (1-10)，基于当日市场波动和决策质量
 
 输出格式 (严格 JSON):
 {
-    "summary": "今日纪要正文...",
-    "key_lessons": "核心教训一句话",
+    "summary": "完整复盘报告正文（包含上述4个模块）...",
+    "key_lessons": "一句话核心教训",
     "importance": 7
 }
 """
@@ -84,12 +94,50 @@ class MemoryConsolidator:
         self._running = False
     
     async def start(self):
-        """启动定时调度"""
+        """启动定时调度 + 启动时补执行"""
         if self._running:
             return
         self._running = True
         self._task = asyncio.create_task(self._daily_loop())
         logger.info("[MemoryConsolidator] Started (daily @ 00:05 CST)")
+        
+        # ★ 启动时补执行：检查昨天是否有纪要，没有则补生成
+        asyncio.create_task(self._startup_catchup())
+    
+    async def _startup_catchup(self):
+        """启动时检查昨天的纪要是否存在，不存在则补生成"""
+        await asyncio.sleep(30)  # 等待系统完全启动
+        try:
+            from app.db.session import AsyncSessionLocal
+            from app.models.board_minutes import BoardMinutes
+            from app.models.hub_agent import HubAgent
+            
+            yesterday = (datetime.now(_CST) - timedelta(days=1)).date()
+            
+            async with AsyncSessionLocal() as db:
+                # 获取所有有 Agent 的用户
+                user_result = await db.execute(select(HubAgent.user_id).distinct())
+                user_ids = [uid for (uid,) in user_result.all()]
+                
+                for user_id in user_ids:
+                    # 检查昨天是否已有纪要
+                    existing = await db.execute(
+                        select(BoardMinutes.id).where(
+                            BoardMinutes.user_id == user_id,
+                            BoardMinutes.date == yesterday,
+                        )
+                    )
+                    if not existing.scalar_one_or_none():
+                        logger.info(
+                            f"[MemoryConsolidator] Catchup: generating yesterday's "
+                            f"minutes ({yesterday}) for user {user_id}"
+                        )
+                        try:
+                            await self.consolidate(user_id, target_date=yesterday)
+                        except Exception as e:
+                            logger.error(f"[MemoryConsolidator] Catchup failed for user {user_id}: {e}")
+        except Exception as e:
+            logger.error(f"[MemoryConsolidator] Startup catchup error: {e}")
     
     async def stop(self):
         """停止"""
@@ -115,7 +163,9 @@ class MemoryConsolidator:
                 await asyncio.sleep(wait_seconds)
                 
                 # 执行坍缩
+                logger.info("[MemoryConsolidator] ★ Daily cron triggered, starting consolidation...")
                 await self._run_for_all_users()
+                logger.info("[MemoryConsolidator] ★ Daily consolidation complete.")
                 
             except asyncio.CancelledError:
                 break
@@ -171,11 +221,14 @@ class MemoryConsolidator:
             ai_debate_text = await self._extract_hub_logs(db, user_id, target_date)
             autopilot_text = await self._extract_autopilot(db, user_id, target_date)
             trade_count, pnl_total = await self._get_trade_stats(db, user_id, target_date)
+            funding_costs = await self._extract_funding_costs(db, user_id, target_date)
+            max_drawdown = await self._extract_max_drawdown(db, user_id, target_date)
             
             # 2. 构建书记员 prompt
             data_block = self._build_data_block(
                 target_date, trades_text, ai_debate_text, autopilot_text,
                 trade_count, pnl_total,
+                funding_costs=funding_costs, max_drawdown=max_drawdown,
             )
             
             if not trades_text and not ai_debate_text and not autopilot_text:
@@ -209,7 +262,7 @@ class MemoryConsolidator:
     async def _extract_trades(
         self, db: AsyncSession, user_id: int, d: date,
     ) -> str:
-        """从 positions 表抽取当日 Hub 相关的仓位变动（源隔离 + 真实盈亏）"""
+        """从 positions 表抽取当日详细交易时间轴（入场/出场时间 + 成交价 + 手续费）"""
         from app.models.position import Position, PositionStatus, PositionSide
         
         # 北京时间当天 → UTC 范围 (CST = UTC+8)
@@ -217,16 +270,12 @@ class MemoryConsolidator:
         day_end = day_start + timedelta(days=1)
         
         try:
-            # 1. 当日 Agent Hub 产生的所有仓位（开仓 OR 平仓）
             from sqlalchemy import or_
             result = await db.execute(
                 select(Position).where(
                     Position.user_id == user_id,
-                    Position.source.in_(self._HUB_SOURCES),
                     or_(
-                        # 当日开仓的
                         and_(Position.created_at >= day_start, Position.created_at < day_end),
-                        # 当日平仓的
                         and_(Position.closed_at >= day_start, Position.closed_at < day_end),
                     ),
                 ).order_by(Position.created_at)
@@ -252,36 +301,65 @@ class MemoryConsolidator:
         except Exception:
             pass
         
+        def _to_cst(dt):
+            """UTC datetime → CST 字符串"""
+            if not dt:
+                return "-"
+            return (dt + timedelta(hours=8)).strftime("%H:%M:%S")
+        
         lines = []
         for p in positions:
             side_str = p.side.value.upper() if hasattr(p.side, 'value') else str(p.side).upper()
             leverage = p.leverage or 1
+            entry_price = float(p.entry_price) if p.entry_price else 0
+            commission = float(p.commission) if hasattr(p, 'commission') and p.commission else 0
+            source = p.source or "unknown"
+            open_time = _to_cst(p.created_at)
+            open_reason = getattr(p, 'open_reason', '') or ''
             
             if p.status == PositionStatus.CLOSED:
-                # 已平仓 → 已实现盈亏
+                close_price = float(p.close_price) if p.close_price else 0
                 pnl = float(p.realized_pnl) if p.realized_pnl else 0
-                pnl_str = f" → 已平仓 {'+' if pnl >= 0 else ''}{pnl:.2f} USDT"
-                lines.append(f"- {p.symbol} {side_str} {p.size} 杠杆{leverage}x{pnl_str} [来源:{p.source}]")
+                close_time = _to_cst(p.closed_at)
+                # 计算持仓时长
+                if p.created_at and p.closed_at:
+                    duration_min = int((p.closed_at - p.created_at).total_seconds() / 60)
+                    if duration_min > 60:
+                        duration_str = f"{duration_min // 60}h{duration_min % 60}m"
+                    else:
+                        duration_str = f"{duration_min}m"
+                else:
+                    duration_str = "-"
+                pnl_sign = '+' if pnl >= 0 else ''
+                lines.append(
+                    f"- [{open_time}] {p.symbol} {side_str} {p.size} {leverage}x | "
+                    f"入场{entry_price:.1f} → 出场{close_price:.1f} | "
+                    f"持仓{duration_str} | 盈亏{pnl_sign}{pnl:.2f} USDT | "
+                    f"手续费{commission:.4f} | [{source}]"
+                    + (f" | 原因: {open_reason[:80]}" if open_reason else "")
+                )
             else:
-                # 仍持仓 → 浮动盈亏
                 mark = live_prices.get(p.symbol, 0)
                 if mark > 0:
                     from decimal import Decimal
                     unrealized = float(p.calculate_unrealized_pnl(Decimal(str(mark))))
-                    pnl_str = f" → 持仓中 浮盈{'+' if unrealized >= 0 else ''}{unrealized:.2f} USDT"
+                    pnl_str = f"浮盈{'+' if unrealized >= 0 else ''}{unrealized:.2f}"
                 else:
-                    pnl_str = " → 持仓中 (无实时价)"
-                lines.append(f"- {p.symbol} {side_str} {p.size} 杠杆{leverage}x{pnl_str} [来源:{p.source}]")
+                    pnl_str = "浮盈未知"
+                lines.append(
+                    f"- [{open_time}] {p.symbol} {side_str} {p.size} {leverage}x | "
+                    f"入场{entry_price:.1f} | 持仓中 {pnl_str} USDT | [{source}]"
+                )
         
         return "\n".join(lines)
     
     async def _extract_hub_logs(
         self, db: AsyncSession, user_id: int, d: date,
     ) -> str:
-        """从 hub_logs 表抽取当日 AI 发言"""
+        """从 hub_logs 表抽取当日 AI 发言（分 Agent 分组，内容截断提至 500 字）"""
         from app.models.hub_log import HubLog
+        from collections import defaultdict
         
-        # 北京时间当天 → UTC 范围
         day_start = datetime(d.year, d.month, d.day) - timedelta(hours=8)
         day_end = day_start + timedelta(days=1)
         
@@ -291,20 +369,29 @@ class MemoryConsolidator:
                 HubLog.created_at >= day_start,
                 HubLog.created_at < day_end,
                 HubLog.log_type == "ai_text",
-            ).order_by(HubLog.created_at).limit(30)
+            ).order_by(HubLog.created_at).limit(60)
         )
         logs = result.scalars().all()
         
         if not logs:
             return ""
         
-        lines = []
+        # 按 Agent 分组
+        by_agent = defaultdict(list)
         for lg in logs:
             name = lg.agent_name or "Unknown"
-            content = lg.content[:150]  # 截断过长内容
-            lines.append(f"- {name}: \"{content}\"")
+            content = lg.content[:500]  # ★ 截断提升到 500 字
+            time_str = (lg.created_at + timedelta(hours=8)).strftime("%H:%M") if lg.created_at else ""
+            by_agent[name].append(f"  [{time_str}] {content}")
         
-        return "\n".join(lines)
+        sections = []
+        for agent_name, entries in by_agent.items():
+            sections.append(f"### {agent_name} ({len(entries)} 条发言)")
+            # 每个 Agent 最多取最后 8 条（保留最新的分析）
+            for entry in entries[-8:]:
+                sections.append(entry)
+        
+        return "\n".join(sections)
     
     async def _extract_autopilot(
         self, db: AsyncSession, user_id: int, d: date,
@@ -379,25 +466,112 @@ class MemoryConsolidator:
             logger.warning(f"[MemoryConsolidator] get_trade_stats error: {e}")
             return 0, 0.0
     
+    # ======== 资金异动采集 ========
+    
+    async def _extract_funding_costs(self, db: AsyncSession, user_id: int, d: date) -> str:
+        """从 wallet_transactions 抽取当日资金费率消耗"""
+        try:
+            from app.models.wallet_transaction import WalletTransaction, TransactionType
+            
+            day_start = datetime(d.year, d.month, d.day) - timedelta(hours=8)
+            day_end = day_start + timedelta(days=1)
+            
+            result = await db.execute(
+                select(WalletTransaction).where(
+                    WalletTransaction.user_id == user_id,
+                    WalletTransaction.type == TransactionType.FUNDING,
+                    WalletTransaction.created_at >= day_start,
+                    WalletTransaction.created_at < day_end,
+                ).order_by(WalletTransaction.created_at)
+            )
+            txs = result.scalars().all()
+            
+            if not txs:
+                return "当日无资金费率消耗。"
+            
+            total = sum(float(tx.amount) for tx in txs)
+            lines = [f"资金费率总消耗: {total:+.4f} USDT ({len(txs)} 笔)"]
+            for tx in txs:
+                time_str = (tx.created_at + timedelta(hours=8)).strftime("%H:%M") if tx.created_at else ""
+                lines.append(f"  [{time_str}] {float(tx.amount):+.4f} USDT | {tx.note or ''}")
+            return "\n".join(lines)
+        except Exception as e:
+            logger.warning(f"[MemoryConsolidator] extract_funding_costs error: {e}")
+            return ""
+    
+    async def _extract_max_drawdown(self, db: AsyncSession, user_id: int, d: date) -> str:
+        """从 wallet_transactions 的 balance_after 计算当日最大回撤"""
+        try:
+            from app.models.wallet_transaction import WalletTransaction
+            
+            day_start = datetime(d.year, d.month, d.day) - timedelta(hours=8)
+            day_end = day_start + timedelta(days=1)
+            
+            result = await db.execute(
+                select(WalletTransaction.balance_after).where(
+                    WalletTransaction.user_id == user_id,
+                    WalletTransaction.created_at >= day_start,
+                    WalletTransaction.created_at < day_end,
+                ).order_by(WalletTransaction.created_at)
+            )
+            balances = [float(row[0]) for row in result.all()]
+            
+            if len(balances) < 2:
+                return "当日资金变动不足，无法计算回撤。"
+            
+            # 计算最大回撤
+            peak = balances[0]
+            max_dd = 0
+            for b in balances:
+                if b > peak:
+                    peak = b
+                dd = peak - b
+                if dd > max_dd:
+                    max_dd = dd
+            
+            dd_pct = (max_dd / peak * 100) if peak > 0 else 0
+            return f"最大回撤: {max_dd:.2f} USDT ({dd_pct:.2f}%) | 日初余额: {balances[0]:.2f} | 日末余额: {balances[-1]:.2f}"
+        except Exception as e:
+            logger.warning(f"[MemoryConsolidator] extract_max_drawdown error: {e}")
+            return ""
+    
     # ======== 书记员 AI ========
     
     def _build_data_block(
         self, d: date, trades: str, debates: str, autopilot: str,
         trade_count: int, pnl_total: float,
+        funding_costs: str = "", max_drawdown: str = "",
     ) -> str:
-        """拼接数据块给书记员"""
-        parts = [f"日期: {d}\n交易笔数: {trade_count} | 总盈亏: {pnl_total:+.2f} USDT\n"]
+        """拼接结构化数据块给书记员"""
+        parts = [
+            f"# 今日系统原始数据 — {d}",
+            f"\n## 概览",
+            f"交易笔数: {trade_count} | 总盈亏: {pnl_total:+.2f} USDT",
+        ]
         
+        # 交易时间轴
+        parts.append(f"\n## 交易时间轴")
         if trades:
-            parts.append(f"[今日交易]\n{trades}")
+            parts.append(trades)
         else:
-            parts.append("[今日交易]\n无交易。")
+            parts.append("今日无交易。")
         
+        # 资金异动
+        parts.append(f"\n## 资金异动")
+        if max_drawdown:
+            parts.append(max_drawdown)
+        if funding_costs:
+            parts.append(funding_costs)
+        
+        # AI 决策逻辑
         if debates:
-            parts.append(f"\n[AI 辩论记录]\n{debates}")
+            parts.append(f"\n## AI 决策逻辑源（各 Agent 当日分析原文）")
+            parts.append(debates)
         
+        # Autopilot 决策
         if autopilot:
-            parts.append(f"\n[Autopilot 自动决策]\n{autopilot}")
+            parts.append(f"\n## Autopilot 自动决策")
+            parts.append(autopilot)
         
         return "\n".join(parts)
     
@@ -476,7 +650,7 @@ class MemoryConsolidator:
                     {"role": "user", "content": data_block},
                 ],
                 temperature=0.3,
-                max_tokens=800,
+                max_tokens=4096,  # ★ 支持长篇结构化复盘报告
             )
             content = response.choices[0].message.content or ""
             
