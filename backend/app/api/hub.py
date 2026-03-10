@@ -843,14 +843,14 @@ async def daily_recap(
     day_end = day_start + timedelta(days=1)
     
     lines = [
-        f"# 📊 每日复盘素材 — {target}",
+        f"# 每日复盘素材 — {target}",
         f"> 自动生成于 {datetime.now(_CST).strftime('%Y-%m-%d %H:%M CST')}，可直接丢给 AI 润色成爆款文案。",
         "",
     ]
     
     # ============ 1. 今日财务看板 ============
     lines.append("---")
-    lines.append("## 💰 今日财务看板")
+    lines.append("## 今日财务看板")
     lines.append("")
     
     # 查询已平仓仓位
@@ -887,13 +887,12 @@ async def daily_recap(
         max_loss = min(pnls) if pnls else 0
         total_commission = sum(float(p.total_commission or 0) for p in closed_positions)
         
-        pnl_emoji = "🟢" if total_pnl >= 0 else "🔴"
         lines.append(f"| 指标 | 数值 |")
         lines.append(f"|------|------|")
         lines.append(f"| 已平仓笔数 | {total_count} |")
         lines.append(f"| 胜 / 负 | {win_count} / {loss_count} |")
         lines.append(f"| 胜率 | {win_rate:.1f}% |")
-        lines.append(f"| {pnl_emoji} 净盈亏 | {total_pnl:+.2f} USDT |")
+        lines.append(f"| 净盈亏 | {total_pnl:+.2f} USDT |")
         lines.append(f"| 最大单笔盈利 | {max_win:+.2f} USDT |")
         lines.append(f"| 最大单笔亏损 | {max_loss:+.2f} USDT |")
         lines.append(f"| 总手续费 | {total_commission:.4f} USDT |")
@@ -912,9 +911,9 @@ async def daily_recap(
             agent = p.agent_name or p.source or "manual"
             open_t = (p.created_at + timedelta(hours=8)).strftime("%H:%M") if p.created_at else "-"
             close_t = (p.closed_at + timedelta(hours=8)).strftime("%H:%M") if p.closed_at else "-"
-            emoji = "✅" if pnl >= 0 else "❌"
+            result_tag = "[WIN]" if pnl >= 0 else "[LOSS]"
             lines.append(
-                f"- {emoji} **{p.symbol}** {side} {p.size} × {leverage}x "
+                f"- {result_tag} **{p.symbol}** {side} {p.size} x {leverage}x "
                 f"| {open_t}→{close_t} | 入{entry:.1f}→出{close:.1f} "
                 f"| **{pnl_sign}{pnl:.2f} USDT** | 由 `{agent}` 发起"
             )
@@ -924,7 +923,7 @@ async def daily_recap(
         lines.append("")
     
     if open_positions:
-        lines.append(f"### 🔓 仍持仓中 ({len(open_positions)} 笔)")
+        lines.append(f"### 仍持仓中 ({len(open_positions)} 笔)")
         for p in open_positions:
             side = p.side.value.upper() if hasattr(p.side, 'value') else str(p.side).upper()
             agent = p.agent_name or p.source or "manual"
@@ -936,7 +935,7 @@ async def daily_recap(
     
     # ============ 2. 决策角斗场 ============
     lines.append("---")
-    lines.append("## ⚔️ 决策角斗场（AI 辩论精华）")
+    lines.append("## 决策角斗场（AI 辩论精华）")
     lines.append("")
     
     log_result = await db.execute(
@@ -963,7 +962,7 @@ async def daily_recap(
     
     # ============ 3. 意难平清单 ============
     lines.append("---")
-    lines.append("## 😤 意难平清单（被风控拦截的交易申请）")
+    lines.append("## 意难平清单（被风控拦截的交易申请）")
     lines.append("")
     
     intercept_result = await db.execute(
@@ -987,17 +986,17 @@ async def daily_recap(
                 f"**{order.symbol}** {order.quantity} × {order.leverage}x "
                 f"@ {price:.1f}"
             )
-            lines.append(f"   - 🚫 拦截原因：{order.intercept_reason}")
+            lines.append(f"   - 拦截原因：{order.intercept_reason}")
             if order.verdict:
                 verdict_map = {
-                    "dodged_bullet": "🛡️ 幸免于难",
-                    "missed_opportunity": "😭 踏空了",
-                    "neutral": "😐 无所谓",
+                    "dodged_bullet": "[幸免于难]",
+                    "missed_opportunity": "[踏空了]",
+                    "neutral": "[无所谓]",
                 }
                 lines.append(f"   - 事后裁定：{verdict_map.get(order.verdict, order.verdict)}")
             lines.append("")
     else:
-        lines.append("今日无被拦截的交易。风平浪静 🌊")
+        lines.append("今日无被拦截的交易。风平浪静。")
         lines.append("")
     
     # ============ 尾注 ============
