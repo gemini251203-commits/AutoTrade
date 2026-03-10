@@ -131,6 +131,7 @@ class HubBrain:
                     messages=messages,
                     tools=tools_spec if tools_spec else None,
                     temperature=agent.temperature,
+                    max_tokens=4096,  # ★ 确保充足的输出空间，避免半句截断
                     stream=False,  # 先用非流式, 简化 tool_call 处理
                 )
             except Exception as e:
@@ -139,6 +140,7 @@ class HubBrain:
                 return
             
             choice = response.choices[0]
+            finish_reason = choice.finish_reason  # ★ 检测截断
             
             # 检查是否有 tool_call
             if choice.message.tool_calls:
@@ -182,6 +184,43 @@ class HubBrain:
             else:
                 # 无 tool_call, 返回文本
                 content = choice.message.content or ""
+                
+                # ★ 处理 finish_reason=length (输出被截断)
+                if finish_reason == "length" and content:
+                    logger.warning(
+                        f"[HubBrain] Output truncated (finish_reason=length), "
+                        f"attempting continuation... ({len(content)} chars so far)"
+                    )
+                    full_content = content
+                    cont_messages = messages + [
+                        {"role": "assistant", "content": content},
+                        {"role": "user", "content": "你的回复被截断了，请从断点处继续说完。不要重复已说过的内容。"},
+                    ]
+                    
+                    for cont_idx in range(3):
+                        try:
+                            cont_resp = await client.chat.completions.create(
+                                model=agent.model,
+                                messages=cont_messages,
+                                tools=None,
+                                temperature=agent.temperature,
+                                max_tokens=4096,
+                                stream=False,
+                            )
+                            cont_choice = cont_resp.choices[0]
+                            cont_text = cont_choice.message.content or ""
+                            if cont_text:
+                                full_content += cont_text
+                            if cont_choice.finish_reason != "length":
+                                break
+                            cont_messages.append({"role": "assistant", "content": cont_text})
+                            cont_messages.append({"role": "user", "content": "继续。"})
+                        except Exception as e:
+                            logger.error(f"[HubBrain] Continuation failed: {e}")
+                            break
+                    
+                    content = full_content
+                
                 yield json.dumps({
                     "type": "text",
                     "content": content,
