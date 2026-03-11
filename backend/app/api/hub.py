@@ -701,7 +701,7 @@ async def trigger_consolidation(
         }
     except Exception as e:
         import traceback
-        logger.error(f"[Consolidation] 500 error: {e}\n{traceback.format_exc()}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"坍缩失败: {str(e)}")
 
 
