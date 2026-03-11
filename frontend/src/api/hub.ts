@@ -255,7 +255,9 @@ export function triggerConsolidation() {
     summary: string
     key_lessons: string
     importance: number
-  }>('/hub/memory/consolidate')
+  }>('/hub/memory/consolidate', null, {
+    timeout: 180_000,  // 180s — AI 生成纪要需要较长时间
+  })
 }
 
 /** 获取近 N 天董事会纪要 */

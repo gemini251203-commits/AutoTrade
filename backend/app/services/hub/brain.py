@@ -131,7 +131,7 @@ class HubBrain:
                     messages=messages,
                     tools=tools_spec if tools_spec else None,
                     temperature=agent.temperature,
-                    max_tokens=4096,  # ★ 确保充足的输出空间，避免半句截断
+                    max_tokens=8192,  # ★ 确保充足的输出空间，避免半句截断
                     stream=False,  # 先用非流式, 简化 tool_call 处理
                 )
             except Exception as e:
@@ -205,7 +205,7 @@ class HubBrain:
                                 messages=cont_messages,
                                 tools=None,
                                 temperature=agent.temperature,
-                                max_tokens=4096,
+                                max_tokens=8192,
                                 stream=False,
                             )
                             cont_choice = cont_resp.choices[0]
