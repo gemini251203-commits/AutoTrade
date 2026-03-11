@@ -397,29 +397,33 @@ class MemoryConsolidator:
         self, db: AsyncSession, user_id: int, d: date,
     ) -> str:
         """从 autopilot_logs 表抽取当日决策"""
-        from app.models.autopilot_log import AutopilotLog
-        
-        # 北京时间当天 → UTC 范围
-        day_start = datetime(d.year, d.month, d.day) - timedelta(hours=8)
-        day_end = day_start + timedelta(days=1)
-        
-        result = await db.execute(
-            select(AutopilotLog).where(
-                AutopilotLog.user_id == user_id,
-                AutopilotLog.created_at >= day_start,
-                AutopilotLog.created_at < day_end,
-            ).order_by(AutopilotLog.created_at).limit(20)
-        )
-        logs = result.scalars().all()
-        
-        if not logs:
+        try:
+            from app.models.autopilot_log import AutopilotLog
+            
+            # 北京时间当天 → UTC 范围
+            day_start = datetime(d.year, d.month, d.day) - timedelta(hours=8)
+            day_end = day_start + timedelta(days=1)
+            
+            result = await db.execute(
+                select(AutopilotLog).where(
+                    AutopilotLog.user_id == user_id,
+                    AutopilotLog.created_at >= day_start,
+                    AutopilotLog.created_at < day_end,
+                ).order_by(AutopilotLog.created_at).limit(20)
+            )
+            logs = result.scalars().all()
+            
+            if not logs:
+                return ""
+            
+            lines = []
+            for lg in logs:
+                lines.append(f"- {lg.symbol} 决策={lg.decision} | {lg.summary[:100]}")
+            
+            return "\n".join(lines)
+        except Exception as e:
+            logger.warning(f"[MemoryConsolidator] extract_autopilot error: {e}")
             return ""
-        
-        lines = []
-        for lg in logs:
-            lines.append(f"- {lg.symbol} 决策={lg.decision} | {lg.summary[:100]}")
-        
-        return "\n".join(lines)
     
     async def _get_trade_stats(
         self, db: AsyncSession, user_id: int, d: date,
