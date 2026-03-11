@@ -312,13 +312,13 @@ class MemoryConsolidator:
             side_str = p.side.value.upper() if hasattr(p.side, 'value') else str(p.side).upper()
             leverage = p.leverage or 1
             entry_price = float(p.entry_price) if p.entry_price else 0
-            commission = float(p.commission) if hasattr(p, 'commission') and p.commission else 0
+            commission = float(p.total_commission) if p.total_commission else 0
             source = p.source or "unknown"
             open_time = _to_cst(p.created_at)
             open_reason = getattr(p, 'open_reason', '') or ''
             
             if p.status == PositionStatus.CLOSED:
-                close_price = float(p.close_price) if p.close_price else 0
+                close_price = float(getattr(p, 'close_price', 0) or getattr(p, 'exit_price', 0) or 0)
                 pnl = float(p.realized_pnl) if p.realized_pnl else 0
                 close_time = _to_cst(p.closed_at)
                 # 计算持仓时长
@@ -333,7 +333,7 @@ class MemoryConsolidator:
                 pnl_sign = '+' if pnl >= 0 else ''
                 lines.append(
                     f"- [{open_time}] {p.symbol} {side_str} {p.size} {leverage}x | "
-                    f"入场{entry_price:.1f} → 出场{close_price:.1f} | "
+                    f"入场{entry_price:.1f}" + (f" → 出场{close_price:.1f}" if close_price else "") + f" | "
                     f"持仓{duration_str} | 盈亏{pnl_sign}{pnl:.2f} USDT | "
                     f"手续费{commission:.4f} | [{source}]"
                     + (f" | 原因: {open_reason[:80]}" if open_reason else "")
