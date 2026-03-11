@@ -201,7 +201,7 @@ export async function* streamChatWithAgent(
   const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
   
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 120_000) // 120s 超时
+  const timeout = setTimeout(() => controller.abort(), 300_000) // 300s 超时 (deepseek 等模型回复较长)
   
   try {
   const response = await fetch(`${baseUrl}/api/hub/agents/${agentId}/chat`, {

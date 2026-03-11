@@ -249,8 +249,8 @@ class HubBrain:
         full_reply = ""
         async for event_str in self.chat_stream(agent, message, db, user_id):
             event = json.loads(event_str)
-            if event["type"] == "done":
-                full_reply = event.get("content", "")
+            if event["type"] == "text":
+                full_reply += event.get("content", "")
             elif event["type"] == "error":
                 full_reply = f"[ERROR] {event.get('content', '')}"
         return full_reply
