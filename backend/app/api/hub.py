@@ -700,8 +700,10 @@ async def trigger_consolidation(
             "importance": result.get("importance", 5),
         }
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        import traceback, sys
+        err = traceback.format_exc()
+        print(f"[CONSOLIDATION ERROR] {err}", flush=True)
+        print(f"[CONSOLIDATION ERROR] {err}", file=sys.stderr, flush=True)
         raise HTTPException(status_code=500, detail=f"坍缩失败: {str(e)}")
 
 
