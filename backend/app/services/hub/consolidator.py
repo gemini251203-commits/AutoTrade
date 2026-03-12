@@ -133,12 +133,14 @@ class MemoryConsolidator:
                         )
                     )
                     if not existing.scalar_one_or_none():
+                        # ★ 自动从 Redis 获取用户设定的书记员
+                        secretary_id = await self._get_secretary_from_redis(user_id)
                         logger.info(
                             f"[MemoryConsolidator] Catchup: generating yesterday's "
-                            f"minutes ({yesterday}) for user {user_id}"
+                            f"minutes ({yesterday}) for user {user_id}, secretary={secretary_id}"
                         )
                         try:
-                            await self.consolidate(user_id, target_date=yesterday)
+                            await self.consolidate(user_id, target_date=yesterday, secretary_agent_id=secretary_id)
                         except Exception as e:
                             logger.error(f"[MemoryConsolidator] Catchup failed for user {user_id}: {e}")
         except Exception as e:
@@ -192,9 +194,45 @@ class MemoryConsolidator:
         
         for user_id in user_ids:
             try:
-                await self.consolidate(user_id)
+                # ★ 自动从 Redis 获取用户设定的书记员
+                secretary_id = await self._get_secretary_from_redis(user_id)
+                logger.info(f"[MemoryConsolidator] Running for user {user_id}, secretary={secretary_id}")
+                await self.consolidate(user_id, secretary_agent_id=secretary_id)
             except Exception as e:
                 logger.error(f"[MemoryConsolidator] Failed for user {user_id}: {e}")
+    
+    @staticmethod
+    async def _get_secretary_from_redis(user_id: int) -> Optional[int]:
+        """从 Redis 获取用户设定的书记员 Agent ID"""
+        try:
+            from app.core.redis import get_redis
+            r = await get_redis()
+            val = await r.get(f"hub:secretary:{user_id}")
+            if val:
+                return int(val)
+        except Exception as e:
+            logger.warning(f"[MemoryConsolidator] Failed to get secretary from Redis for user {user_id}: {e}")
+        
+        # ★ Fallback: 查找第一个有 API Key 的 Agent 作为书记员
+        try:
+            from app.db.session import AsyncSessionLocal
+            from app.models.hub_agent import HubAgent
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(HubAgent.id).where(
+                        HubAgent.user_id == user_id,
+                        HubAgent.api_key_enc.isnot(None),
+                        HubAgent.api_key_enc != '',
+                    ).limit(1)
+                )
+                agent_id = result.scalar_one_or_none()
+                if agent_id:
+                    logger.info(f"[MemoryConsolidator] Fallback: using agent #{agent_id} as secretary for user {user_id}")
+                    return agent_id
+        except Exception as e:
+            logger.warning(f"[MemoryConsolidator] Fallback secretary lookup failed: {e}")
+        
+        return None
     
     async def consolidate(
         self,
@@ -723,7 +761,7 @@ class MemoryConsolidator:
                     {"role": "user", "content": data_block},
                 ],
                 temperature=0.3,
-                max_tokens=4096,  # ★ 支持长篇结构化复盘报告
+                max_tokens=8192,  # ★ 支持长篇结构化复盘报告
             )
             content = response.choices[0].message.content or ""
             
@@ -744,7 +782,7 @@ class MemoryConsolidator:
             except (json.JSONDecodeError, ValueError):
                 # JSON 解析失败，用原始文本
                 return {
-                    "summary": content[:500],
+                    "summary": content,
                     "key_lessons": "",
                     "importance": 5,
                 }
