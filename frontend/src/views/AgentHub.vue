@@ -603,21 +603,49 @@ function statusLabel(status: string) {
 }
 
 // 立刻生成今日复盘
+// ★ 模块级状态：即使用户切换页面，consolidation 请求也不会中断
+let _consolidationPromise: Promise<any> | null = null
+
 async function handleConsolidate() {
+  if (_consolidationPromise) {
+    message.warning('纪要正在生成中，请稍候...')
+    return
+  }
   consolidating.value = true
-  warRoomMessages.value.push(wrMsg('system', '[System] 正在生成今日《董事会纪要》...', { name: 'System' }))
+  warRoomMessages.value.unshift(wrMsg('system', '[System] 正在生成今日《董事会纪要》，可能需要 30-60 秒...', { name: 'System' }))
   scrollWarRoom()
+
+  // ★ 使用原生 fetch（不受 axios 拦截器/组件生命周期影响，页面切换也不取消）
+  const token = (await import('@/utils/request')).getAuthToken()
+  _consolidationPromise = fetch('/api/hub/memory/consolidate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  }).then(async (resp) => {
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '')
+      throw new Error(`生成失败 (${resp.status}): ${body}`)
+    }
+    return resp.json()
+  })
+
   try {
-    const res = await triggerConsolidation()
-    const data = res.data || res
+    const data = await _consolidationPromise
     const text = `[今日董事会纪要] (重要性: ${data.importance}/10)\n\n${data.summary}\n\n[核心教训]: ${data.key_lessons}`
-    warRoomMessages.value.push(wrMsg('ai_text', text, { name: '书记员', avatar: 'BRAIN' }))
-    // 保存到日志
+    // 保存到 hub_logs
     try { await saveHubLog({ agent_name: '书记员', log_type: 'ai_text', content: text }) } catch {}
+    // ★ 刷新 War Room 日志列表，确保纪要立刻显示
+    await loadWarRoomHistory()
+    message.success('董事会纪要生成成功！')
   } catch (e: any) {
-    warRoomMessages.value.push(wrMsg('error', `纪要生成失败: ${e?.message || e}`, { name: 'System' }))
+    warRoomMessages.value.unshift(wrMsg('error', `纪要生成失败: ${e?.message || e}`, { name: 'System' }))
+    scrollWarRoom()
+    message.error(`纪要生成失败: ${e?.message || '未知错误'}`)
   } finally {
     consolidating.value = false
+    _consolidationPromise = null
     scrollWarRoom()
   }
 }
