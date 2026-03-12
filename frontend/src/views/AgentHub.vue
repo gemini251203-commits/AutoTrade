@@ -313,6 +313,8 @@ function collapseToolLogs(msgs: WRMessage[]): WRMessage[] {
 // ==================== Data Loading ====================
 
 async function loadData() {
+  if (_loadingData || _unmounted) return
+  _loadingData = true
   try {
     const [agentRes, statusRes, secRes] = await Promise.all([
       listHubAgents(), getHubStatus(), getSecretary().catch(() => null),
@@ -329,6 +331,8 @@ async function loadData() {
     pollFailCount++
     connectionStatus.value = pollFailCount >= 3 ? 'error' : 'reconnecting'
     console.error(`Failed to load hub data (attempt ${pollFailCount}):`, e)
+  } finally {
+    _loadingData = false
   }
 }
 // ==================== 日志搜索 + 分页 ====================
@@ -397,15 +401,25 @@ async function searchLogs() {
   await loadWarRoomHistory(logSearchKeyword.value.trim() || undefined)
 }
 
-onMounted(async () => {
+// ★ 组件卸载标记 — 防止卸载后轮询请求继续发出
+let _unmounted = false
+let _loadingData = false
+
+onMounted(() => {
+  _unmounted = false
   loading.value = true
-  await Promise.all([loadData(), loadWarRoomHistory()])
-  loading.value = false
-  // 5秒轮询，确保状态及时更新
-  pollTimer = setInterval(loadData, 10000)
+  // ★ 不 await — 让数据在后台加载，不阻塞路由切换和页面渲染
+  Promise.all([loadData(), loadWarRoomHistory()]).finally(() => {
+    loading.value = false
+  })
+  // 10秒轮询
+  pollTimer = setInterval(() => {
+    if (!_unmounted && !_loadingData) loadData()
+  }, 10000)
 })
 
 onUnmounted(() => {
+  _unmounted = true
   if (pollTimer) clearInterval(pollTimer)
 })
 
