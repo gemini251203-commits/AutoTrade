@@ -56,30 +56,35 @@ def _decrypt_agent_key(encrypted: str) -> str:
     raise ValueError(f"无法解密 API Key (长度={len(encrypted)})")
 
 # 华尔街级书记员 System Prompt
-_SECRETARY_PROMPT = """你是一位顶级对冲基金的首席合规与复盘官。你的任务是根据提供的今日系统原始数据，生成一份极度结构化的复盘报告。
+_SECRETARY_PROMPT = """你是一位顶级对冲基金的首席合规与复盘官。你的任务是根据提供的今日系统原始数据，生成一份极度结构化的硬核复盘报告。
 
-必须包含以下模块：
+必须包含以下模块（缺失数据的模块写"无数据"即可）：
 
-1.【核心数据】：总交易笔数、胜率（盈利笔数/总笔数）、净盈亏、最大单笔盈利/亏损、资金费率消耗、最大回撤。
+1.【核心数据】：总交易笔数、胜率（盈利笔数/总笔数）、净盈亏、最大单笔盈利/亏损、资金费率消耗、最大回撤。用数据说话，不要空泛描述。
 
 2.【交易时间轴】：列出每笔交易的精确时间（北京时间）、标的、方向、杠杆、入场价/出场价、持仓时长、触发逻辑与最终盈亏结果。
 
-3.【AI 逻辑审计】：审查今日各 Trader Agent 的决策过程。点名指出：
+3.【被阻拦的交易】：列出今日AI想执行但被风控/系统阻拦的交易决策。分析这些被拦截的交易如果执行了，结果会如何——是正确的拦截还是错失的机会？
+
+4.【AI 逻辑审计】：审查今日各 Agent 的决策过程。只关注决策质量，不需要展开技术指标的具体数值（如MACD、RSI、布林线等的计算过程）。重点指出：
    - 优秀的预判（提前捕捉到信号的决策）
    - 冲动或草率的决策（缺乏充分分析就下单）
-   - 逻辑错误（判断方向与指标信号矛盾）
+   - 逻辑错误（判断方向与最终走势矛盾）
    - 错失的机会（有明确信号但未行动）
 
-4.【系统健康教训】：一段话总结今日得失，给出明日具体的参数调整建议（如止损幅度、杠杆倍数、交易频率等）。
+5.【市场情绪与环境】：分析当天市场的整体情绪、重大外部事件或政策变化对行情的影响，以及AI系统是否适应了这种市场环境变化。
 
-规则：
+6.【系统健康教训】：总结今日得失的核心问题和逻辑缺陷，给出明日具体的优化方向。避免每次重复"降低杠杆、降低频率"等泛泛建议——除非确实发现了相关问题。
+
+重要规则：
 - 全程中文，专业但易懂
+- 精简技术指标细节，只概述AI的决策依据，不罗列MACD、布林通道等具体计算值
 - 没有交易时照实说"今日无交易"，但仍需审计 AI 的分析质量
 - 给出重要性评分 (1-10)，基于当日市场波动和决策质量
 
 输出格式 (严格 JSON):
 {
-    "summary": "完整复盘报告正文（包含上述4个模块）...",
+    "summary": "完整复盘报告正文（包含上述6个模块）...",
     "key_lessons": "一句话核心教训",
     "importance": 7
 }
@@ -220,6 +225,7 @@ class MemoryConsolidator:
             trades_text = await self._extract_trades(db, user_id, target_date)
             ai_debate_text = await self._extract_hub_logs(db, user_id, target_date)
             autopilot_text = await self._extract_autopilot(db, user_id, target_date)
+            blocked_trades_text = await self._extract_blocked_trades(db, user_id, target_date)
             trade_count, pnl_total = await self._get_trade_stats(db, user_id, target_date)
             funding_costs = await self._extract_funding_costs(db, user_id, target_date)
             max_drawdown = await self._extract_max_drawdown(db, user_id, target_date)
@@ -229,6 +235,7 @@ class MemoryConsolidator:
                 target_date, trades_text, ai_debate_text, autopilot_text,
                 trade_count, pnl_total,
                 funding_costs=funding_costs, max_drawdown=max_drawdown,
+                blocked_trades=blocked_trades_text,
             )
             
             if not trades_text and not ai_debate_text and not autopilot_text:
@@ -380,7 +387,7 @@ class MemoryConsolidator:
         by_agent = defaultdict(list)
         for lg in logs:
             name = lg.agent_name or "Unknown"
-            content = lg.content[:500]  # ★ 截断提升到 500 字
+            content = lg.content  # 完整保留内容
             time_str = (lg.created_at + timedelta(hours=8)).strftime("%H:%M") if lg.created_at else ""
             by_agent[name].append(f"  [{time_str}] {content}")
         
@@ -423,6 +430,52 @@ class MemoryConsolidator:
             return "\n".join(lines)
         except Exception as e:
             logger.warning(f"[MemoryConsolidator] extract_autopilot error: {e}")
+            return ""
+    
+    async def _extract_blocked_trades(
+        self, db: AsyncSession, user_id: int, d: date,
+    ) -> str:
+        """从 autopilot_logs 表提取被阻拦的交易（AI想执行但未成功执行的决策）"""
+        try:
+            from app.models.autopilot_log import AutopilotLog
+            
+            day_start = datetime(d.year, d.month, d.day) - timedelta(hours=8)
+            day_end = day_start + timedelta(days=1)
+            
+            result = await db.execute(
+                select(AutopilotLog).where(
+                    AutopilotLog.user_id == user_id,
+                    AutopilotLog.created_at >= day_start,
+                    AutopilotLog.created_at < day_end,
+                    AutopilotLog.action_taken == False,
+                    AutopilotLog.decision.notin_(["hold", "error"]),
+                ).order_by(AutopilotLog.created_at).limit(20)
+            )
+            logs = result.scalars().all()
+            
+            if not logs:
+                return ""
+            
+            def _to_cst(dt):
+                if not dt:
+                    return "-"
+                return (dt + timedelta(hours=8)).strftime("%H:%M:%S")
+            
+            lines = []
+            for lg in logs:
+                time_str = _to_cst(lg.created_at)
+                decision_map = {
+                    "open_long": "想做多", "open_short": "想做空",
+                    "close_long": "想平多", "close_short": "想平空",
+                }
+                decision_cn = decision_map.get(lg.decision, lg.decision)
+                error = f" | 原因: {lg.error_message[:100]}" if lg.error_message else ""
+                summary = lg.summary[:150] if lg.summary else ""
+                lines.append(f"- [{time_str}] {lg.symbol} {decision_cn} | {summary}{error}")
+            
+            return "\n".join(lines)
+        except Exception as e:
+            logger.warning(f"[MemoryConsolidator] extract_blocked_trades error: {e}")
             return ""
     
     async def _get_trade_stats(
@@ -545,6 +598,7 @@ class MemoryConsolidator:
         self, d: date, trades: str, debates: str, autopilot: str,
         trade_count: int, pnl_total: float,
         funding_costs: str = "", max_drawdown: str = "",
+        blocked_trades: str = "",
     ) -> str:
         """拼接结构化数据块给书记员"""
         parts = [
@@ -559,6 +613,13 @@ class MemoryConsolidator:
             parts.append(trades)
         else:
             parts.append("今日无交易。")
+        
+        # 被阻拦的交易
+        parts.append(f"\n## 被阻拦的交易（AI想执行但被系统/风控拦截的决策）")
+        if blocked_trades:
+            parts.append(blocked_trades)
+        else:
+            parts.append("今日无被阻拦的交易。")
         
         # 资金异动
         parts.append(f"\n## 资金异动")
