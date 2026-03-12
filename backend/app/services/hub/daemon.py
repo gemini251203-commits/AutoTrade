@@ -241,7 +241,7 @@ class HubDaemon:
                         agent_id=agent.id,
                         agent_name=agent.name,
                         log_type="ai_text",
-                        content=ev_content[:500],
+                        content=ev_content,
                     ))
                 
                 elif ev_type == "tool_call":
