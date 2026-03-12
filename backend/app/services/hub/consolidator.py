@@ -325,8 +325,16 @@ class MemoryConsolidator:
             open_reason = getattr(p, 'open_reason', '') or ''
             
             if p.status == PositionStatus.CLOSED:
-                close_price = float(getattr(p, 'close_price', 0) or getattr(p, 'exit_price', 0) or 0)
                 pnl = float(p.realized_pnl) if p.realized_pnl else 0
+                # 反算出场价: Position 模型没有 close_price, 从 pnl 反推
+                close_price = 0.0
+                size_f = float(p.size) if p.size else 0
+                if size_f > 0 and entry_price > 0:
+                    side_val = p.side.value if hasattr(p.side, 'value') else str(p.side)
+                    if side_val == 'long':
+                        close_price = entry_price + pnl / size_f
+                    else:
+                        close_price = entry_price - pnl / size_f
                 close_time = _to_cst(p.closed_at)
                 # 计算持仓时长
                 if p.created_at and p.closed_at:
@@ -340,7 +348,7 @@ class MemoryConsolidator:
                 pnl_sign = '+' if pnl >= 0 else ''
                 lines.append(
                     f"- [{open_time}] {p.symbol} {side_str} {p.size} {leverage}x | "
-                    f"入场{entry_price:.1f}" + (f" → 出场{close_price:.1f}" if close_price else "") + f" | "
+                    f"入场{entry_price:.1f} → 出场{close_price:.1f} | "
                     f"持仓{duration_str} | 盈亏{pnl_sign}{pnl:.2f} USDT | "
                     f"手续费{commission:.4f} | [{source}]"
                     + (f" | 原因: {open_reason[:80]}" if open_reason else "")
