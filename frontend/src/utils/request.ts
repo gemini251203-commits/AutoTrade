@@ -3,6 +3,11 @@
  * =====================
  * Configured axios instance with auth interceptors.
  * 
+ * Features:
+ * - Auto auth token injection
+ * - Route-change request cancellation (prevents connection pool starvation)
+ * - Token refresh on 401
+ * 
  * Usage:
  *   import request from '@/utils/request'
  *   const data = await request.get('/wallet/balance')
@@ -14,12 +19,28 @@ import router from '@/router'
 
 // Create axios instance
 const request: AxiosInstance = axios.create({
-  baseURL: '/api',  // Vite proxy will forward to backend
-  timeout: 30000,
+  baseURL: '/api',
+  timeout: 15000,  // 15s (was 30s — shorter timeout prevents connection hogging)
   headers: {
     'Content-Type': 'application/json',
   },
 })
+
+// ============================================
+// Route-Change Request Cancellation
+// ============================================
+// 浏览器限制同域名最多 6 个并发连接。
+// 当页面切换时，旧页面的 pending 请求会占用连接，
+// 导致新页面的请求排队等待 → 页面切换卡顿。
+// 解决方案：路由切换时取消所有 pending 请求。
+
+const _pendingControllers = new Set<AbortController>()
+
+/** 取消所有正在进行的 API 请求（路由切换时调用） */
+export function cancelAllPendingRequests() {
+  _pendingControllers.forEach(c => c.abort())
+  _pendingControllers.clear()
+}
 
 // ============================================
 // Request Interceptor
@@ -58,6 +79,14 @@ request.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`
     }
     
+    // ★ 为每个请求绑定 AbortController（除非已有 signal）
+    if (!config.signal) {
+      const controller = new AbortController()
+      config.signal = controller.signal
+      ;(config as any)._abortController = controller
+      _pendingControllers.add(controller)
+    }
+    
     return config
   },
   (error: AxiosError) => {
@@ -74,10 +103,21 @@ let pendingRequests: Array<(token: string) => void> = []
 
 request.interceptors.response.use(
   (response) => {
-    // Return data directly
+    // ★ 请求完成，从 pending 集合中移除
+    const ctrl = (response.config as any)?._abortController as AbortController | undefined
+    if (ctrl) _pendingControllers.delete(ctrl)
     return response
   },
   async (error: AxiosError) => {
+    // ★ 清理 pending controller
+    const ctrl = (error.config as any)?._abortController as AbortController | undefined
+    if (ctrl) _pendingControllers.delete(ctrl)
+    
+    // ★ 被路由切换取消的请求 — 静默处理
+    if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
+      return Promise.reject(error)
+    }
+    
     const status = error.response?.status
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
     

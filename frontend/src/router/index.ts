@@ -135,10 +135,18 @@ const router = createRouter({
 // Navigation Guards
 // ============================================
 
+import { cancelAllPendingRequests } from '@/utils/request'
+
 // Track whether we've loaded from storage
 let storageLoaded = false
 
 router.beforeEach(async (to, from, next) => {
+  // ★ 路由切换时取消所有旧页面的 pending 请求
+  // 防止连接池被旧请求占满导致新页面加载卡顿
+  if (from.name && from.name !== to.name) {
+    cancelAllPendingRequests()
+  }
+  
   const authStore = useAuthStore()
   const requiresAuth = to.meta.requiresAuth !== false
   
