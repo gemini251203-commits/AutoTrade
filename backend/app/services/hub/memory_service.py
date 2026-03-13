@@ -84,7 +84,7 @@ async def get_memory(user_id: int):
     """
     获取 mem0 Memory 实例（按 user_id 缓存）。
     
-    使用 Gemini 做 embedding + fact extraction，LanceDB 做向量存储。
+    使用 Gemini 做 embedding + fact extraction，Qdrant on-disk 做向量存储。
     如果初始化失败（缺少 API key 等），返回 None。
     """
     global _memory_instances, _init_failures
@@ -100,11 +100,12 @@ async def get_memory(user_id: int):
         
         config = {
             "vector_store": {
-                "provider": "lancedb",
+                "provider": "qdrant",
                 "config": {
                     "collection_name": f"user_{user_id}_memories",
-                    "uri": LANCEDB_PATH,
+                    "path": LANCEDB_PATH,  # Qdrant on-disk 存储路径
                     "embedding_model_dims": 768,
+                    "on_disk": True,
                 },
             },
         }
