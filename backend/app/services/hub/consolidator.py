@@ -846,38 +846,53 @@ class MemoryConsolidator:
 async def load_board_memory(
     db: AsyncSession,
     user_id: int,
-    days: int = 3,
+    days: int = 7,
 ) -> str:
     """
     加载近 N 天的董事会纪要，格式化为注入文本。
     
-    供 brain.py 和 prompts.py 调用。
+    供 brain.py 在 Agent 巡逻时注入到 system prompt。
+    每条纪要限制摘要长度，防止 token 溢出。
     """
     from app.models.board_minutes import BoardMinutes
     
-    cutoff = date.today() - timedelta(days=days)
+    # ★ 使用 CST 时区计算日期（服务器是 UTC）
+    today_cst = datetime.now(_CST).date()
+    cutoff = today_cst - timedelta(days=days)
     
-    result = await db.execute(
-        select(BoardMinutes).where(
-            BoardMinutes.user_id == user_id,
-            BoardMinutes.date >= cutoff,
-        ).order_by(BoardMinutes.date.desc()).limit(days)
-    )
-    minutes_list = result.scalars().all()
+    try:
+        result = await db.execute(
+            select(BoardMinutes).where(
+                BoardMinutes.user_id == user_id,
+                BoardMinutes.date >= cutoff,
+            ).order_by(BoardMinutes.date.desc()).limit(days)
+        )
+        minutes_list = result.scalars().all()
+    except Exception as e:
+        logger.error(f"[load_board_memory] DB query failed: {e}")
+        return ""
     
     if not minutes_list:
+        logger.debug(f"[load_board_memory] No board minutes found for user {user_id} in last {days} days")
         return ""
     
     lines = []
     for m in minutes_list:
         pnl_sign = "+" if m.pnl_total >= 0 else ""
-        lines.append(
-            f"【{m.date} 纪要】重要性: {m.importance}/10 | "
-            f"交易 {m.trade_count} 笔 | 净盈亏: {pnl_sign}{m.pnl_total:.1f} USDT\n"
-            f"{m.summary}\n"
-            f"教训: {m.key_lessons}"
+        # ★ 限制每条纪要的 summary 长度（~300字），防止 7 天纪要撑爆 token
+        summary_text = m.summary[:300] if m.summary else "无摘要"
+        lessons_text = m.key_lessons[:150] if m.key_lessons else ""
+        
+        entry = (
+            f"【{m.date}】重要性:{m.importance}/10 | "
+            f"交易{m.trade_count}笔 | 盈亏:{pnl_sign}{float(m.pnl_total):.1f} USDT\n"
+            f"{summary_text}"
         )
+        if lessons_text:
+            entry += f"\n教训: {lessons_text}"
+        lines.append(entry)
     
+    logger.info(f"[load_board_memory] Loaded {len(lines)} days of board memory for user {user_id}")
     return "\n\n".join(lines)
 
 
