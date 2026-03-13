@@ -839,6 +839,21 @@ class MemoryConsolidator:
             )
             db.add(minutes)
             logger.info(f"[MemoryConsolidator] Created new minutes for {target_date}")
+        
+        # ★ 将纪要向量化存入 mem0 (LanceDB)
+        try:
+            from app.services.hub.memory_service import add_board_minutes_memory
+            await add_board_minutes_memory(
+                user_id=user_id,
+                date_str=str(target_date),
+                summary=result["summary"],
+                key_lessons=result.get("key_lessons", ""),
+                trade_count=trade_count,
+                pnl_total=float(pnl_total),
+            )
+        except Exception as e:
+            # 向量化失败不影响纪要保存
+            logger.warning(f"[MemoryConsolidator] mem0 vectorization failed (non-fatal): {e}")
 
 
 # ======== 全局加载函数 (供 prompt 注入使用) ========

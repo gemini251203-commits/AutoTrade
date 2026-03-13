@@ -2991,6 +2991,7 @@ async def search_historical_minutes(
     user_id: int,
     keyword: str = "",
     days_back: int = 90,
+    semantic: bool = True,
 ) -> str:
     """
     搜索历史董事会纪要 — 深层冷记忆检索
@@ -2998,13 +2999,41 @@ async def search_historical_minutes(
     当你遇到罕见的极端行情，或需要更久远的历史经验时，
     请主动调用此工具搜索过去的董事会纪要。
 
+    支持两种搜索模式:
+    - semantic=True (默认): 语义搜索，理解含义而非精确匹配关键词
+    - semantic=False: 关键词匹配搜索
+
     参数:
-        keyword: 搜索关键词 (如 "暴跌", "止损", "ETH", "逆势")
+        keyword: 搜索内容 (如 "暴跌后怎么办", "止损教训", "ETH 逆势操作")
         days_back: 往回搜索天数 (默认 90 天, 最大 365)
+        semantic: 是否使用语义搜索 (默认 True)
 
     返回:
         匹配的历史纪要列表 (含日期、摘要、教训、盈亏)
     """
+    # ★ 语义搜索模式 — 优先尝试 mem0
+    if semantic and keyword and keyword.strip():
+        try:
+            from app.services.hub.memory_service import search_memories
+            memories = await search_memories(user_id, keyword.strip(), limit=5)
+            if memories:
+                data = []
+                for mem in memories:
+                    data.append({
+                        "memory": mem.get("memory", ""),
+                        "score": f"{mem.get('score', 0):.0%}",
+                        "metadata": mem.get("metadata", {}),
+                    })
+                return json.dumps({
+                    "results": data,
+                    "total": len(data),
+                    "search_mode": "semantic",
+                    "query": keyword,
+                }, ensure_ascii=False, default=str)
+        except Exception as e:
+            logger.debug(f"[AgentTools] Semantic search unavailable, falling back to keyword: {e}")
+
+    # ★ 关键词搜索 fallback
     from app.models.board_minutes import BoardMinutes
     from datetime import date, timedelta
 
@@ -3053,6 +3082,7 @@ async def search_historical_minutes(
         return json.dumps({
             "results": data,
             "total": len(data),
+            "search_mode": "keyword",
             "search_range": f"过去 {days_back} 天",
             "keyword": keyword,
         }, ensure_ascii=False, default=str)
@@ -3060,3 +3090,4 @@ async def search_historical_minutes(
     except Exception as e:
         logger.warning(f"[AgentTools] search_historical_minutes error: {e}")
         return json.dumps({"error": f"搜索失败: {str(e)}"}, ensure_ascii=False, default=str)
+

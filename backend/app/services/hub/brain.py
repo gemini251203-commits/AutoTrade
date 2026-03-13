@@ -95,6 +95,15 @@ class HubBrain:
         except Exception as e:
             logger.warning(f"[HubBrain] Board memory injection failed: {e}")
         
+        # 1.55 注入 mem0 深层记忆 (语义搜索历史经验)
+        try:
+            from app.services.hub.memory_service import get_relevant_context
+            deep_mem = await get_relevant_context(user_id, message, limit=3)
+            if deep_mem:
+                full_system_prompt += f"\n\n{deep_mem}"
+        except Exception as e:
+            logger.debug(f"[HubBrain] Deep memory injection skipped: {e}")
+        
         # 1.6 注入全体 Agent 共享上下文 (打破平行宇宙)
         try:
             shared_ctx = await self._load_shared_context(db, user_id, agent.id)
