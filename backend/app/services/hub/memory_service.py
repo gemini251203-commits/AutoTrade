@@ -29,19 +29,10 @@ _init_failures: set = set()  # 初始化失败的 user_id，避免重复尝试
 
 async def _get_user_gemini_key(user_id: int) -> dict:
     """
-    从数据库获取用户的 Gemini API 配置。
-    优先级: 环境变量 GEMINI_API_KEY > UserAIConfig 表中的 Gemini 配置
+    获取用于 mem0 的 API 配置。
+    优先级: 用户数据库配置 > 环境变量 GEMINI_API_KEY
     """
-    # 1. 优先使用环境变量
-    gemini_key = os.environ.get("GEMINI_API_KEY", "")
-    if gemini_key:
-        return {
-            "api_key": gemini_key,
-            "model": "gemini-2.0-flash",
-            "embedding_model": "models/text-embedding-004",
-        }
-    
-    # 2. 从数据库读取用户的 AI 配置
+    # 1. 先从数据库读取用户的 AI 配置（用户已验证可用的 key）
     try:
         from app.db.session import AsyncSessionLocal
         from app.models.user_ai_config import UserAIConfig
@@ -75,7 +66,17 @@ async def _get_user_gemini_key(user_id: int) -> dict:
                     "provider": "openai_compatible",
                 }
     except Exception as e:
-        logger.debug(f"[MemoryService] Failed to load user config: {e}")
+        logger.debug(f"[MemoryService] Failed to load user config from DB: {e}")
+    
+    # 2. Fallback: 环境变量 GEMINI_API_KEY
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    if gemini_key:
+        return {
+            "api_key": gemini_key,
+            "model": "gemini-2.0-flash",
+            "embedding_model": "models/text-embedding-004",
+            "provider": "gemini",
+        }
     
     return {}
 
