@@ -412,9 +412,15 @@ onMounted(() => {
   Promise.all([loadData(), loadWarRoomHistory()]).finally(() => {
     loading.value = false
   })
-  // 10秒轮询
+  // 10秒轮询（Agent 状态 + War Room 日志）
   pollTimer = setInterval(() => {
-    if (!_unmounted && !_loadingData) loadData()
+    if (!_unmounted && !_loadingData) {
+      loadData()
+      // ★ 自动刷新 War Room 日志（仅在首页且未搜索时）
+      if (!logSearchKeyword.value && logPage.value === 1) {
+        loadWarRoomHistory()
+      }
+    }
   }, 10000)
 })
 
