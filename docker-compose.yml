@@ -82,6 +82,9 @@ services:
       
       # News Module
       CRYPTOPANIC_API_KEY: "a77948a52701c5038a2b79b59c935bbd13881f43"
+      
+      # Memory (mem0 + LanceDB 向量化记忆)
+      GEMINI_API_KEY: "AIzaSyAocsvDP_rnJrClVXVH2-oCrpzQvyMHWOQ"
     volumes:
       - ./data_engine:/app/data_engine
       - ./backend/logs:/app/logs
