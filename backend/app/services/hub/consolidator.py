@@ -181,9 +181,12 @@ class MemoryConsolidator:
                 await asyncio.sleep(3600)  # 出错等1小时重试
     
     async def _run_for_all_users(self):
-        """为所有有活跃 Agent 的用户执行坍缩"""
+        """为所有有活跃 Agent 的用户执行坍缩（生成昨天的纪要）"""
         from app.db.session import AsyncSessionLocal
         from app.models.hub_agent import HubAgent
+        
+        # ★ 00:05 CST 触发时，应该生成昨天的纪要（当天刚开始无数据）
+        yesterday = (datetime.now(_CST) - timedelta(days=1)).date()
         
         async with AsyncSessionLocal() as db:
             # 查找所有有 hub agent 的用户
@@ -196,8 +199,8 @@ class MemoryConsolidator:
             try:
                 # ★ 自动从 Redis 获取用户设定的书记员
                 secretary_id = await self._get_secretary_from_redis(user_id)
-                logger.info(f"[MemoryConsolidator] Running for user {user_id}, secretary={secretary_id}")
-                await self.consolidate(user_id, secretary_agent_id=secretary_id)
+                logger.info(f"[MemoryConsolidator] Running for user {user_id}, date={yesterday}, secretary={secretary_id}")
+                await self.consolidate(user_id, target_date=yesterday, secretary_agent_id=secretary_id)
             except Exception as e:
                 logger.error(f"[MemoryConsolidator] Failed for user {user_id}: {e}")
     
