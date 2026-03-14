@@ -158,11 +158,25 @@ async def get_balance(db: AsyncSession, user_id: int) -> str:
     if not wallet:
         return json.dumps({"error": "钱包未初始化"}, ensure_ascii=False, default=str)
 
+    # ★ 查询已用保证金总额
+    pos_result = await db.execute(
+        select(Position).where(
+            Position.user_id == user_id,
+            Position.status == PositionStatus.OPEN,
+        )
+    )
+    open_positions = pos_result.scalars().all()
+    total_margin_used = sum(float(p.margin) for p in open_positions)
+    position_count = len(open_positions)
+
     return json.dumps({
         "available": float(wallet.balance),
         "frozen": float(wallet.frozen),
         "total_equity": float(wallet.total_equity),
         "total_pnl": float(wallet.total_pnl),
+        "margin_used": round(total_margin_used, 2),
+        "open_positions": position_count,
+        "note": "available 是可用余额，margin_used 是当前所有持仓占用的实际保证金",
     }, ensure_ascii=False, default=str)
 
 
