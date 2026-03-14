@@ -341,9 +341,18 @@ class HubDaemon:
         )
     
     def _build_cycle_prompt(self, agent: HubAgent) -> str:
-        """构建自主决策周期的 prompt (自由思考版)"""
+        """构建自主决策周期的 prompt (多币种巡逻版)"""
+        # 关注的交易对列表
+        watchlist = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
+        symbols_str = "、".join(watchlist)
+        
         return (
-            "轮到你值班了。看看现在市场什么情况，有没有机会，自己判断要不要动。"
+            f"轮到你值班了。你需要关注以下交易对: {symbols_str}。\n"
+            "1. 先查看当前持仓情况（所有币种），了解你的仓位状况。\n"
+            f"2. 逐一检查 {symbols_str} 的行情和技术指标，寻找交易机会。\n"
+            "3. 如果发现好的机会，自己判断要不要开仓或调整仓位。\n"
+            "4. 如果没有机会，保持观望并简要汇报各币种情况。\n"
+            "注意: 调用工具时请明确指定 symbol 参数，不要只看默认的 BTC。"
         )
     
     def get_running_agents(self) -> list:

@@ -577,7 +577,7 @@ async function handleControl(id: number, action: string) {
       pushAndSave('system', `[TRIGGER] ${agent.name} 单次执行...`, { agentId: agent.id, agentName: agent.name })
       // 走 SSE 流式路径，实时显示思考过程
       try {
-        const cyclePrompt = '轮到你值班了。看看现在市场什么情况，有没有机会，自己判断要不要动。'
+        const cyclePrompt = '轮到你值班了。你需要关注以下交易对: BTCUSDT、ETHUSDT、SOLUSDT、BNBUSDT。\n1. 先查看当前持仓情况（所有币种），了解你的仓位状况。\n2. 逐一检查各币种的行情和技术指标，寻找交易机会。\n3. 如果发现好的机会，自己判断要不要开仓或调整仓位。\n4. 如果没有机会，保持观望并简要汇报各币种情况。\n注意: 调用工具时请明确指定 symbol 参数，不要只看默认的 BTC。'
         for await (const event of streamChatWithAgent(agent.id, cyclePrompt)) {
           if (event.type === 'text' || event.type === 'done') {
             if (event.content) {
