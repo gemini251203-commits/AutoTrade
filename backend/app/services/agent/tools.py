@@ -207,7 +207,20 @@ async def get_positions(db: AsyncSession, user_id: int) -> str:
             "stop_loss": float(p.stop_loss) if p.stop_loss else None,
             "take_profit": float(p.take_profit) if p.take_profit else None,
         })
-    return json.dumps({"positions": data}, ensure_ascii=False, default=str)
+    
+    # ★ 汇总信息 — 帮助 AI 准确了解总资金占用
+    total_margin = sum(d["margin"] for d in data)
+    total_unrealized_pnl = sum(d["unrealized_pnl"] for d in data)
+    
+    return json.dumps({
+        "positions": data,
+        "summary": {
+            "total_positions": len(data),
+            "total_margin_used": round(total_margin, 2),
+            "total_unrealized_pnl": round(total_unrealized_pnl, 2),
+            "note": "margin 字段是交易所实际保证金（USDT），请直接使用此值，不要自行计算",
+        },
+    }, ensure_ascii=False, default=str)
 
 
 @register_tool
