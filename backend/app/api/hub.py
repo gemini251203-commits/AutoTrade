@@ -689,12 +689,23 @@ async def trigger_consolidation(
         pass
     
     try:
+        # ★ 智能日期：凌晨 6 点前点击 → 生成昨天的纪要（当天数据太少）
+        from datetime import datetime, timedelta, timezone
+        _cst = timezone(timedelta(hours=8))
+        now_cst = datetime.now(_cst)
+        if now_cst.hour < 6:
+            target_date = (now_cst - timedelta(days=1)).date()
+        else:
+            target_date = now_cst.date()
+        
         result = await memory_consolidator.consolidate(
             current_user.id,
+            target_date=target_date,
             secretary_agent_id=secretary_agent_id,
         )
         return {
             "success": True,
+            "date": str(target_date),
             "summary": result.get("summary", ""),
             "key_lessons": result.get("key_lessons", ""),
             "importance": result.get("importance", 5),
