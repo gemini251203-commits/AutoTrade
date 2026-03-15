@@ -793,59 +793,72 @@ onMounted(fetchAll)
       <!-- Poster Export Modal -->
       <NModal v-model:show="showPosterModal" preset="card" title="导出收益海报" style="max-width: 720px; max-height: 90vh;" :bordered="false">
         <div class="poster-modal-body">
-          <!-- Calendar Header -->
-          <div class="poster-cal-header">
-            <button class="cal-nav-btn" @click="pCalPrev">
-              <NIcon :component="ChevronBackOutline" :size="18" />
-            </button>
-            <span class="cal-month-label">{{ pCalMonthLabel }}</span>
-            <button class="cal-nav-btn" @click="pCalNext">
-              <NIcon :component="ChevronForwardOutline" :size="18" />
-            </button>
-          </div>
-          <!-- Calendar Grid -->
-          <NSpin :show="posterGenerating">
-            <table class="poster-cal-table">
-              <thead>
-                <tr>
-                  <th v-for="d in ['日','一','二','三','四','五','六']" :key="d">{{ d }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(week, wi) in pCalendarWeeks" :key="wi">
-                  <td v-for="(day, di) in week" :key="di">
-                    <div
-                      v-if="day"
-                      @click="selectPosterDay(day as number)"
-                      class="cal-day-cell"
-                      :style="dailyPnlMap[pDateStr(day as number)] !== undefined ? {
-                        background: (dailyPnlMap[pDateStr(day as number)] ?? 0) >= 0 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
-                        border: '1px solid ' + ((dailyPnlMap[pDateStr(day as number)] ?? 0) >= 0 ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'),
-                      } : {}"
-                    >
-                      <span class="cal-day-num">{{ day }}</span>
-                      <span
-                        v-if="dailyPnlMap[pDateStr(day as number)] !== undefined"
-                        class="cal-day-pnl"
-                        :style="{ color: (dailyPnlMap[pDateStr(day as number)] ?? 0) >= 0 ? '#22c55e' : '#ef4444' }"
+          <!-- ===== View 1: Calendar ===== -->
+          <template v-if="!posterPreviewUrl">
+            <!-- Calendar Header -->
+            <div class="poster-cal-header">
+              <button class="cal-nav-btn" @click="pCalPrev">
+                <NIcon :component="ChevronBackOutline" :size="18" />
+              </button>
+              <span class="cal-month-label">{{ pCalMonthLabel }}</span>
+              <button class="cal-nav-btn" @click="pCalNext">
+                <NIcon :component="ChevronForwardOutline" :size="18" />
+              </button>
+            </div>
+            <!-- Calendar Grid -->
+            <NSpin :show="posterGenerating">
+              <table class="poster-cal-table">
+                <thead>
+                  <tr>
+                    <th v-for="d in ['日','一','二','三','四','五','六']" :key="d">{{ d }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(week, wi) in pCalendarWeeks" :key="wi">
+                    <td v-for="(day, di) in week" :key="di">
+                      <div
+                        v-if="day"
+                        @click="selectPosterDay(day as number)"
+                        class="cal-day-cell"
+                        :style="dailyPnlMap[pDateStr(day as number)] !== undefined ? {
+                          background: (dailyPnlMap[pDateStr(day as number)] ?? 0) >= 0 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                          border: '1px solid ' + ((dailyPnlMap[pDateStr(day as number)] ?? 0) >= 0 ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'),
+                        } : {}"
                       >
-                        {{ (dailyPnlMap[pDateStr(day as number)] ?? 0) >= 0 ? '+' : '' }}{{ (dailyPnlMap[pDateStr(day as number)] ?? 0).toFixed(1) }}
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </NSpin>
-          <div class="poster-cal-hint" v-if="!posterPreviewUrl">点击日历上的日期生成海报</div>
-          <!-- Preview -->
-          <div class="poster-preview" v-if="posterPreviewUrl">
-            <img :src="posterPreviewUrl" alt="poster" class="poster-img" />
-            <NButton type="primary" block @click="downloadPoster" style="margin-top: 12px;">
-              <template #icon><NIcon><DownloadOutline /></NIcon></template>
-              保存图片
-            </NButton>
-          </div>
+                        <span class="cal-day-num">{{ day }}</span>
+                        <span
+                          v-if="dailyPnlMap[pDateStr(day as number)] !== undefined"
+                          class="cal-day-pnl"
+                          :style="{ color: (dailyPnlMap[pDateStr(day as number)] ?? 0) >= 0 ? '#22c55e' : '#ef4444' }"
+                        >
+                          {{ (dailyPnlMap[pDateStr(day as number)] ?? 0) >= 0 ? '+' : '' }}{{ (dailyPnlMap[pDateStr(day as number)] ?? 0).toFixed(1) }}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </NSpin>
+            <div class="poster-cal-hint">点击日历上的日期生成海报</div>
+          </template>
+
+          <!-- ===== View 2: Poster Preview ===== -->
+          <template v-else>
+            <div class="poster-preview">
+              <img :src="posterPreviewUrl" alt="poster" class="poster-img" />
+              <div class="poster-actions">
+                <NButton @click="posterPreviewUrl = ''" style="flex: 1;">
+                  <template #icon><NIcon :component="ChevronBackOutline" /></template>
+                  返回选择日期
+                </NButton>
+                <NButton type="primary" @click="downloadPoster" style="flex: 1;">
+                  <template #icon><NIcon><DownloadOutline /></NIcon></template>
+                  保存图片
+                </NButton>
+              </div>
+            </div>
+          </template>
+
           <canvas ref="posterCanvas" style="display: none;" />
         </div>
       </NModal>
@@ -1369,8 +1382,7 @@ onMounted(fetchAll)
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-height: 50vh;
-  overflow-y: auto;
+  gap: 12px;
 }
 
 .poster-img {
@@ -1378,5 +1390,12 @@ onMounted(fetchAll)
   max-width: 400px;
   border-radius: 8px;
   box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+
+.poster-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  max-width: 400px;
 }
 </style>
