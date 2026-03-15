@@ -37,6 +37,9 @@ export interface WalletAPIResponse {
 
   /** 资金账户余额 */
   funding_balance: string | number
+
+  /** 总投入本金 (充值+初始化) */
+  initial_balance: string | number
 }
 
 /**
@@ -74,6 +77,7 @@ export interface WalletState {
   totalPnl: number
   unrealizedPnl: number
   fundingBalance: number
+  initialBalance: number
   currency: string
   loading: boolean
   error: string | null

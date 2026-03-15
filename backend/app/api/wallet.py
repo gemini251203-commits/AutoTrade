@@ -45,6 +45,7 @@ class WalletBalanceResponse(BaseModel):
     total_pnl: Decimal
     unrealized_pnl: Decimal = Decimal("0")
     funding_balance: Decimal = Decimal("0")
+    initial_balance: Decimal = Decimal("0")  # 总投入本金 (充值+初始化)
 
 
 # ==================== Routes ====================
@@ -157,6 +158,23 @@ async def get_balance(
     except Exception as e:
         logger.warning(f"[FROZEN AUDIT] Check failed: {e}")
     
+    # 计算总投入本金: deposit + reset 的总和
+    initial_balance = Decimal("0")
+    try:
+        from app.models.wallet_transaction import WalletTransaction, TransactionType
+        deposit_q = await db.execute(
+            select(func.coalesce(func.sum(WalletTransaction.amount), 0)).where(
+                WalletTransaction.user_id == current_user.id,
+                WalletTransaction.type.in_([
+                    TransactionType.DEPOSIT.value,
+                    TransactionType.RESET.value,
+                ]),
+            )
+        )
+        initial_balance = deposit_q.scalar() or Decimal("0")
+    except Exception as e:
+        logger.warning(f"[Wallet] Failed to calculate initial_balance: {e}")
+    
     return WalletBalanceResponse(
         available=wallet.balance,
         frozen=wallet.frozen,
@@ -164,6 +182,7 @@ async def get_balance(
         total_pnl=wallet.total_pnl,
         unrealized_pnl=unrealized_pnl,
         funding_balance=wallet.funding_balance,
+        initial_balance=initial_balance,
     )
 
 

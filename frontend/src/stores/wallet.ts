@@ -28,6 +28,7 @@ export const useWalletStore = defineStore('wallet', () => {
   const totalPnl = ref<number>(0)
   const unrealizedPnl = ref<number>(0)
   const fundingBalance = ref<number>(0)
+  const initialBalance = ref<number>(0)
   const currency = ref<string>('USDT')
   const loading = ref<boolean>(false)
   const error = ref<string | null>(null)
@@ -53,23 +54,32 @@ export const useWalletStore = defineStore('wallet', () => {
   })
   
   const formattedPnl = computed(() => {
-    const value = totalPnl.value
-    const sign = value >= 0 ? '+' : ''
+    // 真实盈亏 = 当前权益 + 未实现盈亏 - 初始投入
+    const realPnl = initialBalance.value > 0
+      ? (totalEquity.value + unrealizedPnl.value - initialBalance.value)
+      : totalPnl.value
+    const sign = realPnl >= 0 ? '+' : ''
     return sign + new Intl.NumberFormat('en-US', {
       style: 'decimal',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(value)
+    }).format(realPnl)
   })
   
   const pnlPercent = computed(() => {
-    if (totalEquity.value === 0) return '+0.00%'
-    const percent = (totalPnl.value / (totalEquity.value - totalPnl.value)) * 100
+    if (initialBalance.value <= 0) return '+0.00%'
+    const realPnl = totalEquity.value + unrealizedPnl.value - initialBalance.value
+    const percent = (realPnl / initialBalance.value) * 100
     const sign = percent >= 0 ? '+' : ''
     return sign + percent.toFixed(2) + '%'
   })
   
-  const isPnlPositive = computed(() => totalPnl.value >= 0)
+  const isPnlPositive = computed(() => {
+    const realPnl = initialBalance.value > 0
+      ? (totalEquity.value + unrealizedPnl.value - initialBalance.value)
+      : totalPnl.value
+    return realPnl >= 0
+  })
   
   const formattedUnrealizedPnl = computed(() => {
     const value = unrealizedPnl.value
@@ -115,6 +125,7 @@ export const useWalletStore = defineStore('wallet', () => {
       totalPnl.value = parseFloat(String(data.total_pnl)) || 0
       unrealizedPnl.value = parseFloat(String(data.unrealized_pnl)) || 0
       fundingBalance.value = parseFloat(String(data.funding_balance)) || 0
+      initialBalance.value = parseFloat(String(data.initial_balance)) || 0
       
     } catch (e: any) {
       error.value = e.response?.data?.detail || 'Failed to fetch balance'
@@ -150,6 +161,7 @@ export const useWalletStore = defineStore('wallet', () => {
     totalPnl.value = 0
     unrealizedPnl.value = 0
     fundingBalance.value = 0
+    initialBalance.value = 0
     error.value = null
   }
   
@@ -192,6 +204,7 @@ export const useWalletStore = defineStore('wallet', () => {
     totalPnl,
     unrealizedPnl,
     fundingBalance,
+    initialBalance,
     currency,
     loading,
     error,
