@@ -304,30 +304,40 @@ async def search_memories(
     limit: int = 5,
 ) -> List[Dict[str, Any]]:
     """
-    语义搜索用户的历史记忆。
+    语义搜索用户的历史记忆（带重试，应对 Gemini 速率限制）。
     """
     m = await get_memory(user_id)
     if m is None:
         return []
     
-    try:
-        import asyncio
-        result = await asyncio.to_thread(
-            m.search,
-            query,
-            user_id=str(user_id),
-            limit=limit,
-        )
+    import asyncio
+    last_err = None
+    for attempt in range(3):
+        try:
+            result = await asyncio.to_thread(
+                m.search,
+                query,
+                user_id=str(user_id),
+                limit=limit,
+            )
+            
+            memories = result.get("results", []) if isinstance(result, dict) else []
+            logger.info(
+                f"[MemoryService] Search '{query[:30]}...' for user {user_id}: "
+                f"{len(memories)} results"
+            )
+            return memories
         
-        memories = result.get("results", []) if isinstance(result, dict) else []
-        logger.info(
-            f"[MemoryService] Search '{query[:30]}...' for user {user_id}: "
-            f"{len(memories)} results"
-        )
-        return memories
+        except Exception as e:
+            last_err = e
+            if "RESOURCE_EXHAUSTED" in str(e) and attempt < 2:
+                wait = 3 * (attempt + 1)
+                logger.warning(f"[MemoryService] Rate limited, retrying in {wait}s... (attempt {attempt + 1}/3)")
+                await asyncio.sleep(wait)
+            else:
+                break
     
-    except Exception as e:
-        logger.error(f"[MemoryService] Search failed: {e}")
+    logger.error(f"[MemoryService] Search failed after retries: {last_err}")
         return []
 
 
