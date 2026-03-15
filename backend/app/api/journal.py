@@ -136,11 +136,24 @@ async def get_journal_stats(
     current_user: CurrentUser,
     db: DbSession,
     symbol: Optional[str] = None,
+    date: Optional[str] = None,  # YYYY-MM-DD (北京时间)
 ):
-    """获取交易统计"""
+    """获取交易统计 (可按日期过滤)"""
     base_filter = [TradeMemory.user_id == current_user.id]
     if symbol:
         base_filter.append(TradeMemory.symbol == symbol.upper())
+    
+    # 按日期过滤 (北京时间 → UTC 转换)
+    if date:
+        from datetime import datetime, timedelta
+        try:
+            day = datetime.strptime(date, "%Y-%m-%d")
+            utc_start = day - timedelta(hours=8)  # 北京 00:00 → UTC
+            utc_end = utc_start + timedelta(days=1)
+            base_filter.append(TradeMemory.created_at >= utc_start)
+            base_filter.append(TradeMemory.created_at < utc_end)
+        except ValueError:
+            pass
     
     # 总体统计
     result = await db.execute(

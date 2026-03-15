@@ -7,9 +7,9 @@
  * 展示所有来源 (手动/AI Agent/信号助手/量化策略) 的交易记录
  * 包含统计卡片 + 记忆列表
  */
-import { ref, onMounted, computed } from 'vue'
-import { NTag, NEmpty, NSpin, NSelect, NTooltip, NIcon, NPopconfirm, NPagination, useMessage } from 'naive-ui'
-import { BookOutline, TrendingUpOutline, TrendingDownOutline, TimeOutline, ShieldCheckmarkOutline, TrashOutline } from '@vicons/ionicons5'
+import { ref, onMounted, computed, nextTick } from 'vue'
+import { NTag, NEmpty, NSpin, NSelect, NTooltip, NIcon, NPopconfirm, NPagination, NButton, NDatePicker, NModal, useMessage } from 'naive-ui'
+import { BookOutline, TrendingUpOutline, TrendingDownOutline, TimeOutline, ShieldCheckmarkOutline, TrashOutline, DownloadOutline } from '@vicons/ionicons5'
 import MainLayout from '@/layouts/MainLayout.vue'
 import request from '@/utils/request'
 import type { TradeMemoryResponse as TradeMemory } from '@/api/strategy'
@@ -173,6 +173,172 @@ function formatPrice(price: string | number | null | undefined): string {
 
 const formatTime = formatDateTimeBJ
 
+// ========== Poster Export ==========
+const showPosterModal = ref(false)
+const posterDate = ref<number>(Date.now())
+const posterGenerating = ref(false)
+const posterCanvas = ref<HTMLCanvasElement | null>(null)
+const posterPreviewUrl = ref('')
+
+interface DailyPnlItem {
+  date: string
+  pnl: number
+}
+
+async function generatePoster() {
+  posterGenerating.value = true
+  try {
+    // 获取选中日期
+    const d = new Date(posterDate.value)
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+    // 获取当月日历 PnL
+    const res = await request.get('/wallet/portfolio-stats')
+    const dailyPnl: DailyPnlItem[] = res.data.daily_pnl || []
+    const dayData = dailyPnl.find((item: DailyPnlItem) => item.date === dateStr)
+    const pnlValue = dayData ? dayData.pnl : 0
+
+    // 获取钱包余额以计算收益率
+    const walletRes = await request.get('/wallet/balance')
+    const initialBalance = parseFloat(String(walletRes.data.initial_balance)) || 3000
+
+    // 收益率 = 当日盈亏 / 初始本金
+    const pnlPct = initialBalance > 0 ? (pnlValue / initialBalance) * 100 : 0
+
+    // 交易笔数（从 journal 查当日数据）
+    const journalRes = await request.get('/journal/stats', { params: { date: dateStr } })
+    const dayTrades = journalRes.data?.total_trades || 0
+    const dayWins = journalRes.data?.win_count || 0
+    const dayLosses = journalRes.data?.loss_count || 0
+
+    // 绘制海报
+    await nextTick()
+    drawPoster(dateStr, pnlValue, pnlPct, dayTrades, dayWins, dayLosses, initialBalance)
+  } catch (e) {
+    console.error('Failed to generate poster:', e)
+    message.error('生成海报失败')
+  } finally {
+    posterGenerating.value = false
+  }
+}
+
+function drawPoster(
+  dateStr: string,
+  pnlValue: number,
+  pnlPct: number,
+  trades: number,
+  wins: number,
+  losses: number,
+  initialBalance: number,
+) {
+  const canvas = posterCanvas.value
+  if (!canvas) return
+  const dpr = 2
+  const W = 400
+  const H = 640
+  canvas.width = W * dpr
+  canvas.height = H * dpr
+  canvas.style.width = W + 'px'
+  canvas.style.height = H + 'px'
+  const ctx = canvas.getContext('2d')!
+  ctx.scale(dpr, dpr)
+
+  const isPositive = pnlValue >= 0
+  const accentColor = isPositive ? '#0ECB81' : '#F6465D'
+
+  // ---- Background ----
+  ctx.fillStyle = '#0B0E11'
+  ctx.fillRect(0, 0, W, H)
+
+  // 装饰菱形
+  ctx.save()
+  ctx.translate(W - 80, 100)
+  ctx.rotate(Math.PI / 4)
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)'
+  ctx.lineWidth = 2
+  ctx.strokeRect(-55, -55, 110, 110)
+  ctx.fillStyle = 'rgba(255,255,255,0.02)'
+  ctx.fillRect(-40, -40, 80, 80)
+  ctx.restore()
+
+  // ---- Date ----
+  ctx.fillStyle = '#848E9C'
+  ctx.font = '14px -apple-system, "Helvetica Neue", sans-serif'
+  ctx.fillText(dateStr, 32, 52)
+
+  // ---- Title ----
+  ctx.fillStyle = '#EAECEF'
+  ctx.font = 'bold 22px -apple-system, "Helvetica Neue", sans-serif'
+  ctx.fillText('AutoTrade 日收益', 32, 100)
+
+  // ---- Subtitle ----
+  ctx.fillStyle = '#848E9C'
+  ctx.font = '14px -apple-system, "Helvetica Neue", sans-serif'
+  if (trades > 0) {
+    ctx.fillText(`${trades} 笔交易 · ${wins}胜 ${losses}负`, 32, 130)
+  } else {
+    ctx.fillText('当日无交易', 32, 130)
+  }
+
+  // ---- Main PnL ----
+  const sign = isPositive ? '+' : ''
+  const pnlText = `${sign}${pnlValue.toFixed(2)}`
+  ctx.fillStyle = accentColor
+  ctx.font = 'bold 56px -apple-system, "Helvetica Neue", sans-serif'
+  ctx.fillText(pnlText, 32, 230)
+
+  // USDT label
+  const pnlWidth = ctx.measureText(pnlText).width
+  ctx.fillStyle = '#848E9C'
+  ctx.font = '20px -apple-system, "Helvetica Neue", sans-serif'
+  ctx.fillText('USDT', 32 + pnlWidth + 10, 230)
+
+  // ---- PnL Percentage ----
+  ctx.fillStyle = accentColor
+  ctx.font = 'bold 28px -apple-system, "Helvetica Neue", sans-serif'
+  ctx.fillText(`${sign}${pnlPct.toFixed(2)}%`, 32, 280)
+
+  // ---- Stats area ----
+  const statsY = 340
+  ctx.fillStyle = '#848E9C'
+  ctx.font = '13px -apple-system, "Helvetica Neue", sans-serif'
+  ctx.fillText('初始本金', 32, statsY)
+  ctx.fillText('当日交易', W / 2, statsY)
+  
+  ctx.fillStyle = '#EAECEF'
+  ctx.font = 'bold 18px -apple-system, "Helvetica Neue", sans-serif'
+  ctx.fillText(`${initialBalance.toLocaleString()}`, 32, statsY + 28)
+  ctx.fillText(`${trades} 笔`, W / 2, statsY + 28)
+
+  // ---- Divider line ----
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(32, H - 90)
+  ctx.lineTo(W - 32, H - 90)
+  ctx.stroke()
+
+  // ---- Footer watermark ----
+  ctx.fillStyle = '#848E9C'
+  ctx.font = '13px -apple-system, "Helvetica Neue", sans-serif'
+  ctx.fillText('AutoTrade · AI 量化交易系统', 32, H - 50)
+  ctx.fillStyle = '#5E6673'
+  ctx.font = '11px -apple-system, "Helvetica Neue", sans-serif'
+  ctx.fillText('Powered by AI Agent', 32, H - 30)
+
+  posterPreviewUrl.value = canvas.toDataURL('image/png')
+}
+
+function downloadPoster() {
+  if (!posterPreviewUrl.value) return
+  const d = new Date(posterDate.value)
+  const dateStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+  const a = document.createElement('a')
+  a.href = posterPreviewUrl.value
+  a.download = `AutoTrade_${dateStr}.png`
+  a.click()
+}
+
 onMounted(fetchAll)
 </script>
 
@@ -185,6 +351,10 @@ onMounted(fetchAll)
           <NIcon size="24" color="#8b5cf6"><BookOutline /></NIcon>
           <h1>交易日志</h1>
           <span class="subtitle" v-if="stats">共 {{ stats.total_trades }} 笔交易</span>
+          <NButton size="small" quaternary @click="showPosterModal = true" style="margin-left: 8px;">
+            <template #icon><NIcon><DownloadOutline /></NIcon></template>
+            导出海报
+          </NButton>
         </div>
         <div class="header-filters">
           <NInput
@@ -466,6 +636,27 @@ onMounted(fetchAll)
           @update:page="onPageChange"
         />
       </div>
+
+      <!-- Poster Export Modal -->
+      <NModal v-model:show="showPosterModal" preset="card" title="导出收益海报" style="max-width: 460px;" :bordered="false">
+        <div class="poster-modal-body">
+          <div class="poster-date-row">
+            <span class="poster-label">选择日期</span>
+            <NDatePicker v-model:value="posterDate" type="date" size="small" style="width: 180px" />
+            <NButton type="primary" size="small" :loading="posterGenerating" @click="generatePoster">
+              生成预览
+            </NButton>
+          </div>
+          <div class="poster-preview" v-if="posterPreviewUrl">
+            <img :src="posterPreviewUrl" alt="poster" class="poster-img" />
+            <NButton type="primary" block @click="downloadPoster" style="margin-top: 12px;">
+              <template #icon><NIcon><DownloadOutline /></NIcon></template>
+              保存图片
+            </NButton>
+          </div>
+          <canvas ref="posterCanvas" style="display: none;" />
+        </div>
+      </NModal>
     </div>
   </MainLayout>
 </template>
@@ -895,5 +1086,37 @@ onMounted(fetchAll)
     flex-wrap: wrap;
     gap: 6px;
   }
+}
+
+/* Poster Modal */
+.poster-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.poster-date-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.poster-label {
+  font-size: 13px;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.poster-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.poster-img {
+  width: 100%;
+  max-width: 400px;
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
 }
 </style>
