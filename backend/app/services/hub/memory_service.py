@@ -27,12 +27,24 @@ _memory_instances: Dict[int, Any] = {}
 _init_failures: set = set()  # 初始化失败的 user_id，避免重复尝试
 
 
-async def _get_user_gemini_key(user_id: int) -> dict:
+async def _get_user_api_configs(user_id: int) -> dict:
     """
     获取用于 mem0 的 API 配置。
-    优先级: 用户数据库配置 > 环境变量 GEMINI_API_KEY
+    
+    策略:
+    - LLM: 优先 DeepSeek（稳定可靠，用户已有 key）
+    - Embedder: 优先 Gemini（embedding 免费额度极高 1500次/分钟）
+    
+    返回 {"llm": {...}, "embedder": {...}} 或空字典
     """
-    # 1. 先从数据库读取用户的 AI 配置（用户已验证可用的 key）
+    llm_cfg = {}
+    embedder_cfg = {}
+    gemini_key = ""
+    deepseek_key = ""
+    deepseek_base = ""
+    deepseek_model = ""
+    
+    # 1. 从数据库读取用户的 AI 配置
     try:
         from app.db.session import AsyncSessionLocal
         from app.models.user_ai_config import UserAIConfig
@@ -49,34 +61,70 @@ async def _get_user_gemini_key(user_id: int) -> dict:
                 base_url = cfg.api_base_url or ""
                 model = cfg.model or "deepseek-chat"
                 
-                # 检测是否是 Gemini
                 if "googleapis.com" in base_url or "gemini" in model.lower():
-                    return {
-                        "api_key": api_key,
-                        "model": model,
-                        "embedding_model": "models/text-embedding-004",
-                        "provider": "gemini",
-                    }
-                
-                # 非 Gemini (DeepSeek 等)，也可以尝试用 OpenAI 兼容模式
-                return {
-                    "api_key": api_key,
-                    "model": model,
-                    "base_url": base_url,
-                    "provider": "openai_compatible",
-                }
+                    gemini_key = api_key
+                else:
+                    deepseek_key = api_key
+                    deepseek_base = base_url or "https://api.deepseek.com"
+                    deepseek_model = model
     except Exception as e:
         logger.debug(f"[MemoryService] Failed to load user config from DB: {e}")
     
-    # 2. Fallback: 环境变量 GEMINI_API_KEY
-    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    # 2. 环境变量补充
+    if not gemini_key:
+        gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    if not deepseek_key:
+        deepseek_key = os.environ.get("OPENAI_API_KEY", "")
+        if deepseek_key and not deepseek_base:
+            deepseek_base = "https://api.deepseek.com"
+            deepseek_model = "deepseek-chat"
+    
+    # 3. 组装配置 — LLM 优先 DeepSeek，Embedder 优先 Gemini
+    
+    # Embedder: Gemini text-embedding-004（免费额度极高）
     if gemini_key:
-        return {
-            "api_key": gemini_key,
-            "model": "gemini-2.0-flash",
-            "embedding_model": "models/text-embedding-004",
+        embedder_cfg = {
             "provider": "gemini",
+            "config": {
+                "api_key": gemini_key,
+                "model": "gemini-embedding-001",
+                "embedding_dims": 768,
+            },
         }
+    
+    # LLM: DeepSeek（稳定，避免 Gemini 速率限制）
+    if deepseek_key:
+        llm_cfg = {
+            "provider": "openai",
+            "config": {
+                "api_key": deepseek_key,
+                "model": deepseek_model or "deepseek-chat",
+                "openai_base_url": deepseek_base or "https://api.deepseek.com",
+            },
+        }
+    elif gemini_key:
+        # 没有 DeepSeek 时 fallback 到 Gemini
+        llm_cfg = {
+            "provider": "gemini",
+            "config": {
+                "api_key": gemini_key,
+                "model": "gemini-2.0-flash",
+            },
+        }
+    
+    # 如果没有 Gemini 做 embedder，但有 DeepSeek → 用 OpenAI 兼容 embedding
+    if not embedder_cfg and deepseek_key:
+        embedder_cfg = {
+            "provider": "openai",
+            "config": {
+                "api_key": deepseek_key,
+                "model": "text-embedding-3-small",
+                "openai_base_url": deepseek_base,
+            },
+        }
+    
+    if llm_cfg and embedder_cfg:
+        return {"llm": llm_cfg, "embedder": embedder_cfg}
     
     return {}
 
@@ -85,8 +133,10 @@ async def get_memory(user_id: int):
     """
     获取 mem0 Memory 实例（按 user_id 缓存）。
     
-    使用 Gemini 做 embedding + fact extraction，Qdrant on-disk 做向量存储。
-    如果初始化失败（缺少 API key 等），返回 None。
+    架构:
+    - LLM: DeepSeek（稳定，fact extraction）
+    - Embedder: Gemini text-embedding-004（免费额度高）
+    - Vector Store: Qdrant on-disk
     """
     global _memory_instances, _init_failures
     
@@ -94,76 +144,52 @@ async def get_memory(user_id: int):
         return _memory_instances[user_id]
     
     if user_id in _init_failures:
-        return None  # 已尝试过但失败了
+        return None
     
     try:
         from mem0 import Memory
+        
+        # 获取 LLM + Embedder 配置
+        api_cfgs = await _get_user_api_configs(user_id)
+        
+        if not api_cfgs:
+            logger.warning(
+                f"[MemoryService] No API key available for user {user_id}. "
+                "Need at least one of: Gemini API key or DeepSeek API key. "
+                "Memory service disabled for this user."
+            )
+            _init_failures.add(user_id)
+            return None
+        
+        # 确定 embedding 维度
+        embedder_provider = api_cfgs["embedder"]["provider"]
+        embedding_dims = 768 if embedder_provider == "gemini" else 1536
         
         config = {
             "vector_store": {
                 "provider": "qdrant",
                 "config": {
                     "collection_name": f"user_{user_id}_memories",
-                    "path": LANCEDB_PATH,  # Qdrant on-disk 存储路径
-                    "embedding_model_dims": 768,
+                    "path": LANCEDB_PATH,
+                    "embedding_model_dims": embedding_dims,
                     "on_disk": True,
                 },
             },
+            "embedder": api_cfgs["embedder"],
+            "llm": api_cfgs["llm"],
         }
         
-        # 获取用户 API 配置
-        api_cfg = await _get_user_gemini_key(user_id)
-        
-        if api_cfg.get("provider") == "gemini" or "googleapis" in api_cfg.get("base_url", ""):
-            config["embedder"] = {
-                "provider": "gemini",
-                "config": {
-                    "api_key": api_cfg["api_key"],
-                    "model": api_cfg.get("embedding_model", "models/text-embedding-004"),
-                    "embedding_dims": 768,
-                },
-            }
-            config["llm"] = {
-                "provider": "gemini",
-                "config": {
-                    "api_key": api_cfg["api_key"],
-                    "model": api_cfg.get("model", "gemini-2.0-flash"),
-                },
-            }
-        elif api_cfg.get("api_key"):
-            # OpenAI 兼容模式 (DeepSeek 等)
-            embedder_cfg = {
-                "api_key": api_cfg["api_key"],
-                "model": "text-embedding-3-small",
-            }
-            if api_cfg.get("base_url"):
-                embedder_cfg["openai_base_url"] = api_cfg["base_url"]
-            
-            config["embedder"] = {
-                "provider": "openai",
-                "config": embedder_cfg,
-            }
-            config["llm"] = {
-                "provider": "openai",
-                "config": {
-                    "api_key": api_cfg["api_key"],
-                    "model": api_cfg.get("model", "deepseek-chat"),
-                    "openai_base_url": api_cfg.get("base_url", "https://api.deepseek.com"),
-                },
-            }
-        else:
-            logger.warning(
-                f"[MemoryService] No API key available for user {user_id}. "
-                "Set GEMINI_API_KEY env var or configure AI in settings. "
-                "Memory service disabled for this user."
-            )
-            _init_failures.add(user_id)
-            return None
+        llm_provider = api_cfgs["llm"]["provider"]
+        llm_model = api_cfgs["llm"]["config"].get("model", "unknown")
+        emb_model = api_cfgs["embedder"]["config"].get("model", "unknown")
         
         import asyncio
         instance = await asyncio.to_thread(Memory.from_config, config)
         _memory_instances[user_id] = instance
-        logger.info(f"[MemoryService] Initialized for user {user_id} with LanceDB at {LANCEDB_PATH}")
+        logger.info(
+            f"[MemoryService] Initialized for user {user_id}: "
+            f"LLM={llm_provider}/{llm_model}, Embedder={embedder_provider}/{emb_model}"
+        )
         return instance
     
     except Exception as e:
