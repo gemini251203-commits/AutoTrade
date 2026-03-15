@@ -90,16 +90,26 @@ async def _get_user_api_configs(user_id: int) -> dict:
                 if agent and agent.api_key_enc:
                     agent_key = decrypt_api_key(agent.api_key_enc)
                     agent_base = agent.api_base_url or ""
+                    agent_model = agent.model or ""
+                    logger.info(
+                        f"[MemoryService] Found Hub Agent #{agent.id} '{agent.name}': "
+                        f"model={agent_model}, base_url={agent_base[:30]}..."
+                    )
                     # 非 Gemini 的 Agent key 可用作 DeepSeek LLM
-                    if "googleapis.com" not in agent_base and "gemini" not in (agent.model or "").lower():
+                    if "googleapis.com" not in agent_base and "gemini" not in agent_model.lower():
                         deepseek_key = agent_key
                         deepseek_base = agent_base or "https://api.deepseek.com"
-                        deepseek_model = agent.model or "deepseek-chat"
-                        logger.debug(f"[MemoryService] Using Hub Agent #{agent.id} key for LLM")
+                        deepseek_model = agent_model or "deepseek-chat"
+                        logger.info(f"[MemoryService] → Using as DeepSeek LLM ({deepseek_model})")
                     elif not gemini_key:
                         gemini_key = agent_key
+                        logger.info("[MemoryService] → Using as Gemini key")
+                    else:
+                        logger.info("[MemoryService] → Skipped (already have gemini key)")
+                else:
+                    logger.info(f"[MemoryService] No Hub Agent with API key for user {user_id}")
         except Exception as e:
-            logger.debug(f"[MemoryService] Failed to load Hub Agent key: {e}")
+            logger.warning(f"[MemoryService] Failed to load Hub Agent key: {e}")
     
     # 3. 环境变量补充
     if not gemini_key:
