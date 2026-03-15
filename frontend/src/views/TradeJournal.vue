@@ -188,7 +188,14 @@ interface DailyPnlItem { date: string; pnl: number }
 const dailyPnlData = ref<DailyPnlItem[]>([])
 const dailyPnlMap = computed(() => {
   const map: Record<string, number> = {}
-  for (const d of dailyPnlData.value) map[d.date] = d.pnl
+  // 北京时间今天
+  const now = new Date()
+  const bj = new Date(now.getTime() + 8 * 3600000)
+  const todayStr = `${bj.getUTCFullYear()}-${String(bj.getUTCMonth() + 1).padStart(2, '0')}-${String(bj.getUTCDate()).padStart(2, '0')}`
+  for (const d of dailyPnlData.value) {
+    // 只显示今天及之前的日期
+    if (d.date <= todayStr) map[d.date] = d.pnl
+  }
   return map
 })
 
@@ -308,8 +315,10 @@ function drawPoster(dateStr: string, pnlValue: number, pnlPct: number, trades: P
   if (!canvas) return
   const dpr = 2
   const W = 400
-  // 高度自适应：基础 380 + 每笔交易 55px + 底部 90
-  const tradeAreaH = Math.max(trades.length * 55, 40)
+  // 高度自适应：基础 380 + 每笔交易（限8笔）55px + 溢出摘要行 + 底部 90
+  const displayCount = Math.min(trades.length, 8)
+  const hasExtra = trades.length > 8
+  const tradeAreaH = Math.max(displayCount * 55 + (hasExtra ? 30 : 0), 40)
   const H = 380 + tradeAreaH + 90
   canvas.width = W * dpr
   canvas.height = H * dpr
@@ -383,8 +392,12 @@ function drawPoster(dateStr: string, pnlValue: number, pnlPct: number, trades: P
   ctx.stroke()
   curY += 20
 
-  // ---- Trade list ----
-  if (trades.length > 0) {
+  // ---- Trade list (max 8) ----
+  const MAX_POSTER_TRADES = 8
+  const showTrades = trades.slice(0, MAX_POSTER_TRADES)
+  const extraCount = trades.length - showTrades.length
+
+  if (showTrades.length > 0) {
     // 表头
     ctx.fillStyle = '#5E6673'
     ctx.font = '11px -apple-system, "Helvetica Neue", sans-serif'
@@ -396,7 +409,7 @@ function drawPoster(dateStr: string, pnlValue: number, pnlPct: number, trades: P
     ctx.textAlign = 'left'
     curY += 16
 
-    for (const t of trades) {
+    for (const t of showTrades) {
       // Symbol
       ctx.fillStyle = '#EAECEF'
       ctx.font = 'bold 13px -apple-system, "Helvetica Neue", sans-serif'
@@ -430,6 +443,21 @@ function drawPoster(dateStr: string, pnlValue: number, pnlPct: number, trades: P
       ctx.textAlign = 'left'
 
       curY += 38
+    }
+
+    // 超出部分摘要
+    if (extraCount > 0) {
+      ctx.fillStyle = '#5E6673'
+      ctx.font = '12px -apple-system, "Helvetica Neue", sans-serif'
+      const extraPnl = trades.slice(MAX_POSTER_TRADES).reduce((s, t) => s + t.pnl_usdt, 0)
+      const extraSign = extraPnl >= 0 ? '+' : ''
+      ctx.fillText(`... 及其他 ${extraCount} 笔交易`, 32, curY)
+      ctx.fillStyle = extraPnl >= 0 ? '#0ECB81' : '#F6465D'
+      ctx.font = 'bold 12px -apple-system, "Helvetica Neue", sans-serif'
+      ctx.textAlign = 'right'
+      ctx.fillText(`${extraSign}${extraPnl.toFixed(2)}`, W - 32, curY)
+      ctx.textAlign = 'left'
+      curY += 24
     }
   } else {
     ctx.fillStyle = '#5E6673'
