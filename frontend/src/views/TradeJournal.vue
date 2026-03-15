@@ -1369,6 +1369,8 @@ onMounted(fetchAll)
   display: flex;
   flex-direction: column;
   align-items: center;
+  max-height: 50vh;
+  overflow-y: auto;
 }
 
 .poster-img {
