@@ -416,8 +416,8 @@ onMounted(() => {
   pollTimer = setInterval(() => {
     if (!_unmounted && !_loadingData) {
       loadData()
-      // ★ 自动刷新 War Room 日志（仅在首页且未搜索时）
-      if (!logSearchKeyword.value && logPage.value === 1) {
+      // ★ 自动刷新 War Room 日志（仅在首页且未搜索、且不在生成纪要时）
+      if (!logSearchKeyword.value && logPage.value === 1 && !consolidating.value) {
         loadWarRoomHistory()
       }
     }
