@@ -1762,15 +1762,24 @@ async def manage_grid(
             ticker = await client.get_ticker(symbol.upper())
             current_price = Decimal(str(ticker.get("lastPrice", 0))) if ticker else Decimal("0")
             
-            bot = await GridStrategy.start_grid(
+            # 1. 先创建网格机器人
+            bot = await GridStrategy.create_grid_bot(
                 db=db,
                 user_id=user_id,
+                name=f"Grid {symbol.upper()} {grid_count}格",
                 symbol=symbol.upper(),
                 upper_price=Decimal(str(upper_price)),
                 lower_price=Decimal(str(lower_price)),
                 grid_count=grid_count,
                 investment=Decimal(str(investment)),
                 leverage=leverage,
+            )
+            await db.flush()
+            
+            # 2. 再启动网格
+            bot = await GridStrategy.start_grid(
+                db=db,
+                bot_id=bot.id,
                 current_price=current_price,
             )
             await db.commit()
@@ -1783,6 +1792,7 @@ async def manage_grid(
                 "lower_price": str(bot.lower_price),
                 "grid_count": bot.grid_count,
                 "investment": str(bot.investment),
+                "quantity_per_grid": str(bot.quantity_per_grid),
                 "message": f"网格 {bot.name} 已启动",
             }, ensure_ascii=False, default=str)
         
@@ -1790,7 +1800,7 @@ async def manage_grid(
             if grid_id <= 0:
                 return json.dumps({"error": "必须提供 grid_id"}, ensure_ascii=False, default=str)
             
-            bot = await GridStrategy.stop_grid(db=db, grid_id=grid_id, user_id=user_id)
+            bot = await GridStrategy.stop_grid(db=db, bot_id=grid_id)
             await db.commit()
             
             return json.dumps({
