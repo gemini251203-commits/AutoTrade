@@ -788,20 +788,20 @@ onMounted(fetchAll)
                   <td v-for="(day, di) in week" :key="di">
                     <div
                       v-if="day"
-                      @click="selectPosterDay(day)"
+                      @click="selectPosterDay(day as number)"
                       class="cal-day-cell"
-                      :style="dailyPnlMap[pDateStr(day)] !== undefined ? {
-                        background: dailyPnlMap[pDateStr(day)] >= 0 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
-                        border: '1px solid ' + (dailyPnlMap[pDateStr(day)] >= 0 ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'),
+                      :style="dailyPnlMap[pDateStr(day as number)] !== undefined ? {
+                        background: (dailyPnlMap[pDateStr(day as number)] ?? 0) >= 0 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                        border: '1px solid ' + ((dailyPnlMap[pDateStr(day as number)] ?? 0) >= 0 ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'),
                       } : {}"
                     >
                       <span class="cal-day-num">{{ day }}</span>
                       <span
-                        v-if="dailyPnlMap[pDateStr(day)] !== undefined"
+                        v-if="dailyPnlMap[pDateStr(day as number)] !== undefined"
                         class="cal-day-pnl"
-                        :style="{ color: dailyPnlMap[pDateStr(day)] >= 0 ? '#22c55e' : '#ef4444' }"
+                        :style="{ color: (dailyPnlMap[pDateStr(day as number)] ?? 0) >= 0 ? '#22c55e' : '#ef4444' }"
                       >
-                        {{ dailyPnlMap[pDateStr(day)] >= 0 ? '+' : '' }}{{ dailyPnlMap[pDateStr(day)].toFixed(1) }}
+                        {{ (dailyPnlMap[pDateStr(day as number)] ?? 0) >= 0 ? '+' : '' }}{{ (dailyPnlMap[pDateStr(day as number)] ?? 0).toFixed(1) }}
                       </span>
                     </div>
                   </td>
