@@ -8,8 +8,8 @@
  * 包含统计卡片 + 记忆列表
  */
 import { ref, onMounted, computed, nextTick } from 'vue'
-import { NTag, NEmpty, NSpin, NSelect, NTooltip, NIcon, NPopconfirm, NPagination, NButton, NDatePicker, NModal, useMessage } from 'naive-ui'
-import { BookOutline, TrendingUpOutline, TrendingDownOutline, TimeOutline, ShieldCheckmarkOutline, TrashOutline, DownloadOutline } from '@vicons/ionicons5'
+import { NTag, NEmpty, NSpin, NSelect, NTooltip, NIcon, NPopconfirm, NPagination, NButton, NModal, useMessage } from 'naive-ui'
+import { BookOutline, TrendingUpOutline, TrendingDownOutline, TimeOutline, ShieldCheckmarkOutline, TrashOutline, DownloadOutline, ChevronBackOutline, ChevronForwardOutline } from '@vicons/ionicons5'
 import MainLayout from '@/layouts/MainLayout.vue'
 import request from '@/utils/request'
 import type { TradeMemoryResponse as TradeMemory } from '@/api/strategy'
@@ -175,45 +175,120 @@ const formatTime = formatDateTimeBJ
 
 // ========== Poster Export ==========
 const showPosterModal = ref(false)
-const posterDate = ref<number>(Date.now())
 const posterGenerating = ref(false)
 const posterCanvas = ref<HTMLCanvasElement | null>(null)
 const posterPreviewUrl = ref('')
 
-interface DailyPnlItem {
-  date: string
-  pnl: number
+// Calendar state
+const pCalYear = ref(new Date().getFullYear())
+const pCalMonth = ref(new Date().getMonth() + 1)
+const pCalMonthLabel = computed(() => `${pCalYear.value} 年 ${pCalMonth.value} 月`)
+
+interface DailyPnlItem { date: string; pnl: number }
+const dailyPnlData = ref<DailyPnlItem[]>([])
+const dailyPnlMap = computed(() => {
+  const map: Record<string, number> = {}
+  for (const d of dailyPnlData.value) map[d.date] = d.pnl
+  return map
+})
+
+const pCalendarWeeks = computed(() => {
+  const y = pCalYear.value, m = pCalMonth.value
+  const firstDay = new Date(y, m - 1, 1)
+  const daysInMonth = new Date(y, m, 0).getDate()
+  const startDow = firstDay.getDay()
+  const weeks: (number | null)[][] = []
+  let week: (number | null)[] = Array(startDow).fill(null)
+  for (let d = 1; d <= daysInMonth; d++) {
+    week.push(d)
+    if (week.length === 7) { weeks.push(week); week = [] }
+  }
+  if (week.length > 0) {
+    while (week.length < 7) week.push(null)
+    weeks.push(week)
+  }
+  return weeks
+})
+
+function pDateStr(day: number): string {
+  return `${pCalYear.value}-${String(pCalMonth.value).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-async function generatePoster() {
-  posterGenerating.value = true
+async function openPosterModal() {
+  const now = new Date()
+  const bj = new Date(now.getTime() + 8 * 3600000)
+  pCalYear.value = bj.getUTCFullYear()
+  pCalMonth.value = bj.getUTCMonth() + 1
+  showPosterModal.value = true
+  posterPreviewUrl.value = ''
+  await fetchPosterPnl()
+}
+
+async function fetchPosterPnl() {
   try {
-    // 获取选中日期
-    const d = new Date(posterDate.value)
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-
-    // 获取当月日历 PnL
     const res = await request.get('/wallet/portfolio-stats')
-    const dailyPnl: DailyPnlItem[] = res.data.daily_pnl || []
-    const dayData = dailyPnl.find((item: DailyPnlItem) => item.date === dateStr)
-    const pnlValue = dayData ? dayData.pnl : 0
+    dailyPnlData.value = res.data.daily_pnl || []
+  } catch { dailyPnlData.value = [] }
+}
 
-    // 获取钱包余额以计算收益率
+function pCalPrev() {
+  if (pCalMonth.value === 1) { pCalYear.value--; pCalMonth.value = 12 }
+  else pCalMonth.value--
+  fetchPosterPnl()
+}
+function pCalNext() {
+  if (pCalMonth.value === 12) { pCalYear.value++; pCalMonth.value = 1 }
+  else pCalMonth.value++
+  fetchPosterPnl()
+}
+
+interface PosterTrade {
+  symbol: string; side: string; leverage: number
+  entry_price: number; exit_price: number
+  pnl_pct: number; pnl_usdt: number
+}
+
+async function selectPosterDay(day: number) {
+  const dateStr = pDateStr(day)
+  posterGenerating.value = true
+  posterPreviewUrl.value = ''
+  try {
+    // 获取当日盈亏
+    const pnlValue = dailyPnlMap.value[dateStr] || 0
+
+    // 获取收益率
     const walletRes = await request.get('/wallet/balance')
     const initialBalance = parseFloat(String(walletRes.data.initial_balance)) || 3000
-
-    // 收益率 = 当日盈亏 / 初始本金
     const pnlPct = initialBalance > 0 ? (pnlValue / initialBalance) * 100 : 0
 
-    // 交易笔数（从 journal 查当日数据）
-    const journalRes = await request.get('/journal/stats', { params: { date: dateStr } })
-    const dayTrades = journalRes.data?.total_trades || 0
-    const dayWins = journalRes.data?.win_count || 0
-    const dayLosses = journalRes.data?.loss_count || 0
+    // 获取当日交易列表
+    const journalRes = await request.get('/journal/', {
+      params: { limit: 50, offset: 0 }
+    })
+    const allTrades: TradeMemory[] = journalRes.data?.items || []
+    
+    // 筛选当日交易（按北京时间）
+    const dayTrades: PosterTrade[] = allTrades
+      .filter(m => {
+        if (!m.created_at) return false
+        const t = new Date(m.created_at)
+        const bj = new Date(t.getTime() + 8 * 3600000)
+        const bjDate = `${bj.getUTCFullYear()}-${String(bj.getUTCMonth() + 1).padStart(2, '0')}-${String(bj.getUTCDate()).padStart(2, '0')}`
+        return bjDate === dateStr
+      })
+      .filter(m => m.source !== 'system')
+      .map(m => ({
+        symbol: m.symbol,
+        side: m.side || 'long',
+        leverage: m.leverage || 1,
+        entry_price: parseFloat(String(m.entry_price || 0)),
+        exit_price: parseFloat(String(m.exit_price || 0)),
+        pnl_pct: parseFloat(String(m.pnl_pct || 0)),
+        pnl_usdt: parseFloat(String(m.pnl_usdt || 0)),
+      }))
 
-    // 绘制海报
     await nextTick()
-    drawPoster(dateStr, pnlValue, pnlPct, dayTrades, dayWins, dayLosses, initialBalance)
+    drawPoster(dateStr, pnlValue, pnlPct, dayTrades)
   } catch (e) {
     console.error('Failed to generate poster:', e)
     message.error('生成海报失败')
@@ -222,20 +297,20 @@ async function generatePoster() {
   }
 }
 
-function drawPoster(
-  dateStr: string,
-  pnlValue: number,
-  pnlPct: number,
-  trades: number,
-  wins: number,
-  losses: number,
-  initialBalance: number,
-) {
+function fmtPrice(p: number): string {
+  if (p >= 1000) return p.toFixed(1)
+  if (p >= 1) return p.toFixed(2)
+  return p.toFixed(4)
+}
+
+function drawPoster(dateStr: string, pnlValue: number, pnlPct: number, trades: PosterTrade[]) {
   const canvas = posterCanvas.value
   if (!canvas) return
   const dpr = 2
   const W = 400
-  const H = 640
+  // 高度自适应：基础 380 + 每笔交易 55px + 底部 90
+  const tradeAreaH = Math.max(trades.length * 55, 40)
+  const H = 380 + tradeAreaH + 90
   canvas.width = W * dpr
   canvas.height = H * dpr
   canvas.style.width = W + 'px'
@@ -252,7 +327,7 @@ function drawPoster(
 
   // 装饰菱形
   ctx.save()
-  ctx.translate(W - 80, 100)
+  ctx.translate(W - 80, 90)
   ctx.rotate(Math.PI / 4)
   ctx.strokeStyle = 'rgba(255,255,255,0.04)'
   ctx.lineWidth = 2
@@ -264,75 +339,125 @@ function drawPoster(
   // ---- Date ----
   ctx.fillStyle = '#848E9C'
   ctx.font = '14px -apple-system, "Helvetica Neue", sans-serif'
-  ctx.fillText(dateStr, 32, 52)
+  ctx.fillText(dateStr, 32, 42)
 
   // ---- Title ----
   ctx.fillStyle = '#EAECEF'
   ctx.font = 'bold 22px -apple-system, "Helvetica Neue", sans-serif'
-  ctx.fillText('AutoTrade 日收益', 32, 100)
+  ctx.fillText('AutoTrade 日收益', 32, 85)
 
   // ---- Subtitle ----
   ctx.fillStyle = '#848E9C'
   ctx.font = '14px -apple-system, "Helvetica Neue", sans-serif'
-  if (trades > 0) {
-    ctx.fillText(`${trades} 笔交易 · ${wins}胜 ${losses}负`, 32, 130)
+  const wins = trades.filter(t => t.pnl_usdt > 0).length
+  const losses = trades.filter(t => t.pnl_usdt < 0).length
+  if (trades.length > 0) {
+    ctx.fillText(`${trades.length} 笔交易 · ${wins}胜 ${losses}负`, 32, 112)
   } else {
-    ctx.fillText('当日无交易', 32, 130)
+    ctx.fillText('当日无交易', 32, 112)
   }
 
   // ---- Main PnL ----
   const sign = isPositive ? '+' : ''
   const pnlText = `${sign}${pnlValue.toFixed(2)}`
   ctx.fillStyle = accentColor
-  ctx.font = 'bold 56px -apple-system, "Helvetica Neue", sans-serif'
-  ctx.fillText(pnlText, 32, 230)
-
-  // USDT label
+  ctx.font = 'bold 48px -apple-system, "Helvetica Neue", sans-serif'
+  ctx.fillText(pnlText, 32, 195)
   const pnlWidth = ctx.measureText(pnlText).width
   ctx.fillStyle = '#848E9C'
-  ctx.font = '20px -apple-system, "Helvetica Neue", sans-serif'
-  ctx.fillText('USDT', 32 + pnlWidth + 10, 230)
+  ctx.font = '18px -apple-system, "Helvetica Neue", sans-serif'
+  ctx.fillText('USDT', 32 + pnlWidth + 8, 195)
 
   // ---- PnL Percentage ----
   ctx.fillStyle = accentColor
-  ctx.font = 'bold 28px -apple-system, "Helvetica Neue", sans-serif'
-  ctx.fillText(`${sign}${pnlPct.toFixed(2)}%`, 32, 280)
+  ctx.font = 'bold 24px -apple-system, "Helvetica Neue", sans-serif'
+  ctx.fillText(`${sign}${pnlPct.toFixed(2)}%`, 32, 235)
 
-  // ---- Stats area ----
-  const statsY = 340
-  ctx.fillStyle = '#848E9C'
-  ctx.font = '13px -apple-system, "Helvetica Neue", sans-serif'
-  ctx.fillText('初始本金', 32, statsY)
-  ctx.fillText('当日交易', W / 2, statsY)
-  
-  ctx.fillStyle = '#EAECEF'
-  ctx.font = 'bold 18px -apple-system, "Helvetica Neue", sans-serif'
-  ctx.fillText(`${initialBalance.toLocaleString()}`, 32, statsY + 28)
-  ctx.fillText(`${trades} 笔`, W / 2, statsY + 28)
-
-  // ---- Divider line ----
+  // ---- Divider ----
+  let curY = 265
   ctx.strokeStyle = 'rgba(255,255,255,0.06)'
   ctx.lineWidth = 1
   ctx.beginPath()
-  ctx.moveTo(32, H - 90)
-  ctx.lineTo(W - 32, H - 90)
+  ctx.moveTo(32, curY)
+  ctx.lineTo(W - 32, curY)
+  ctx.stroke()
+  curY += 20
+
+  // ---- Trade list ----
+  if (trades.length > 0) {
+    // 表头
+    ctx.fillStyle = '#5E6673'
+    ctx.font = '11px -apple-system, "Helvetica Neue", sans-serif'
+    ctx.fillText('交易对', 32, curY)
+    ctx.fillText('方向/杠杆', 130, curY)
+    ctx.fillText('入场 → 出场', 215, curY)
+    ctx.textAlign = 'right'
+    ctx.fillText('盈亏', W - 32, curY)
+    ctx.textAlign = 'left'
+    curY += 16
+
+    for (const t of trades) {
+      // Symbol
+      ctx.fillStyle = '#EAECEF'
+      ctx.font = 'bold 13px -apple-system, "Helvetica Neue", sans-serif'
+      ctx.fillText(t.symbol.replace('USDT', ''), 32, curY)
+
+      // Side + leverage
+      const sideText = t.side === 'long' ? '多' : '空'
+      const sideColor = t.side === 'long' ? '#0ECB81' : '#F6465D'
+      ctx.fillStyle = sideColor
+      ctx.font = 'bold 12px -apple-system, "Helvetica Neue", sans-serif'
+      ctx.fillText(`${sideText} ${t.leverage}x`, 130, curY)
+
+      // Entry → Exit
+      ctx.fillStyle = '#848E9C'
+      ctx.font = '11px -apple-system, "Helvetica Neue", sans-serif'
+      ctx.fillText(`${fmtPrice(t.entry_price)} → ${fmtPrice(t.exit_price)}`, 215, curY)
+
+      // PnL
+      const tSign = t.pnl_usdt >= 0 ? '+' : ''
+      ctx.fillStyle = t.pnl_usdt >= 0 ? '#0ECB81' : '#F6465D'
+      ctx.font = 'bold 12px -apple-system, "Helvetica Neue", sans-serif'
+      ctx.textAlign = 'right'
+      ctx.fillText(`${tSign}${t.pnl_usdt.toFixed(2)}`, W - 32, curY)
+      ctx.textAlign = 'left'
+
+      // PnL pct (下方小字)
+      ctx.fillStyle = t.pnl_pct >= 0 ? 'rgba(14,203,129,0.6)' : 'rgba(246,70,93,0.6)'
+      ctx.font = '10px -apple-system, "Helvetica Neue", sans-serif'
+      ctx.textAlign = 'right'
+      ctx.fillText(`${t.pnl_pct >= 0 ? '+' : ''}${t.pnl_pct.toFixed(1)}%`, W - 32, curY + 14)
+      ctx.textAlign = 'left'
+
+      curY += 38
+    }
+  } else {
+    ctx.fillStyle = '#5E6673'
+    ctx.font = '13px -apple-system, "Helvetica Neue", sans-serif'
+    ctx.fillText('当日暂无已平仓交易记录', 32, curY + 10)
+  }
+
+  // ---- Footer divider ----
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'
+  ctx.beginPath()
+  ctx.moveTo(32, H - 70)
+  ctx.lineTo(W - 32, H - 70)
   ctx.stroke()
 
   // ---- Footer watermark ----
   ctx.fillStyle = '#848E9C'
   ctx.font = '13px -apple-system, "Helvetica Neue", sans-serif'
-  ctx.fillText('AutoTrade · AI 量化交易系统', 32, H - 50)
+  ctx.fillText('AutoTrade · AI 量化交易系统', 32, H - 40)
   ctx.fillStyle = '#5E6673'
   ctx.font = '11px -apple-system, "Helvetica Neue", sans-serif'
-  ctx.fillText('Powered by AI Agent', 32, H - 30)
+  ctx.fillText('Powered by AI Agent', 32, H - 20)
 
   posterPreviewUrl.value = canvas.toDataURL('image/png')
 }
 
 function downloadPoster() {
   if (!posterPreviewUrl.value) return
-  const d = new Date(posterDate.value)
-  const dateStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+  const dateStr = `${pCalYear.value}${String(pCalMonth.value).padStart(2, '0')}`
   const a = document.createElement('a')
   a.href = posterPreviewUrl.value
   a.download = `AutoTrade_${dateStr}.png`
@@ -351,7 +476,7 @@ onMounted(fetchAll)
           <NIcon size="24" color="#8b5cf6"><BookOutline /></NIcon>
           <h1>交易日志</h1>
           <span class="subtitle" v-if="stats">共 {{ stats.total_trades }} 笔交易</span>
-          <NButton size="small" quaternary @click="showPosterModal = true" style="margin-left: 8px;">
+          <NButton size="small" quaternary @click="openPosterModal" style="margin-left: 8px;">
             <template #icon><NIcon><DownloadOutline /></NIcon></template>
             导出海报
           </NButton>
@@ -638,15 +763,54 @@ onMounted(fetchAll)
       </div>
 
       <!-- Poster Export Modal -->
-      <NModal v-model:show="showPosterModal" preset="card" title="导出收益海报" style="max-width: 460px;" :bordered="false">
+      <NModal v-model:show="showPosterModal" preset="card" title="导出收益海报" style="max-width: 720px; max-height: 90vh;" :bordered="false">
         <div class="poster-modal-body">
-          <div class="poster-date-row">
-            <span class="poster-label">选择日期</span>
-            <NDatePicker v-model:value="posterDate" type="date" size="small" style="width: 180px" />
-            <NButton type="primary" size="small" :loading="posterGenerating" @click="generatePoster">
-              生成预览
-            </NButton>
+          <!-- Calendar Header -->
+          <div class="poster-cal-header">
+            <button class="cal-nav-btn" @click="pCalPrev">
+              <NIcon :component="ChevronBackOutline" :size="18" />
+            </button>
+            <span class="cal-month-label">{{ pCalMonthLabel }}</span>
+            <button class="cal-nav-btn" @click="pCalNext">
+              <NIcon :component="ChevronForwardOutline" :size="18" />
+            </button>
           </div>
+          <!-- Calendar Grid -->
+          <NSpin :show="posterGenerating">
+            <table class="poster-cal-table">
+              <thead>
+                <tr>
+                  <th v-for="d in ['日','一','二','三','四','五','六']" :key="d">{{ d }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(week, wi) in pCalendarWeeks" :key="wi">
+                  <td v-for="(day, di) in week" :key="di">
+                    <div
+                      v-if="day"
+                      @click="selectPosterDay(day)"
+                      class="cal-day-cell"
+                      :style="dailyPnlMap[pDateStr(day)] !== undefined ? {
+                        background: dailyPnlMap[pDateStr(day)] >= 0 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                        border: '1px solid ' + (dailyPnlMap[pDateStr(day)] >= 0 ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'),
+                      } : {}"
+                    >
+                      <span class="cal-day-num">{{ day }}</span>
+                      <span
+                        v-if="dailyPnlMap[pDateStr(day)] !== undefined"
+                        class="cal-day-pnl"
+                        :style="{ color: dailyPnlMap[pDateStr(day)] >= 0 ? '#22c55e' : '#ef4444' }"
+                      >
+                        {{ dailyPnlMap[pDateStr(day)] >= 0 ? '+' : '' }}{{ dailyPnlMap[pDateStr(day)].toFixed(1) }}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </NSpin>
+          <div class="poster-cal-hint" v-if="!posterPreviewUrl">点击日历上的日期生成海报</div>
+          <!-- Preview -->
           <div class="poster-preview" v-if="posterPreviewUrl">
             <img :src="posterPreviewUrl" alt="poster" class="poster-img" />
             <NButton type="primary" block @click="downloadPoster" style="margin-top: 12px;">
@@ -1095,16 +1259,82 @@ onMounted(fetchAll)
   gap: 16px;
 }
 
-.poster-date-row {
+.poster-cal-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
 }
 
-.poster-label {
-  font-size: 13px;
+.cal-nav-btn {
+  padding: 4px;
+  border-radius: 6px;
+  background: none;
+  border: none;
   color: #9ca3af;
-  flex-shrink: 0;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.cal-nav-btn:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+.cal-month-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e5e7eb;
+}
+
+.poster-cal-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: center;
+}
+
+.poster-cal-table th {
+  font-size: 10px;
+  color: #6b7280;
+  padding: 4px 0;
+  font-weight: 400;
+}
+
+.poster-cal-table td {
+  padding: 3px;
+}
+
+.cal-day-cell {
+  margin: 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.cal-day-cell:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.cal-day-num {
+  font-size: 12px;
+  color: #d1d5db;
+}
+
+.cal-day-pnl {
+  font-size: 8px;
+  font-family: 'SF Mono', monospace;
+  font-weight: 600;
+}
+
+.poster-cal-hint {
+  text-align: center;
+  font-size: 12px;
+  color: #6b7280;
+  padding: 8px 0;
 }
 
 .poster-preview {
