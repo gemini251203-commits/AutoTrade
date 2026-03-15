@@ -126,18 +126,19 @@ async def _get_user_api_configs(user_id: int) -> dict:
             deepseek_base = "https://api.deepseek.com"
             deepseek_model = "deepseek-chat"
     
-    # 3. 组装配置 — LLM 优先 DeepSeek，Embedder 优先 Gemini
+    # 4. 组装配置 — LLM 优先 DeepSeek，Embedder 优先 Ollama
     
-    # Embedder: Gemini text-embedding-004（免费额度极高）
-    if gemini_key:
-        embedder_cfg = {
-            "provider": "gemini",
-            "config": {
-                "api_key": gemini_key,
-                "model": "gemini-embedding-001",
-                "embedding_dims": 768,
-            },
-        }
+    # Embedder 优先级: Ollama 本地 > Gemini > OpenAI 兼容
+    ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://ollama:11434")
+    
+    # 尝试 Ollama (完全免费，无速率限制)
+    embedder_cfg = {
+        "provider": "ollama",
+        "config": {
+            "model": "nomic-embed-text",
+            "ollama_base_url": ollama_url,
+        },
+    }
     
     # LLM: DeepSeek（稳定，避免 Gemini 速率限制）
     if deepseek_key:
@@ -156,17 +157,6 @@ async def _get_user_api_configs(user_id: int) -> dict:
             "config": {
                 "api_key": gemini_key,
                 "model": "gemini-2.0-flash",
-            },
-        }
-    
-    # 如果没有 Gemini 做 embedder，但有 DeepSeek → 用 OpenAI 兼容 embedding
-    if not embedder_cfg and deepseek_key:
-        embedder_cfg = {
-            "provider": "openai",
-            "config": {
-                "api_key": deepseek_key,
-                "model": "text-embedding-3-small",
-                "openai_base_url": deepseek_base,
             },
         }
     
@@ -208,9 +198,9 @@ async def get_memory(user_id: int):
             _init_failures.add(user_id)
             return None
         
-        # 确定 embedding 维度
+        # 确定 embedding 维度 (nomic-embed-text / gemini = 768, openai = 1536)
         embedder_provider = api_cfgs["embedder"]["provider"]
-        embedding_dims = 768 if embedder_provider == "gemini" else 1536
+        embedding_dims = 768 if embedder_provider in ("gemini", "ollama") else 1536
         
         config = {
             "vector_store": {

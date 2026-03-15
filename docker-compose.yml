@@ -119,6 +119,18 @@ services:
       - autotrade-network
 
   # ==========================================
+  # Ollama (Local Embedding for mem0)
+  # ==========================================
+  ollama:
+    image: ollama/ollama
+    container_name: autotrade-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - autotrade-network
+
+  # ==========================================
   # Data Spider (K-line Deep Backfill)
   # ==========================================
   spider:
@@ -156,3 +168,4 @@ volumes:
   redis_data:
   risk_configs:
   lancedb_data:
+  ollama_data:
