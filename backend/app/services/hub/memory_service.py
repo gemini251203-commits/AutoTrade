@@ -70,7 +70,38 @@ async def _get_user_api_configs(user_id: int) -> dict:
     except Exception as e:
         logger.debug(f"[MemoryService] Failed to load user config from DB: {e}")
     
-    # 2. 环境变量补充
+    # 2. 从 Hub Agent 获取 DeepSeek key（用户的 Agent 通常配了 DeepSeek）
+    if not deepseek_key:
+        try:
+            from app.db.session import AsyncSessionLocal
+            from app.models.hub_agent import HubAgent
+            from app.core.encryption import decrypt_api_key
+            from sqlalchemy import select
+            
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(HubAgent).where(
+                        HubAgent.user_id == user_id,
+                        HubAgent.api_key_enc.isnot(None),
+                        HubAgent.api_key_enc != '',
+                    ).limit(1)
+                )
+                agent = result.scalar_one_or_none()
+                if agent and agent.api_key_enc:
+                    agent_key = decrypt_api_key(agent.api_key_enc)
+                    agent_base = agent.api_base_url or ""
+                    # 非 Gemini 的 Agent key 可用作 DeepSeek LLM
+                    if "googleapis.com" not in agent_base and "gemini" not in (agent.model or "").lower():
+                        deepseek_key = agent_key
+                        deepseek_base = agent_base or "https://api.deepseek.com"
+                        deepseek_model = agent.model or "deepseek-chat"
+                        logger.debug(f"[MemoryService] Using Hub Agent #{agent.id} key for LLM")
+                    elif not gemini_key:
+                        gemini_key = agent_key
+        except Exception as e:
+            logger.debug(f"[MemoryService] Failed to load Hub Agent key: {e}")
+    
+    # 3. 环境变量补充
     if not gemini_key:
         gemini_key = os.environ.get("GEMINI_API_KEY", "")
     if not deepseek_key:
