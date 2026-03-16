@@ -19,6 +19,7 @@ from app.api.deps import DbSession, CurrentUser
 from app.models.wallet import Wallet
 from app.services.wallet import WalletManager
 from app.core.time_utils import utc_now
+from sqlalchemy import select, func
 
 
 router = APIRouter()
