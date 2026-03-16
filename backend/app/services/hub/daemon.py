@@ -200,7 +200,6 @@ class HubDaemon:
     ):
         """执行一个决策周期 (逐事件写入 hub_logs, 与手动触发完全对齐)"""
         from app.services.hub.brain import hub_brain
-        from app.models.hub_log import HubLog
         import json as _json
         
         logger.info(f"[HubDaemon] [CYCLE] Agent #{agent.id} '{agent.name}' executing cycle")
@@ -235,42 +234,24 @@ class HubDaemon:
                     continue
                 
                 if ev_type == "text" and ev_content:
-                    # AI 思考输出 — 写入 hub_logs
-                    db.add(HubLog(
-                        user_id=user_id,
-                        agent_id=agent.id,
-                        agent_name=agent.name,
-                        log_type="ai_text",
-                        content=ev_content,
-                    ))
+                    # AI 思考输出 — 即时写入 hub_logs
+                    await self._save_log(user_id, agent.id, agent.name, "ai_text", ev_content)
                 
                 elif ev_type == "tool_call":
-                    # 工具调用 — 写入 hub_logs
+                    # 工具调用 — 即时写入 hub_logs
                     tool_name = event.get("tool", "unknown")
                     tool_args = event.get("args", {})
                     args_str = _json.dumps(tool_args, ensure_ascii=False)[:200]
-                    db.add(HubLog(
-                        user_id=user_id,
-                        agent_id=agent.id,
-                        agent_name=agent.name,
-                        log_type="tool_call",
-                        content=f"[TOOL] {tool_name}({args_str})",
-                    ))
+                    await self._save_log(user_id, agent.id, agent.name, "tool_call", f"[TOOL] {tool_name}({args_str})")
                     # ★ 检测交易工具调用
                     if tool_name in ("place_order", "close_position"):
                         has_trade = True  # 调用了下单/平仓工具
                 
                 elif ev_type == "tool_result":
-                    # 工具结果 — 写入 hub_logs
+                    # 工具结果 — 即时写入 hub_logs
                     result_str = event.get("result", str(ev_content))
                     result_preview = result_str[:300]
-                    db.add(HubLog(
-                        user_id=user_id,
-                        agent_id=agent.id,
-                        agent_name=agent.name,
-                        log_type="tool_result",
-                        content=f"[RESULT] {result_preview}",
-                    ))
+                    await self._save_log(user_id, agent.id, agent.name, "tool_result", f"[RESULT] {result_preview}")
                     # ★ 在 tool_result 中检测交易成功（比 full_reply 可靠得多）
                     if not has_trade and any(kw in result_str for kw in TRADE_KEYWORDS):
                         has_trade = True
@@ -284,26 +265,14 @@ class HubDaemon:
                 elif ev_type == "error":
                     has_error = True
                     full_reply = f"[ERROR] {ev_content}"
-                    db.add(HubLog(
-                        user_id=user_id,
-                        agent_id=agent.id,
-                        agent_name=agent.name,
-                        log_type="error",
-                        content=f"[ERROR] {ev_content}",
-                    ))
+                    await self._save_log(user_id, agent.id, agent.name, "error", f"[ERROR] {ev_content}")
                     
         except Exception as e:
             has_error = True
             full_reply = f"[ERROR] AI 调用异常: {str(e)}"
             logger.error(f"[HubDaemon] Agent #{agent.id} stream exception: {e}")
             try:
-                db.add(HubLog(
-                    user_id=user_id,
-                    agent_id=agent.id,
-                    agent_name=agent.name,
-                    log_type="error",
-                    content=full_reply,
-                ))
+                await self._save_log(user_id, agent.id, agent.name, "error", full_reply)
             except Exception:
                 pass
         
@@ -320,13 +289,7 @@ class HubDaemon:
                 agent.status = HubAgentStatus.ACTIVE
                 logger.info(f"[HubDaemon] Agent #{agent.id} auto-healed: ERROR → ACTIVE")
                 try:
-                    db.add(HubLog(
-                        user_id=user_id,
-                        agent_id=agent.id,
-                        agent_name=agent.name,
-                        log_type="system",
-                        content=f"[自愈] {agent.name} 已从错误状态恢复正常运行",
-                    ))
+                    await self._save_log(user_id, agent.id, agent.name, "system", f"[自愈] {agent.name} 已从错误状态恢复正常运行")
                 except Exception:
                     pass
         
@@ -339,6 +302,30 @@ class HubDaemon:
             f"Runs={agent.total_runs}, Trades={agent.total_trades}"
             f"{' [TRADED]' if has_trade else ''}"
         )
+    
+    async def _save_log(
+        self,
+        user_id: int,
+        agent_id: int,
+        agent_name: str,
+        log_type: str,
+        content: str,
+    ):
+        """使用独立 session 即时写入一条 hub_log，确保前端轮询能实时看到"""
+        from app.db.session import AsyncSessionLocal
+        from app.models.hub_log import HubLog
+        try:
+            async with AsyncSessionLocal() as log_db:
+                log_db.add(HubLog(
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    agent_name=agent_name,
+                    log_type=log_type,
+                    content=content,
+                ))
+                await log_db.commit()
+        except Exception as e:
+            logger.warning(f"[HubDaemon] Failed to save log: {e}")
     
     def _build_cycle_prompt(self, agent: HubAgent) -> str:
         """构建自主决策周期的 prompt (多币种巡逻版)"""
