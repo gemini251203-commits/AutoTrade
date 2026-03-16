@@ -345,7 +345,7 @@ const logHasMore = ref(false)
 const logTotal = ref(0)
 
 /** 从 API 加载历史日志 */
-async function loadWarRoomHistory(keyword?: string, page?: number) {
+async function loadWarRoomHistory(keyword?: string, page?: number, autoScroll = true) {
   try {
     logSearchLoading.value = true
     const p = page ?? logPage.value
@@ -356,12 +356,24 @@ async function loadWarRoomHistory(keyword?: string, page?: number) {
     const logs = data?.logs || []
     logHasMore.value = data?.has_more ?? (logs.length >= logPageSize)
     logPage.value = p
-    warRoomMessages.value = collapseToolLogs(logs.map((log: any) => wrMsg(
-      log.log_type as WRMessage['type'],
-      log.content,
-      { name: log.agent_name, time: _utc2beijing(log.created_at) }
-    )))
-    scrollWarRoom()
+    
+    // ★ 检测是否有新日志（比较第一条日志的时间戳）
+    const newFirstTime = logs[0]?.created_at || ''
+    const oldFirstTime = (warRoomMessages.value[0] as any)?._rawTime || ''
+    const hasNewContent = newFirstTime !== oldFirstTime
+    
+    warRoomMessages.value = collapseToolLogs(logs.map((log: any) => {
+      const msg = wrMsg(
+        log.log_type as WRMessage['type'],
+        log.content,
+        { name: log.agent_name, time: _utc2beijing(log.created_at) }
+      )
+      ;(msg as any)._rawTime = log.created_at  // 保存原始时间用于比较
+      return msg
+    }))
+    
+    // ★ 只在有新内容且允许自动滚动时才滚动
+    if (autoScroll && hasNewContent) scrollWarRoom()
   } catch (e) {
     console.error('Failed to load war room history:', e)
   } finally {
