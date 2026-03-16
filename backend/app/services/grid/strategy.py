@@ -445,14 +445,19 @@ class GridStrategy:
             level["status"] = "matched"
             
             # 计算该格利润
-            buy_price = Decimal(level["price"])
+            # ★ 网格利润 = 卖出价 - 下一级的买入价 (grid_interval 差价)
             sell_price = order.avg_fill_price or order.price
+            if level_num > 0:
+                buy_price = Decimal(grid_levels[level_num - 1]["price"])
+            else:
+                # 最底层 level 没有下一级，用自身价格（利润≈0）
+                buy_price = Decimal(level["price"])
             profit = (sell_price - buy_price) * order.quantity
             
             bot.total_profit += profit
             bot.realized_pnl = bot.total_profit - bot.total_commission
             
-            logger.info(f"[GridStrategy] Grid matched: profit={profit}, total={bot.total_profit}")
+            logger.info(f"[GridStrategy] Grid matched: buy@{buy_price} sell@{sell_price} profit={profit}, total={bot.total_profit}")
             
             # 记录到交易日志 (TradeJournal)
             try:
