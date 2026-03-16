@@ -73,7 +73,7 @@ async def list_trade_memories(
     symbol: Optional[str] = None,
     source: Optional[str] = None,
     result: Optional[str] = None,
-    limit: int = Query(default=20, le=200),
+    limit: int = Query(default=20, le=1000),
     offset: int = Query(default=0, ge=0),
 ):
     """获取交易记忆列表 (带 total 用于分页)"""
