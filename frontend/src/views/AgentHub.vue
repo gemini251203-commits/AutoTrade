@@ -17,6 +17,7 @@ import {
   type HubAgent, type HubStatus, type BoardResult,
   type HubAgentCreateRequest, type HubAgentUpdateRequest, type ToolInfo,
 } from '@/api/hub'
+import request from '@/utils/request'
 import { CalendarOutline, ChevronBackOutline, ChevronForwardOutline } from '@vicons/ionicons5'
 
 // ==================== State ====================
@@ -751,8 +752,45 @@ async function openMinutesCalendar() {
 async function fetchMinutesMonth() {
   minutesLoading.value = true
   try {
-    const res = await getMonthlyMinutes(calYear.value, calMonth.value)
-    minutesData.value = (res as any).data?.minutes || (res as any).minutes || []
+    const [minutesRes, journalRes] = await Promise.all([
+      getMonthlyMinutes(calYear.value, calMonth.value),
+      request.get('/journal/', { params: { limit: 500, offset: 0 } }),
+    ])
+    const rawMinutes: MinutesEntry[] = (minutesRes as any).data?.minutes || (minutesRes as any).minutes || []
+    
+    // 从交易记录计算每日PnL（与海报日历一致）
+    const trades = journalRes.data?.items || []
+    const tradePnlByDate: Record<string, number> = {}
+    const tradeCountByDate: Record<string, number> = {}
+    for (const m of trades) {
+      if (!m.created_at || m.source === 'system') continue
+      const t = new Date(m.created_at)
+      const bj = new Date(t.getTime() + 8 * 3600000)
+      const dk = `${bj.getUTCFullYear()}-${String(bj.getUTCMonth() + 1).padStart(2, '0')}-${String(bj.getUTCDate()).padStart(2, '0')}`
+      tradePnlByDate[dk] = (tradePnlByDate[dk] || 0) + parseFloat(String(m.pnl_usdt || 0))
+      tradeCountByDate[dk] = (tradeCountByDate[dk] || 0) + 1
+    }
+    
+    // 用交易记录的 PnL 覆盖纪要的 pnl_total
+    for (const entry of rawMinutes) {
+      if (entry.date in tradePnlByDate) {
+        entry.pnl_total = tradePnlByDate[entry.date]!
+        entry.trade_count = tradeCountByDate[entry.date] ?? entry.trade_count
+      }
+    }
+    
+    // 对有交易但没纪要的日期，创建虚拟条目用于日历着色
+    const existingDates = new Set(rawMinutes.map(m => m.date))
+    for (const [date, pnl] of Object.entries(tradePnlByDate)) {
+      if (!existingDates.has(date)) {
+        rawMinutes.push({
+          id: 0, date, summary: '', key_lessons: '',
+          importance: 0, trade_count: tradeCountByDate[date] ?? 0, pnl_total: pnl,
+        })
+      }
+    }
+    
+    minutesData.value = rawMinutes
   } catch (e) {
     console.error('fetch minutes failed', e)
     minutesData.value = []
