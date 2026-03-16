@@ -233,8 +233,20 @@ async function openPosterModal() {
 
 async function fetchPosterPnl() {
   try {
-    const res = await request.get('/wallet/portfolio-stats')
-    dailyPnlData.value = res.data.daily_pnl || []
+    // 从交易记录计算每日PnL（与纪要数据源一致）
+    const res = await request.get('/journal/', { params: { limit: 500, offset: 0 } })
+    const trades: TradeMemory[] = res.data?.items || []
+    
+    const pnlByDate: Record<string, number> = {}
+    for (const m of trades) {
+      if (!m.created_at || m.source === 'system') continue
+      const t = new Date(m.created_at)
+      const bj = new Date(t.getTime() + 8 * 3600000)
+      const dateKey = `${bj.getUTCFullYear()}-${String(bj.getUTCMonth() + 1).padStart(2, '0')}-${String(bj.getUTCDate()).padStart(2, '0')}`
+      pnlByDate[dateKey] = (pnlByDate[dateKey] || 0) + parseFloat(String(m.pnl_usdt || 0))
+    }
+    
+    dailyPnlData.value = Object.entries(pnlByDate).map(([date, pnl]) => ({ date, pnl }))
   } catch { dailyPnlData.value = [] }
 }
 
