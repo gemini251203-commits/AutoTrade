@@ -64,17 +64,20 @@ _SECRETARY_PROMPT = """你是一位顶级对冲基金的首席合规与复盘官
 
 2.【交易时间轴】：列出每笔交易的精确时间（北京时间）、标的、方向、杠杆、入场价/出场价、持仓时长、触发逻辑与最终盈亏结果。
 
-3.【被阻拦的交易】：列出今日AI想执行但被风控/系统阻拦的交易决策。分析这些被拦截的交易如果执行了，结果会如何——是正确的拦截还是错失的机会？
+3.【网格交易】：列出今日活跃的网格机器人，包括：新开设的网格（区间/网格数/投入）、各网格的成交笔数（买/卖）、已实现利润。评价AI选择网格策略的时机是否合理。
 
-4.【AI 逻辑审计】：审查今日各 Agent 的决策过程。只关注决策质量，不需要展开技术指标的具体数值（如MACD、RSI、布林线等的计算过程）。重点指出：
+4.【被阻拦的交易】：列出今日AI想执行但被风控/系统阻拦的交易决策。分析这些被拦截的交易如果执行了，结果会如何——是正确的拦截还是错失的机会？
+
+5.【AI 逻辑审计】：审查今日各 Agent 的决策过程。只关注决策质量，不需要展开技术指标的具体数值（如MACD、RSI、布林线等的计算过程）。重点指出：
    - 优秀的预判（提前捕捉到信号的决策）
    - 冲动或草率的决策（缺乏充分分析就下单）
    - 逻辑错误（判断方向与最终走势矛盾）
    - 错失的机会（有明确信号但未行动）
+   - 网格策略的选择时机是否正确（震荡vs趋势判断）
 
-5.【市场情绪与环境】：分析当天市场的整体情绪、重大外部事件或政策变化对行情的影响，以及AI系统是否适应了这种市场环境变化。
+6.【市场情绪与环境】：分析当天市场的整体情绪、重大外部事件或政策变化对行情的影响，以及AI系统是否适应了这种市场环境变化。
 
-6.【系统健康教训】：总结今日得失的核心问题和逻辑缺陷，给出明日具体的优化方向。避免每次重复"降低杠杆、降低频率"等泛泛建议——除非确实发现了相关问题。
+7.【系统健康教训】：总结今日得失的核心问题和逻辑缺陷，给出明日具体的优化方向。避免每次重复"降低杠杆、降低频率"等泛泛建议——除非确实发现了相关问题。
 
 重要规则：
 - 全程中文，专业但易懂
@@ -84,7 +87,7 @@ _SECRETARY_PROMPT = """你是一位顶级对冲基金的首席合规与复盘官
 
 输出格式 (严格 JSON):
 {
-    "summary": "完整复盘报告正文（包含上述6个模块）...",
+    "summary": "完整复盘报告正文（包含上述7个模块）...",
     "key_lessons": "一句话核心教训",
     "importance": 7
 }
@@ -270,6 +273,7 @@ class MemoryConsolidator:
             trade_count, pnl_total = await self._get_trade_stats(db, user_id, target_date)
             funding_costs = await self._extract_funding_costs(db, user_id, target_date)
             max_drawdown = await self._extract_max_drawdown(db, user_id, target_date)
+            grid_data_text = await self._extract_grid_data(db, user_id, target_date)
             
             # 2. 构建书记员 prompt
             data_block = self._build_data_block(
@@ -277,6 +281,7 @@ class MemoryConsolidator:
                 trade_count, pnl_total,
                 funding_costs=funding_costs, max_drawdown=max_drawdown,
                 blocked_trades=blocked_trades_text,
+                grid_data=grid_data_text,
             )
             
             if not trades_text and not ai_debate_text and not autopilot_text:
@@ -641,13 +646,101 @@ class MemoryConsolidator:
             logger.warning(f"[MemoryConsolidator] extract_max_drawdown error: {e}")
             return ""
     
+    # ======== 网格交易数据采集 ========
+    
+    async def _extract_grid_data(
+        self, db: AsyncSession, user_id: int, d: date,
+    ) -> str:
+        """从 grid_bots 表抽取当日活跃的网格交易数据"""
+        try:
+            from app.models.grid_bot import GridBot, GridStatus
+            from sqlalchemy import or_
+            
+            # 北京时间当天 → UTC 范围
+            day_start = datetime(d.year, d.month, d.day) - timedelta(hours=8)
+            day_end = day_start + timedelta(days=1)
+            
+            # 查询当日创建、启动、或正在运行的网格
+            result = await db.execute(
+                select(GridBot).where(
+                    GridBot.user_id == user_id,
+                    or_(
+                        # 当日创建的
+                        and_(GridBot.created_at >= day_start, GridBot.created_at < day_end),
+                        # 当日启动的
+                        and_(GridBot.started_at >= day_start, GridBot.started_at < day_end),
+                        # 当日停止的
+                        and_(GridBot.stopped_at >= day_start, GridBot.stopped_at < day_end),
+                        # 正在运行的（有成交就需要纳入）
+                        GridBot.status == GridStatus.RUNNING,
+                    ),
+                ).order_by(GridBot.created_at)
+            )
+            bots = result.scalars().all()
+            
+            if not bots:
+                return ""
+            
+            def _to_cst(dt):
+                if not dt:
+                    return "-"
+                return (dt + timedelta(hours=8)).strftime("%m-%d %H:%M")
+            
+            lines = []
+            total_grid_profit = 0
+            total_grid_buys = 0
+            total_grid_sells = 0
+            
+            for bot in bots:
+                # 判断是否当日新建
+                is_new = (bot.created_at and bot.created_at >= day_start and bot.created_at < day_end)
+                is_stopped = (bot.stopped_at and bot.stopped_at >= day_start and bot.stopped_at < day_end)
+                
+                status_tag = ""
+                if is_new:
+                    status_tag = "[新建] "
+                if is_stopped:
+                    status_tag = "[已停止] "
+                elif bot.status.value == "running":
+                    status_tag = status_tag or "[运行中] "
+                
+                profit = float(bot.realized_pnl or 0)
+                total_grid_profit += profit
+                total_grid_buys += bot.filled_buy_count
+                total_grid_sells += bot.filled_sell_count
+                
+                lines.append(
+                    f"- {status_tag}{bot.symbol} | "
+                    f"区间: {float(bot.lower_price):.2f}-{float(bot.upper_price):.2f} | "
+                    f"网格数: {bot.grid_count} | "
+                    f"投入: {float(bot.investment):.2f}U | "
+                    f"杠杆: {bot.leverage}x | "
+                    f"买入成交: {bot.filled_buy_count} | 卖出成交: {bot.filled_sell_count} | "
+                    f"已实现盈亏: {profit:+.4f} USDT | "
+                    f"创建: {_to_cst(bot.created_at)}"
+                )
+            
+            # 汇总行
+            summary = (
+                f"网格总览: {len(bots)} 个网格 | "
+                f"总买入成交: {total_grid_buys} | 总卖出成交: {total_grid_sells} | "
+                f"网格总盈亏: {total_grid_profit:+.4f} USDT"
+            )
+            
+            return summary + "\n" + "\n".join(lines)
+        except Exception as e:
+            logger.warning(f"[MemoryConsolidator] extract_grid_data error: {e}")
+            return ""
+    
     # ======== 书记员 AI ========
+
     
     def _build_data_block(
         self, d: date, trades: str, debates: str, autopilot: str,
         trade_count: int, pnl_total: float,
         funding_costs: str = "", max_drawdown: str = "",
         blocked_trades: str = "",
+        grid_data: str = "",
     ) -> str:
         """拼接结构化数据块给书记员"""
         parts = [
@@ -662,6 +755,13 @@ class MemoryConsolidator:
             parts.append(trades)
         else:
             parts.append("今日无交易。")
+        
+        # 网格交易
+        parts.append(f"\n## 网格交易")
+        if grid_data:
+            parts.append(grid_data)
+        else:
+            parts.append("今日无网格交易活动。")
         
         # 被阻拦的交易
         parts.append(f"\n## 被阻拦的交易（AI想执行但被系统/风控拦截的决策）")
