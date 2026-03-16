@@ -328,30 +328,26 @@ class HubDaemon:
             logger.warning(f"[HubDaemon] Failed to save log: {e}")
     
     def _build_cycle_prompt(self, agent: HubAgent) -> str:
-        """构建自主决策周期的 prompt (趋势+网格双策略版)"""
-        # 关注的交易对列表
+        """构建自主决策周期的 prompt (开放式策略版)"""
         watchlist = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
         symbols_str = "、".join(watchlist)
         
         return (
-            f"轮到你值班了。你需要关注以下交易对: {symbols_str}。\n"
-            "请按以下步骤执行:\n\n"
-            "1. **查看持仓和网格**: 先查看当前持仓情况（所有币种），再用 manage_grid(action='list') 查看已有网格。\n"
-            f"2. **行情分析**: 逐一检查 {symbols_str} 的行情和技术指标。\n"
-            "3. **判断行情类型**: 对每个币种判断当前是【趋势行情】还是【震荡行情】:\n"
-            "   - 震荡行情特征: RSI 在 40-60 之间、布林带收窄、ADX<25、价格在一个区间内反复\n"
-            "   - 趋势行情特征: RSI>70 或 <30、MACD 明确金/死叉、ADX>25、均线多头/空头排列\n\n"
-            "4. **策略选择**:\n"
-            "   【震荡行情】→ 适合网格交易:\n"
-            "   - 如果该币种没有运行中的网格，且震荡区间明确，用 manage_grid(action='start') 开设网格\n"
-            "   - 网格区间设为近期支撑位~阻力位，网格数 5-10 个，投入控制在账户余额的 20-40%\n"
-            "   - 杠杆用 1 倍（网格无需杠杆，安全第一）\n"
-            "   【趋势行情】→ 适合合约交易:\n"
-            "   - 如果有明确的趋势方向，用 place_order 开仓跟踪趋势\n"
-            "   - 设好止损止盈\n\n"
-            "5. **网格管理**: 检查已有网格，如果价格已突破网格区间，考虑用 manage_grid(action='stop') 停止\n"
-            "6. **汇报**: 简要说明各币种的行情类型、你的判断和行动\n\n"
-            "注意: 调用工具时请明确指定 symbol 参数，不要只看默认的 BTC。"
+            f"轮到你值班了。你需要关注以下交易对: {symbols_str}。\n\n"
+            "你拥有以下交易能力:\n"
+            "- place_order: 开合约仓位（做多/做空）\n"
+            "- close_position: 平仓\n"
+            "- manage_grid: 管理网格交易（创建/启动/停止/查看）\n\n"
+            "请自主完成以下工作:\n"
+            "1. 查看当前持仓和已有网格 (manage_grid action='list')\n"
+            f"2. 分析 {symbols_str} 的行情和技术指标\n"
+            "3. 根据你对市场的判断，自主决定最合适的交易策略:\n"
+            "   - 你认为适合趋势跟踪就开合约\n"
+            "   - 你认为适合区间震荡就开网格\n"
+            "   - 你认为需要观望就不操作\n"
+            "   - 已有仓位或网格不合理时，主动调整或关闭\n"
+            "4. 简要汇报你的判断和行动\n\n"
+            "注意: 调用工具时请明确指定 symbol 参数。风控原则: 单笔投入不超过账户余额的 30%。"
         )
     
     def get_running_agents(self) -> list:
