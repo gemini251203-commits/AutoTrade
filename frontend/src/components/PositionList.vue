@@ -46,6 +46,12 @@ const positions = ref<PositionRisk[]>([])
 const loading = ref(false)
 const closingId = ref<number | null>(null)
 
+// 杠杆修改弹窗
+const showLeverageModal = ref(false)
+const leverageEditing = ref<PositionRisk | null>(null)
+const leverageForm = ref({ leverage: 10 })
+const leverageSaving = ref(false)
+
 // 止盈止损弹窗
 const showTpSlModal = ref(false)
 const tpSlEditing = ref<PositionRisk | null>(null)
@@ -211,6 +217,33 @@ async function saveTpSl() {
   }
 }
 
+// 打开杠杆修改弹窗
+function openLeverageModal(position: PositionRisk) {
+  leverageEditing.value = position
+  leverageForm.value.leverage = position.leverage
+  showLeverageModal.value = true
+}
+
+// 保存杠杆
+async function saveLeverage() {
+  if (!leverageEditing.value) return
+  
+  leverageSaving.value = true
+  try {
+    await request.post(`/position/${leverageEditing.value.position_id}/leverage`, {
+      leverage: leverageForm.value.leverage,
+    })
+    message.success(`杠杆已修改为 ${leverageForm.value.leverage}x`)
+    showLeverageModal.value = false
+    await fetchPositions()
+    await walletStore.fetchBalance()
+  } catch (e: any) {
+    message.error(e.response?.data?.detail || '修改杠杆失败')
+  } finally {
+    leverageSaving.value = false
+  }
+}
+
 // 打开平仓弹窗
 function openCloseModal(position: PositionRisk) {
   closeEditing.value = position
@@ -299,8 +332,11 @@ const columns = [
   {
     title: '杠杆',
     key: 'leverage',
-    width: 60,
-    render: (row: PositionRisk) => row.leverage + 'x',
+    width: 70,
+    render: (row: PositionRisk) => h('span', {
+      class: 'cursor-pointer hover:text-blue-400 transition underline decoration-dotted underline-offset-2',
+      onClick: () => openLeverageModal(row),
+    }, row.leverage + 'x'),
   },
   {
     title: '未实现盈亏',
@@ -419,7 +455,7 @@ function formatNumber(val: string | number | null | undefined, decimals: number 
             <NTag size="small" :type="pos.side === 'long' ? 'success' : 'error'">
               {{ pos.side === 'long' ? '多' : '空' }}
             </NTag>
-            <span class="text-xs text-gray-400 bg-white/5 px-1.5 py-0.5 rounded">{{ pos.leverage }}x</span>
+            <span class="text-xs text-gray-400 bg-white/5 px-1.5 py-0.5 rounded cursor-pointer hover:bg-white/10 active:bg-white/20 transition" @click="openLeverageModal(pos)">{{ pos.leverage }}x</span>
           </div>
           
           <!-- PnL Display -->
@@ -573,6 +609,78 @@ function formatNumber(val: string | number | null | undefined, decimals: number 
           @click="saveTpSl"
         >
           确认
+        </NButton>
+      </div>
+    </NModal>
+    
+    <!-- 杠杆修改弹窗 -->
+    <NModal v-model:show="showLeverageModal" preset="card" style="width: 380px;">
+      <template #header>
+        <div class="flex items-center gap-2">
+          <span>修改杠杆</span>
+          <NTag size="small" type="info">{{ leverageEditing?.symbol }}</NTag>
+        </div>
+      </template>
+      
+      <div class="space-y-4" v-if="leverageEditing">
+        <div class="grid grid-cols-2 gap-2 text-sm text-gray-400 mb-4">
+          <div>当前杠杆</div>
+          <div class="text-right text-white font-mono">{{ leverageEditing.leverage }}x</div>
+          <div>当前保证金</div>
+          <div class="text-right text-white font-mono">
+            {{ (parseFloat(leverageEditing.size) * parseFloat(leverageEditing.entry_price) / leverageEditing.leverage).toFixed(2) }} USDT
+          </div>
+        </div>
+        
+        <div>
+          <div class="text-sm text-gray-400 mb-2">新杠杆倍数</div>
+          <NInputNumber
+            v-model:value="leverageForm.leverage"
+            :min="1"
+            :max="125"
+            :step="1"
+            style="width: 100%"
+          >
+            <template #suffix>x</template>
+          </NInputNumber>
+        </div>
+        
+        <!-- 预计变化 -->
+        <div class="p-3 rounded-lg bg-white/5 text-xs space-y-1">
+          <div class="flex justify-between">
+            <span class="text-gray-500">新保证金</span>
+            <span class="font-mono text-white">
+              {{ (parseFloat(leverageEditing.size) * parseFloat(leverageEditing.entry_price) / leverageForm.leverage).toFixed(2) }} USDT
+            </span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">保证金变化</span>
+            <span 
+              class="font-mono"
+              :class="(
+                (parseFloat(leverageEditing.size) * parseFloat(leverageEditing.entry_price) / leverageForm.leverage)
+                - (parseFloat(leverageEditing.size) * parseFloat(leverageEditing.entry_price) / leverageEditing.leverage)
+              ) > 0 ? 'text-red-400' : 'text-green-400'"
+            >
+              {{ (
+                (parseFloat(leverageEditing.size) * parseFloat(leverageEditing.entry_price) / leverageForm.leverage)
+                - (parseFloat(leverageEditing.size) * parseFloat(leverageEditing.entry_price) / leverageEditing.leverage)
+              ) > 0 ? '+' : '' }}{{ (
+                (parseFloat(leverageEditing.size) * parseFloat(leverageEditing.entry_price) / leverageForm.leverage)
+                - (parseFloat(leverageEditing.size) * parseFloat(leverageEditing.entry_price) / leverageEditing.leverage)
+              ).toFixed(2) }} USDT
+            </span>
+          </div>
+        </div>
+        
+        <NButton
+          type="primary"
+          block
+          :loading="leverageSaving"
+          :disabled="leverageForm.leverage === leverageEditing.leverage"
+          @click="saveLeverage"
+        >
+          确认修改
         </NButton>
       </div>
     </NModal>

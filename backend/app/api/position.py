@@ -419,6 +419,90 @@ async def set_tp_sl(
     return PositionResponse.from_position(position)
 
 
+class ChangeLeverageRequest(BaseModel):
+    """修改杠杆请求"""
+    leverage: int = Field(..., ge=1, le=125, example=20)
+
+
+@router.post("/{position_id}/leverage", response_model=PositionResponse)
+async def change_leverage(
+    position_id: int,
+    request: ChangeLeverageRequest,
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """
+    修改持仓杠杆倍数
+    
+    - 提高杠杆：释放多余保证金回余额
+    - 降低杠杆：从余额中扣除额外保证金
+    """
+    from sqlalchemy import select
+    from app.services.wallet import WalletManager
+    
+    result = await db.execute(
+        select(Position).where(
+            Position.id == position_id,
+            Position.user_id == current_user.id,
+        )
+    )
+    position = result.scalar_one_or_none()
+    
+    if not position:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="仓位不存在",
+        )
+    
+    if position.status != PositionStatus.OPEN:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="无法修改已关闭仓位的杠杆",
+        )
+    
+    old_leverage = position.leverage
+    new_leverage = request.leverage
+    
+    if old_leverage == new_leverage:
+        return PositionResponse.from_position(position)
+    
+    # 计算新旧保证金差额
+    old_margin = position.margin
+    new_margin = (position.size * position.entry_price) / Decimal(str(new_leverage))
+    margin_diff = new_margin - old_margin
+    
+    # 调整钱包
+    wallet = await WalletManager.get_wallet(db, current_user.id, for_update=True)
+    
+    if margin_diff > 0:
+        # 降低杠杆 → 需要追加保证金
+        if wallet.balance < margin_diff:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"余额不足以降低杠杆: 需要追加 {float(margin_diff):.2f} USDT, "
+                    f"可用 {float(wallet.balance):.2f} USDT"
+                ),
+            )
+        wallet.balance -= margin_diff
+    else:
+        # 提高杠杆 → 释放保证金
+        wallet.balance += abs(margin_diff)
+    
+    position.leverage = new_leverage
+    position.margin = new_margin
+    
+    logger.info(
+        f"[Position API] Leverage changed: position={position_id}, "
+        f"{old_leverage}x → {new_leverage}x, margin {float(old_margin):.2f} → {float(new_margin):.2f}"
+    )
+    
+    await db.commit()
+    await db.refresh(position)
+    
+    return PositionResponse.from_position(position)
+
+
 # ==================== 动态强平价格 (Cross Margin) ====================
 
 class LiquidationInfoRequest(BaseModel):
