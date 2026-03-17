@@ -337,6 +337,7 @@ class HubDaemon:
             "你拥有以下交易能力:\n"
             "- place_order: 开合约仓位（做多/做空）\n"
             "- close_position: 平仓\n"
+            "- change_leverage: 修改持仓杠杆倍数（1-125倍，持仓中可调）\n"
             "- manage_grid: 管理网格交易（创建/启动/停止/查看）\n\n"
             "请自主完成以下工作:\n"
             "1. 查看当前持仓和已有网格 (manage_grid action='list')\n"

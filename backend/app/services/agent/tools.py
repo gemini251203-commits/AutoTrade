@@ -445,6 +445,101 @@ async def close_position(
 
 
 @register_tool
+async def change_leverage(
+    db: AsyncSession,
+    user_id: int,
+    symbol: str = "BTCUSDT",
+    leverage: int = 10,
+) -> str:
+    """修改持仓杠杆倍数（支持持仓中调整，1-125倍）"""
+    try:
+        symbol = symbol.upper()
+        leverage = int(leverage)
+        
+        if leverage < 1 or leverage > 125:
+            return json.dumps({
+                "success": False,
+                "error": f"杠杆必须在 1-125 之间，当前输入: {leverage}",
+            }, ensure_ascii=False, default=str)
+        
+        # 查找该交易对的持仓
+        result = await db.execute(
+            select(Position).where(
+                Position.user_id == user_id,
+                Position.symbol == symbol,
+                Position.status == PositionStatus.OPEN,
+            )
+        )
+        position = result.scalar_one_or_none()
+        
+        if not position:
+            return json.dumps({
+                "success": False,
+                "error": f"未找到 {symbol} 的持仓，无法修改杠杆",
+            }, ensure_ascii=False, default=str)
+        
+        old_leverage = position.leverage
+        if old_leverage == leverage:
+            return json.dumps({
+                "success": True,
+                "message": f"{symbol} 杠杆已经是 {leverage}x，无需修改",
+            }, ensure_ascii=False, default=str)
+        
+        # 计算新旧保证金差额
+        old_margin = position.margin
+        new_margin = (position.size * position.entry_price) / Decimal(str(leverage))
+        margin_diff = new_margin - old_margin  # 正=需要追加, 负=可释放
+        
+        # 调整钱包余额
+        from app.services.wallet import WalletManager
+        wallet = await WalletManager.get_wallet(db, user_id, for_update=True)
+        
+        if margin_diff > 0:
+            # 提高保证金（降低杠杆）：从余额中扣除
+            if wallet.balance < margin_diff:
+                return json.dumps({
+                    "success": False,
+                    "error": (
+                        f"余额不足以降低杠杆: 需要追加 {float(margin_diff):.2f} USDT 保证金，"
+                        f"可用余额 {float(wallet.balance):.2f} USDT"
+                    ),
+                }, ensure_ascii=False, default=str)
+            wallet.balance -= margin_diff
+        else:
+            # 释放保证金（提高杠杆）：返还到余额
+            wallet.balance += abs(margin_diff)
+        
+        # 更新仓位
+        position.leverage = leverage
+        position.margin = new_margin
+        
+        logger.info(
+            f"[AgentTools] Leverage changed: {symbol} {old_leverage}x → {leverage}x, "
+            f"margin {float(old_margin):.2f} → {float(new_margin):.2f}, "
+            f"diff={float(margin_diff):+.2f}"
+        )
+        
+        return json.dumps({
+            "success": True,
+            "symbol": symbol,
+            "position_id": position.id,
+            "old_leverage": old_leverage,
+            "new_leverage": leverage,
+            "old_margin": round(float(old_margin), 2),
+            "new_margin": round(float(new_margin), 2),
+            "margin_change": round(float(margin_diff), 2),
+            "message": (
+                f"{symbol} 杠杆已从 {old_leverage}x 调整为 {leverage}x，"
+                f"保证金 {float(old_margin):.2f} → {float(new_margin):.2f} USDT"
+            ),
+        }, ensure_ascii=False, default=str)
+
+    except Exception as e:
+        logger.error(f"[AgentTools] change_leverage failed: {e}")
+        return json.dumps({"success": False, "error": f"修改杠杆失败: {str(e)}"}, ensure_ascii=False, default=str)
+
+
+@register_tool
 async def cancel_order(
     db: AsyncSession,
     user_id: int,
