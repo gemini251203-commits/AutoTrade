@@ -330,3 +330,39 @@ async def delete_grid_bot(
     await db.commit()
     
     return {"message": f"Grid bot #{bot_id} deleted"}
+
+
+@router.delete("/cleanup/abandoned")
+async def cleanup_abandoned_grids(
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """
+    批量清理废弃网格
+    
+    删除所有已停止/已完成/待启动的非运行中网格
+    """
+    result = await db.execute(
+        select(GridBot).where(
+            GridBot.user_id == current_user.id,
+            GridBot.status.in_([
+                GridStatus.STOPPED,
+                GridStatus.CREATED,
+                GridStatus.COMPLETED,
+            ]),
+        )
+    )
+    bots = list(result.scalars().all())
+    
+    if not bots:
+        return {"message": "没有需要清理的网格", "deleted_count": 0}
+    
+    for bot in bots:
+        await db.delete(bot)
+    
+    await db.commit()
+    
+    return {
+        "message": f"已清理 {len(bots)} 个废弃网格",
+        "deleted_count": len(bots),
+    }

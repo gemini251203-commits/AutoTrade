@@ -1807,7 +1807,7 @@ async def manage_grid(
     lower_price: float = 0,
     grid_count: int = 10,
     investment: float = 100,
-    leverage: int = 1,
+    leverage: int = 15,
     grid_id: int = 0,
 ) -> str:
     """

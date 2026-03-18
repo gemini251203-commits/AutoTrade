@@ -239,6 +239,20 @@ async function deleteGrid(botId: number) {
   }
 }
 
+// 批量清理废弃网格
+async function cleanupGrids() {
+  loading.value = true
+  try {
+    const resp = await request.delete('/grid/cleanup/abandoned')
+    message.success(resp.data?.message || '清理完成')
+    await fetchGridBots()
+  } catch (e: any) {
+    message.error(e.response?.data?.detail || '清理失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 // ==================== 格式化 ====================
 
 function formatNum(val: string | null | undefined): string {
@@ -314,9 +328,17 @@ onUnmounted(() => {
     <!-- 头部 -->
     <div class="header">
       <h3>网格交易 <span class="subtitle">自动高抛低吸</span></h3>
-      <NButton v-if="!showCreateForm" type="primary" size="small" @click="openCreateForm">
-        创建网格
-      </NButton>
+      <div v-if="!showCreateForm" style="display:flex;gap:8px">
+        <NPopconfirm @positive-click="cleanupGrids">
+          <template #trigger>
+            <NButton size="small" quaternary type="warning" :loading="loading">清理废弃</NButton>
+          </template>
+          将删除所有已停止、已完成、待启动的网格，确定？
+        </NPopconfirm>
+        <NButton type="primary" size="small" @click="openCreateForm">
+          创建网格
+        </NButton>
+      </div>
     </div>
     
     <!-- 内联创建表单 -->
