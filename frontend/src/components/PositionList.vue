@@ -287,7 +287,15 @@ const columns = [
     title: '交易对',
     key: 'symbol',
     width: 100,
-    render: (row: PositionRisk) => row.symbol,
+    render: (row: PositionRisk) => {
+      const children = [h('span', { class: 'font-bold' }, row.symbol)]
+      if (row.source && row.source !== 'manual') {
+        const label = row.source === 'grid' ? '网格' : row.source === 'hub' ? 'AI' : row.source
+        const type = row.source === 'grid' ? 'warning' : row.source === 'hub' ? 'info' : 'default'
+        children.push(h(NTag, { size: 'tiny', type, style: 'margin-left: 6px' }, { default: () => label }))
+      }
+      return h('div', { class: 'flex items-center' }, children)
+    },
   },
   {
     title: '方向',
