@@ -459,40 +459,8 @@ class GridStrategy:
             
             logger.info(f"[GridStrategy] Grid matched: buy@{buy_price} sell@{sell_price} profit={profit}, total={bot.total_profit}")
             
-            # 记录到交易日志 (TradeJournal)
-            try:
-                from app.models.position import Position, PositionSide
-                # 构造轻量 Position-like 对象供 TradeJournal 使用
-                # 网格不创建 Position, 所以用当前 order 的数据构造
-                class _GridPseudoPosition:
-                    """网格伪仓位 — 仅用于 TradeJournal 记录"""
-                    def __init__(self, bot, order, buy_price, sell_price, profit):
-                        self.id = None  # 网格无 position_id
-                        self.user_id = bot.user_id
-                        self.symbol = bot.symbol
-                        self.side = PositionSide.LONG if bot.direction.value == "long" else PositionSide.SHORT
-                        self.entry_price = buy_price
-                        self.margin = buy_price * order.quantity / Decimal(str(bot.leverage))
-                        self.size = order.quantity
-                        self.leverage = bot.leverage
-                        self.created_at = order.created_at
-                        self.closed_at = utc_now()
-                        self.stop_loss = bot.stop_loss_price
-                        self.take_profit = bot.take_profit_price
-                        self.total_commission = Decimal("0")
-                        self.source = "grid"
-                        self.open_reason = f"Grid #{bot.id}"
-                
-                pseudo_pos = _GridPseudoPosition(bot, order, buy_price, sell_price, profit)
-                await TradeJournal.record_close(
-                    db=db,
-                    position=pseudo_pos,
-                    pnl=profit,
-                    close_price=sell_price,
-                    close_reason="grid_matched",
-                )
-            except Exception as e:
-                logger.warning(f"[GridStrategy] TradeJournal record failed: {e}")
+            # ★ TradeJournal 由 PositionManager.close_position 统一记录
+            # 不在此处重复写入，避免双倍记录导致 PNL 不一致
                 
             # 重新在该级放置买单
             try:

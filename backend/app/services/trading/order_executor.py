@@ -390,6 +390,9 @@ class OrderExecutor:
             elif note.startswith("[Quant]"):
                 source = "quant"
                 open_reason = note[7:].strip()
+            elif note.startswith("Grid "):
+                source = "grid"
+                open_reason = note
             else:
                 open_reason = note
         
