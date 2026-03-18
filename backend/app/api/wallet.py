@@ -672,3 +672,148 @@ async def fix_frozen_funds(
         "balance": str(wallet.balance),
     }
 
+
+@router.get("/audit")
+async def audit_wallet(
+    current_user: CurrentUser,
+    db: DbSession,
+    fix: bool = False,
+):
+    """
+    钱包审计 — 检查 wallet 余额与实际数据是否一致
+    
+    公式:
+      correct_total = deposits + funding_fees + sum(closed positions realized_pnl)
+      correct_frozen = sum(open positions margin) + sum(open orders frozen_amount)
+      correct_balance = correct_total - correct_frozen
+      correct_total_pnl = sum(closed positions realized_pnl)
+    
+    参数:
+      fix: 如果 True, 自动修正 wallet 到正确值
+    """
+    from app.models.position import Position
+    from app.models.order import Order
+    from app.models.wallet_transaction import WalletTransaction
+    
+    user_id = current_user.id
+    wallet = await WalletManager.get_wallet(db, user_id, for_update=fix)
+    if not wallet:
+        raise HTTPException(status_code=404, detail="钱包不存在")
+    
+    # 1. 充值总额
+    dep_result = await db.execute(
+        select(func.coalesce(func.sum(WalletTransaction.amount), 0))
+        .where(WalletTransaction.user_id == user_id, WalletTransaction.type == "DEPOSIT")
+    )
+    deposits = dep_result.scalar() or Decimal("0")
+    
+    # 2. 资金费率收入
+    fund_result = await db.execute(
+        select(func.coalesce(func.sum(WalletTransaction.amount), 0))
+        .where(WalletTransaction.user_id == user_id, WalletTransaction.type == "FUNDING")
+    )
+    funding = fund_result.scalar() or Decimal("0")
+    
+    # 3. 初始化余额 (simulation airdrop)
+    init_result = await db.execute(
+        select(func.coalesce(func.sum(WalletTransaction.amount), 0))
+        .where(WalletTransaction.user_id == user_id, WalletTransaction.type == "INIT")
+    )
+    init_balance = init_result.scalar() or Decimal("0")
+    
+    # 4. 已平仓 PNL
+    pnl_result = await db.execute(
+        select(
+            func.coalesce(func.sum(Position.realized_pnl), 0),
+            func.count(Position.id),
+        )
+        .where(
+            Position.user_id == user_id,
+            Position.status.in_(["CLOSED", "closed", "LIQUIDATED", "liquidated"]),
+        )
+    )
+    pnl_row = pnl_result.one()
+    closed_pnl = pnl_row[0] or Decimal("0")
+    closed_count = pnl_row[1]
+    
+    # 5. 开仓保证金
+    open_pos_result = await db.execute(
+        select(
+            func.coalesce(func.sum(Position.margin), 0),
+            func.count(Position.id),
+        )
+        .where(
+            Position.user_id == user_id,
+            Position.status.in_(["OPEN", "open"]),
+        )
+    )
+    open_pos_row = open_pos_result.one()
+    open_positions_margin = open_pos_row[0] or Decimal("0")
+    open_positions_count = open_pos_row[1]
+    
+    # 6. 挂单冻结
+    open_ord_result = await db.execute(
+        select(func.coalesce(func.sum(Order.frozen_amount), 0))
+        .where(
+            Order.user_id == user_id,
+            Order.status.in_(["OPEN", "open"]),
+        )
+    )
+    open_orders_frozen = open_ord_result.scalar() or Decimal("0")
+    
+    # 7. 计算正确值
+    correct_total = deposits + init_balance + funding + closed_pnl
+    correct_frozen = open_positions_margin + open_orders_frozen
+    correct_balance = correct_total - correct_frozen
+    correct_total_pnl = closed_pnl
+    
+    actual_total = wallet.balance + wallet.frozen
+    diff = actual_total - correct_total
+    
+    audit = {
+        "user_id": user_id,
+        "deposits": round(float(deposits), 2),
+        "init_balance": round(float(init_balance), 2),
+        "funding_income": round(float(funding), 4),
+        "closed_pnl": round(float(closed_pnl), 4),
+        "closed_count": closed_count,
+        "correct_total_funds": round(float(correct_total), 4),
+        "open_positions_margin": round(float(open_positions_margin), 2),
+        "open_positions_count": open_positions_count,
+        "open_orders_frozen": round(float(open_orders_frozen), 2),
+        "correct_frozen": round(float(correct_frozen), 2),
+        "correct_balance": round(float(correct_balance), 4),
+        "correct_total_pnl": round(float(correct_total_pnl), 4),
+        "actual_balance": round(float(wallet.balance), 4),
+        "actual_frozen": round(float(wallet.frozen), 4),
+        "actual_total": round(float(actual_total), 4),
+        "actual_total_pnl": round(float(wallet.total_pnl), 4),
+        "diff": round(float(diff), 4),
+        "is_healthy": abs(diff) < Decimal("0.01"),
+    }
+    
+    if fix and abs(diff) >= Decimal("0.01"):
+        old = {
+            "balance": round(float(wallet.balance), 2),
+            "frozen": round(float(wallet.frozen), 2),
+            "total_pnl": round(float(wallet.total_pnl), 2),
+        }
+        wallet.balance = correct_balance
+        wallet.frozen = correct_frozen
+        wallet.total_pnl = correct_total_pnl
+        await db.commit()
+        await db.refresh(wallet)
+        audit["fixed"] = True
+        audit["old_values"] = old
+        audit["message"] = f"已修正: diff={round(float(diff), 2)} USDT"
+        logger.warning(
+            f"[Wallet Audit] User {user_id}: FIXED wallet. "
+            f"diff={diff}, old={old}, "
+            f"new=balance={correct_balance}, frozen={correct_frozen}"
+        )
+    elif fix:
+        audit["fixed"] = False
+        audit["message"] = "钱包数据一致，无需修正"
+    
+    return audit
+
