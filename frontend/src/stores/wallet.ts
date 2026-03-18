@@ -54,10 +54,8 @@ export const useWalletStore = defineStore('wallet', () => {
   })
   
   const formattedPnl = computed(() => {
-    // 真实盈亏 = 当前权益 + 未实现盈亏 - 初始投入
-    const realPnl = initialBalance.value > 0
-      ? (totalEquity.value + unrealizedPnl.value - initialBalance.value)
-      : totalPnl.value
+    // 已实现盈亏 = wallet.total_pnl (仅已平仓的累计)
+    const realPnl = totalPnl.value
     const sign = realPnl >= 0 ? '+' : ''
     return sign + new Intl.NumberFormat('en-US', {
       style: 'decimal',
@@ -68,17 +66,13 @@ export const useWalletStore = defineStore('wallet', () => {
   
   const pnlPercent = computed(() => {
     if (initialBalance.value <= 0) return '+0.00%'
-    const realPnl = totalEquity.value + unrealizedPnl.value - initialBalance.value
-    const percent = (realPnl / initialBalance.value) * 100
+    const percent = (totalPnl.value / initialBalance.value) * 100
     const sign = percent >= 0 ? '+' : ''
     return sign + percent.toFixed(2) + '%'
   })
   
   const isPnlPositive = computed(() => {
-    const realPnl = initialBalance.value > 0
-      ? (totalEquity.value + unrealizedPnl.value - initialBalance.value)
-      : totalPnl.value
-    return realPnl >= 0
+    return totalPnl.value >= 0
   })
   
   const formattedUnrealizedPnl = computed(() => {
