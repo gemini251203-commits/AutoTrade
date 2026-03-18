@@ -1818,6 +1818,7 @@ async def manage_grid(
     - start: 创建并启动网格 (需要 symbol/upper_price/lower_price/grid_count/investment)
     - stop: 停止网格 (需要 grid_id)
     - delete: 删除网格 (需要 grid_id)
+    - cleanup: 批量清理所有废弃网格 (已停止/已完成/已创建未启动)
     """
     from app.services.grid import GridStrategy
     
@@ -1827,12 +1828,16 @@ async def manage_grid(
         if action == "list":
             bots = await GridStrategy.get_user_grid_bots(db, user_id)
             bot_list = []
+            abandoned_count = 0
             for b in bots:
+                status_val = b.status.value if hasattr(b.status, 'value') else str(b.status)
+                if status_val in ('STOPPED', 'COMPLETED', 'CREATED'):
+                    abandoned_count += 1
                 bot_list.append({
                     "id": b.id,
                     "name": b.name,
                     "symbol": b.symbol,
-                    "status": b.status.value if hasattr(b.status, 'value') else str(b.status),
+                    "status": status_val,
                     "upper_price": str(b.upper_price),
                     "lower_price": str(b.lower_price),
                     "grid_count": b.grid_count,
@@ -1841,11 +1846,14 @@ async def manage_grid(
                     "filled_buy_count": b.filled_buy_count,
                     "filled_sell_count": b.filled_sell_count,
                 })
-            return json.dumps({
+            result = {
                 "action": "list",
                 "count": len(bot_list),
                 "bots": bot_list,
-            }, ensure_ascii=False, default=str)
+            }
+            if abandoned_count > 0:
+                result["warning"] = f"⚠️ 有 {abandoned_count} 个废弃网格待清理，请调用 manage_grid(action=cleanup) 清理"
+            return json.dumps(result, ensure_ascii=False, default=str)
         
         elif action == "start":
             if upper_price <= 0 or lower_price <= 0:
@@ -1923,10 +1931,34 @@ async def manage_grid(
                 "message": "网格已删除",
             }, ensure_ascii=False, default=str)
         
+        elif action == "cleanup":
+            from app.models.grid_bot import GridBot, GridStatus
+            from sqlalchemy import select
+            
+            result = await db.execute(
+                select(GridBot).where(
+                    GridBot.user_id == user_id,
+                    GridBot.status.in_([GridStatus.STOPPED, GridStatus.CREATED, GridStatus.COMPLETED]),
+                )
+            )
+            abandoned = result.scalars().all()
+            deleted_ids = []
+            for bot in abandoned:
+                deleted_ids.append(bot.id)
+                await db.delete(bot)
+            if deleted_ids:
+                await db.commit()
+            return json.dumps({
+                "action": "cleanup",
+                "deleted_count": len(deleted_ids),
+                "deleted_ids": deleted_ids,
+                "message": f"已清理 {len(deleted_ids)} 个废弃网格" if deleted_ids else "没有废弃网格需要清理",
+            }, ensure_ascii=False, default=str)
+        
         else:
             return json.dumps({
                 "error": f"未知操作: {action}",
-                "valid_actions": ["list", "start", "stop", "delete"],
+                "valid_actions": ["list", "start", "stop", "delete", "cleanup"],
             }, ensure_ascii=False, default=str)
     
     except Exception as e:

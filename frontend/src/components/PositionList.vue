@@ -39,6 +39,7 @@ interface PositionRisk {
   // 新增
   stop_loss: string | null
   take_profit: string | null
+  source: string
 }
 
 // ==================== 状态 ====================
@@ -452,6 +453,9 @@ function formatNumber(val: string | number | null | undefined, decimals: number 
         <div class="flex justify-between items-start mb-3">
           <div class="flex items-center gap-2">
             <span class="font-bold text-white text-lg">{{ pos.symbol }}</span>
+            <NTag size="small" :type="pos.source === 'grid' ? 'warning' : pos.source === 'hub' ? 'info' : 'default'" v-if="pos.source && pos.source !== 'manual'">
+              {{ pos.source === 'grid' ? '网格' : pos.source === 'hub' ? 'AI Hub' : pos.source }}
+            </NTag>
             <NTag size="small" :type="pos.side === 'long' ? 'success' : 'error'">
               {{ pos.side === 'long' ? '多' : '空' }}
             </NTag>

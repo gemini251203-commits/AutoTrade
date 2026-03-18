@@ -46,6 +46,7 @@ class PositionRiskResponse(BaseModel):
     # 🔥 新增止盈止损字段
     stop_loss: Optional[str] = None
     take_profit: Optional[str] = None
+    source: str = "manual"
 
 
 class AccountRiskResponse(BaseModel):
@@ -120,6 +121,7 @@ def risk_to_response(risk: PositionRisk) -> PositionRiskResponse:
         # 🔥 填充止盈止损
         stop_loss=str(risk.stop_loss) if risk.stop_loss else None,
         take_profit=str(risk.take_profit) if risk.take_profit else None,
+        source=risk.source,
     )
 
 

@@ -59,6 +59,7 @@ class PositionRisk:
     # 🔥 新增止盈止损字段
     stop_loss: Optional[Decimal] = None
     take_profit: Optional[Decimal] = None
+    source: str = "manual"
 
 
 @dataclass
@@ -199,6 +200,7 @@ class RiskEngine:
             # 🔥 填充止盈止损
             stop_loss=position.stop_loss,
             take_profit=position.take_profit,
+            source=getattr(position, 'source', 'manual') or 'manual',
         )
     
     @staticmethod
