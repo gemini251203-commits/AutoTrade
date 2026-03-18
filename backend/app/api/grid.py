@@ -71,6 +71,7 @@ class GridResponse(BaseModel):
     realized_pnl: str
     profit_rate: str
     matched_count: int
+    floating_pnl: str = "0.00"  # 未配对仓位的浮动盈亏
     created_at: str
     started_at: Optional[str]
 
@@ -82,7 +83,7 @@ class GridDetailResponse(GridResponse):
 
 # ==================== Helper ====================
 
-def bot_to_response(bot: GridBot) -> GridResponse:
+def bot_to_response(bot: GridBot, floating_pnl: Decimal = Decimal("0")) -> GridResponse:
     """转换 GridBot 为 API 响应"""
     # 格式化小数位: 价格2位, 数量5位, 金额2位
     def fmt_price(v: Decimal) -> str:
@@ -113,6 +114,7 @@ def bot_to_response(bot: GridBot) -> GridResponse:
         realized_pnl=fmt_price(bot.realized_pnl),
         profit_rate=fmt_price(bot.profit_rate),
         matched_count=bot.matched_count,
+        floating_pnl=fmt_price(floating_pnl),
         created_at=bot.created_at.isoformat() + "Z",
         started_at=bot.started_at.isoformat() + "Z" if bot.started_at else None,
     )
@@ -126,9 +128,61 @@ async def list_grid_bots(
     db: DbSession,
     status_filter: Optional[GridStatus] = None,
 ):
-    """获取用户网格机器人列表"""
+    """获取用户网格机器人列表（含浮动盈亏）"""
+    from app.models.position import Position, PositionStatus, PositionSide
+    import httpx
+    
     bots = await GridStrategy.get_user_grid_bots(db, current_user.id, status_filter)
-    return [bot_to_response(bot) for bot in bots]
+    
+    # 获取所有运行中网格的 symbol 列表
+    running_symbols = set()
+    for bot in bots:
+        if bot.status == GridStatus.RUNNING:
+            running_symbols.add(bot.symbol)
+    
+    # 获取实时价格
+    price_map = {}
+    if running_symbols:
+        try:
+            async with httpx.AsyncClient() as client:
+                for sym in running_symbols:
+                    resp = await client.get(
+                        f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={sym}",
+                        timeout=3,
+                    )
+                    if resp.status_code == 200:
+                        price_map[sym] = Decimal(resp.json().get("price", "0"))
+        except Exception as e:
+            logger.warning(f"[Grid API] 获取价格失败: {e}")
+    
+    # 获取所有网格相关的 OPEN 仓位
+    grid_positions = {}
+    if running_symbols:
+        result = await db.execute(
+            select(Position).where(
+                Position.user_id == current_user.id,
+                Position.status == PositionStatus.OPEN,
+                Position.source == "grid",
+            )
+        )
+        for pos in result.scalars().all():
+            # 根据 symbol 分组
+            grid_positions.setdefault(pos.symbol, []).append(pos)
+    
+    # 计算每个 bot 的浮动盈亏
+    responses = []
+    for bot in bots:
+        floating = Decimal("0")
+        if bot.status == GridStatus.RUNNING and bot.symbol in price_map:
+            mark_price = price_map[bot.symbol]
+            for pos in grid_positions.get(bot.symbol, []):
+                if pos.side == PositionSide.LONG:
+                    floating += (mark_price - pos.entry_price) * pos.size
+                else:
+                    floating += (pos.entry_price - mark_price) * pos.size
+        responses.append(bot_to_response(bot, floating))
+    
+    return responses
 
 
 @router.post("/", response_model=GridResponse)

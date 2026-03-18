@@ -41,6 +41,7 @@ interface GridBot {
   realized_pnl: string
   profit_rate: string
   matched_count: number
+  floating_pnl: string
   created_at: string
   started_at: string | null
 }
@@ -467,8 +468,8 @@ onUnmounted(() => {
           </div>
           <div class="detail-item">
             <span class="detail-label">未配对盈亏</span>
-            <span class="detail-value muted">
-              {{ formatNum(String(parseFloat(bot.total_profit) - parseFloat(bot.realized_pnl))) }}
+            <span :class="['detail-value', parseFloat(bot.floating_pnl) >= 0 ? 'green' : 'red']">
+              {{ formatNum(bot.floating_pnl) }}
             </span>
           </div>
           <div class="detail-item">
