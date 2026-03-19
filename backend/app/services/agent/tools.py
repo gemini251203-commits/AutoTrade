@@ -1933,7 +1933,8 @@ async def manage_grid(
         
         elif action == "cleanup":
             from app.models.grid_bot import GridBot, GridStatus
-            from sqlalchemy import select
+            from app.models.position import Position, PositionStatus
+            from sqlalchemy import select, update
             
             result = await db.execute(
                 select(GridBot).where(
@@ -1946,13 +1947,39 @@ async def manage_grid(
             for bot in abandoned:
                 deleted_ids.append(bot.id)
                 await db.delete(bot)
-            if deleted_ids:
+            
+            # 🔥 清理孤儿仓位: 如果没有 RUNNING 的网格 bot，把 grid 仓位改为 manual
+            running_result = await db.execute(
+                select(GridBot.id).where(
+                    GridBot.user_id == user_id,
+                    GridBot.status == GridStatus.RUNNING,
+                )
+            )
+            running_ids = running_result.scalars().all()
+            
+            orphan_count = 0
+            if not running_ids:
+                # 没有运行中的网格 → 所有 grid 仓位都是孤儿
+                orphan_result = await db.execute(
+                    update(Position)
+                    .where(
+                        Position.user_id == user_id,
+                        Position.source == "grid",
+                        Position.status == PositionStatus.OPEN,
+                    )
+                    .values(source="manual")
+                    .returning(Position.id)
+                )
+                orphan_count = len(orphan_result.fetchall())
+            
+            if deleted_ids or orphan_count:
                 await db.commit()
             return json.dumps({
                 "action": "cleanup",
                 "deleted_count": len(deleted_ids),
                 "deleted_ids": deleted_ids,
-                "message": f"已清理 {len(deleted_ids)} 个废弃网格" if deleted_ids else "没有废弃网格需要清理",
+                "orphan_positions_fixed": orphan_count,
+                "message": f"已清理 {len(deleted_ids)} 个废弃网格" + (f"，修正 {orphan_count} 个孤儿仓位" if orphan_count else "") if (deleted_ids or orphan_count) else "没有废弃网格需要清理",
             }, ensure_ascii=False, default=str)
         
         else:
