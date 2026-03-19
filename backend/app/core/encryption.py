@@ -21,20 +21,21 @@ def get_encryption_key() -> bytes:
     
     优先从环境变量读取，如果不存在则使用 JWT_SECRET_KEY 派生
     """
-    # 尝试从环境变量获取专用加密密钥
+    # 尝试从环境变量获取专用加密密钥 (Fernet key = 32 bytes, base64url encoded)
     encryption_key = os.getenv("ENCRYPTION_KEY")
     
     if encryption_key:
-        # 确保是有效的 Fernet key (32 bytes, base64 encoded)
         try:
-            return base64.urlsafe_b64decode(encryption_key)
+            # Fernet key 本身就是 base64 encoded，直接 encode 为 bytes 即可
+            key_bytes = encryption_key.encode()
+            # 验证是否是有效的 Fernet key
+            Fernet(key_bytes)
+            return key_bytes
         except Exception:
-            pass
+            logger.warning("[Encryption] ENCRYPTION_KEY env var invalid, falling back to JWT_SECRET_KEY")
     
     # 从 JWT_SECRET_KEY 派生 (使用前32字节)
-    # 这是备用方案，生产环境建议设置专用 ENCRYPTION_KEY
     secret = settings.jwt_secret_key
-    # 确保长度足够 (Fernet 需要 32 bytes)
     padded = (secret * 3)[:32]
     return base64.urlsafe_b64encode(padded.encode())
 

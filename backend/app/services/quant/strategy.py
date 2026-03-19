@@ -163,6 +163,8 @@ ALLOWED_CONDITION_KEYS = {
 ALLOWED_RISK_KEYS = {
     "side", "leverage", "position_pct",
     "stop_loss_pct", "take_profit_pct",
+    # Pipeline mode
+    "type", "params",
     # L2+
     "stop_type", "trailing_pct", "atr_stop_multiplier",
     # L4+
