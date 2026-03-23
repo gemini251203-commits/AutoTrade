@@ -159,8 +159,7 @@ class NewsCrawler:
             return
         
         if not self.api_key:
-            logger.error("[NewsCrawler] 缺少 CryptoCompare API Key，无法启动")
-            return
+            logger.warning("[NewsCrawler] 无 CryptoCompare API Key，将使用 RSS fallback")
         
         self._running = True
         self._task = asyncio.create_task(self._poll_loop())
@@ -186,6 +185,11 @@ class NewsCrawler:
     async def _fetch_and_save(self):
         """抓取并保存新闻"""
         raw_posts = await self._fetch_cryptocompare()
+        
+        # 🔥 Fallback: CryptoCompare 失败时用 RSS
+        if not raw_posts:
+            raw_posts = await self._fetch_rss_fallback()
+        
         if not raw_posts:
             return
         
@@ -228,6 +232,10 @@ class NewsCrawler:
     
     async def _fetch_cryptocompare(self) -> List[Dict[str, Any]]:
         """调用 CryptoCompare News API"""
+        if not self.api_key:
+            logger.debug("[NewsCrawler] 无 CryptoCompare API Key，跳过")
+            return []
+        
         from app.core.network import net_manager
         
         params = {
@@ -262,6 +270,75 @@ class NewsCrawler:
         except Exception as e:
             logger.error("[NewsCrawler] 请求异常: %s", e)
             return []
+    
+    async def _fetch_rss_fallback(self) -> List[Dict[str, Any]]:
+        """RSS 免费新闻源 (CoinTelegraph + CoinDesk)"""
+        import xml.etree.ElementTree as ET
+        from app.core.network import net_manager
+        
+        RSS_FEEDS = [
+            ("https://cointelegraph.com/rss", "CoinTelegraph"),
+            ("https://www.coindesk.com/arc/outboundfeeds/rss/", "CoinDesk"),
+        ]
+        
+        all_posts = []
+        
+        for feed_url, source_name in RSS_FEEDS:
+            try:
+                async with net_manager.get_client(timeout=15.0) as client:
+                    resp = await client.get(feed_url)
+                    if resp.status_code != 200:
+                        logger.warning("[NewsCrawler] RSS %s 返回 %d", source_name, resp.status_code)
+                        continue
+                    
+                    root = ET.fromstring(resp.text)
+                    
+                    # 标准 RSS 格式: <rss><channel><item>...</item></channel></rss>
+                    items = root.findall(".//item")
+                    
+                    for item in items[:20]:  # 每源最多 20 条
+                        title = (item.findtext("title") or "").strip()
+                        link = (item.findtext("link") or "").strip()
+                        pub_date_str = item.findtext("pubDate") or ""
+                        description = (item.findtext("description") or "").strip()
+                        
+                        # 提取 categories
+                        categories = []
+                        for cat_elem in item.findall("category"):
+                            if cat_elem.text:
+                                categories.append(cat_elem.text.strip())
+                        
+                        if not title:
+                            continue
+                        
+                        # 转换为 CryptoCompare 兼容格式
+                        pub_timestamp = 0
+                        if pub_date_str:
+                            try:
+                                from email.utils import parsedate_to_datetime
+                                dt = parsedate_to_datetime(pub_date_str)
+                                pub_timestamp = int(dt.timestamp())
+                            except Exception:
+                                pub_timestamp = int(utc_now().timestamp())
+                        
+                        post = {
+                            "id": hashlib.md5(f"{title}|{link}".encode()).hexdigest(),
+                            "title": title,
+                            "url": link,
+                            "published_on": pub_timestamp,
+                            "categories": "|".join(categories),
+                            "source_info": {"name": source_name},
+                            "body": description[:500] if description else "",
+                        }
+                        all_posts.append(post)
+                        
+            except Exception as e:
+                logger.warning("[NewsCrawler] RSS %s 解析失败: %s", source_name, e)
+        
+        if all_posts:
+            logger.info("[NewsCrawler] RSS fallback 获取 %d 条新闻", len(all_posts))
+        
+        return all_posts
     
     async def _parse_and_save(
         self,
