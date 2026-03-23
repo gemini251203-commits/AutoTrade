@@ -320,24 +320,28 @@ async def place_order(
         sl = Decimal(str(stop_loss)) if stop_loss and float(stop_loss) > 0 else None
         tp = Decimal(str(take_profit)) if take_profit and float(take_profit) > 0 else None
         
-        # 🔥 Hub/Autopilot 来源: 如果 AI 没传 TP/SL，自动计算默认值
+        # 🔥 Hub/Autopilot 来源: 如果 AI 没传 TP/SL，自动从风控配置读取默认值
         source_label = agent_source_var.get('agent')
-        if source_label in ('hub', 'autopilot') and current_price > 0:
+        if source_label in ('hub', 'autopilot') and current_price > 0 and (not sl or not tp):
+            from app.core.risk_config import risk_config
+            cfg = risk_config.load_for_user(user_id)
+            sl_pct = Decimal(str(cfg.get("default_sl_pct", 2.0))) / 100  # e.g. 2% -> 0.02
+            tp_pct = Decimal(str(cfg.get("default_tp_pct", 4.0))) / 100  # e.g. 4% -> 0.04
             cp = Decimal(str(current_price))
             if side.lower() == 'buy':
                 if not sl:
-                    sl = (cp * Decimal("0.97")).quantize(Decimal("0.01"))  # 默认 3% 止损
-                    logger.info(f"[AgentTools] Auto SL for BUY: {sl}")
+                    sl = (cp * (1 - sl_pct)).quantize(Decimal("0.01"))
+                    logger.info(f"[AgentTools] Auto SL for BUY: {sl} ({cfg.get('default_sl_pct')}%)")
                 if not tp:
-                    tp = (cp * Decimal("1.06")).quantize(Decimal("0.01"))  # 默认 6% 止盈
-                    logger.info(f"[AgentTools] Auto TP for BUY: {tp}")
+                    tp = (cp * (1 + tp_pct)).quantize(Decimal("0.01"))
+                    logger.info(f"[AgentTools] Auto TP for BUY: {tp} ({cfg.get('default_tp_pct')}%)")
             else:  # sell
                 if not sl:
-                    sl = (cp * Decimal("1.03")).quantize(Decimal("0.01"))  # 默认 3% 止损
-                    logger.info(f"[AgentTools] Auto SL for SELL: {sl}")
+                    sl = (cp * (1 + sl_pct)).quantize(Decimal("0.01"))
+                    logger.info(f"[AgentTools] Auto SL for SELL: {sl} ({cfg.get('default_sl_pct')}%)")
                 if not tp:
-                    tp = (cp * Decimal("0.94")).quantize(Decimal("0.01"))  # 默认 6% 止盈
-                    logger.info(f"[AgentTools] Auto TP for SELL: {tp}")
+                    tp = (cp * (1 - tp_pct)).quantize(Decimal("0.01"))
+                    logger.info(f"[AgentTools] Auto TP for SELL: {tp} ({cfg.get('default_tp_pct')}%)")
 
         # 根据来源上下文确定 source 和 agent 名称
         source_label = agent_source_var.get('agent')
