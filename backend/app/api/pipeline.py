@@ -174,19 +174,23 @@ async def get_pipeline_status(
     except Exception:
         pass
 
-    # Portfolio/Risk/Execution: 订单统计
+    # Portfolio/Risk/Execution: 订单统计 (仅量化策略来源)
     total_orders = 0
     filled_orders = 0
     rejected_orders = 0
     try:
         r = await db.execute(
-            select(func.count(Order.id)).where(Order.user_id == user_id)
+            select(func.count(Order.id)).where(
+                Order.user_id == user_id,
+                Order.note.like("Strategy:%"),
+            )
         )
         total_orders = r.scalar() or 0
         r2 = await db.execute(
             select(func.count(Order.id)).where(
                 Order.user_id == user_id,
                 Order.status == OrderStatus.FILLED,
+                Order.note.like("Strategy:%"),
             )
         )
         filled_orders = r2.scalar() or 0
@@ -194,13 +198,14 @@ async def get_pipeline_status(
             select(func.count(Order.id)).where(
                 Order.user_id == user_id,
                 Order.status == OrderStatus.REJECTED,
+                Order.note.like("Strategy:%"),
             )
         )
         rejected_orders = r3.scalar() or 0
     except Exception:
         pass
 
-    # 仓位统计
+    # 仓位统计 (仅量化策略来源)
     open_positions = 0
     closed_positions = 0
     try:
@@ -208,6 +213,7 @@ async def get_pipeline_status(
             select(func.count(Position.id)).where(
                 Position.user_id == user_id,
                 Position.status == PositionStatus.OPEN,
+                Position.source == "quant",
             )
         )
         open_positions = r.scalar() or 0
@@ -215,6 +221,7 @@ async def get_pipeline_status(
             select(func.count(Position.id)).where(
                 Position.user_id == user_id,
                 Position.status == PositionStatus.CLOSED,
+                Position.source == "quant",
             )
         )
         closed_positions = r2.scalar() or 0
