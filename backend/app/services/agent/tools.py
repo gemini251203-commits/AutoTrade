@@ -319,6 +319,25 @@ async def place_order(
         # 止损止盈参数
         sl = Decimal(str(stop_loss)) if stop_loss and float(stop_loss) > 0 else None
         tp = Decimal(str(take_profit)) if take_profit and float(take_profit) > 0 else None
+        
+        # 🔥 Hub/Autopilot 来源: 如果 AI 没传 TP/SL，自动计算默认值
+        source_label = agent_source_var.get('agent')
+        if source_label in ('hub', 'autopilot') and current_price > 0:
+            cp = Decimal(str(current_price))
+            if side.lower() == 'buy':
+                if not sl:
+                    sl = (cp * Decimal("0.97")).quantize(Decimal("0.01"))  # 默认 3% 止损
+                    logger.info(f"[AgentTools] Auto SL for BUY: {sl}")
+                if not tp:
+                    tp = (cp * Decimal("1.06")).quantize(Decimal("0.01"))  # 默认 6% 止盈
+                    logger.info(f"[AgentTools] Auto TP for BUY: {tp}")
+            else:  # sell
+                if not sl:
+                    sl = (cp * Decimal("1.03")).quantize(Decimal("0.01"))  # 默认 3% 止损
+                    logger.info(f"[AgentTools] Auto SL for SELL: {sl}")
+                if not tp:
+                    tp = (cp * Decimal("0.94")).quantize(Decimal("0.01"))  # 默认 6% 止盈
+                    logger.info(f"[AgentTools] Auto TP for SELL: {tp}")
 
         # 根据来源上下文确定 source 和 agent 名称
         source_label = agent_source_var.get('agent')
