@@ -325,8 +325,8 @@ async def place_order(
         if source_label in ('hub', 'autopilot') and current_price > 0 and (not sl or not tp):
             from app.core.risk_config import risk_config
             cfg = risk_config.load_for_user(user_id)
-            sl_pct = Decimal(str(cfg.get("default_sl_pct", 2.0))) / 100  # e.g. 2% -> 0.02
-            tp_pct = Decimal(str(cfg.get("default_tp_pct", 4.0))) / 100  # e.g. 4% -> 0.04
+            sl_pct = Decimal(str(cfg.get("default_sl_pct", 2.0))) / 100
+            tp_pct = Decimal(str(cfg.get("default_tp_pct", 4.0))) / 100
             cp = Decimal(str(current_price))
             if side.lower() == 'buy':
                 if not sl:
@@ -335,7 +335,7 @@ async def place_order(
                 if not tp:
                     tp = (cp * (1 + tp_pct)).quantize(Decimal("0.01"))
                     logger.info(f"[AgentTools] Auto TP for BUY: {tp} ({cfg.get('default_tp_pct')}%)")
-            else:  # sell
+            else:
                 if not sl:
                     sl = (cp * (1 + sl_pct)).quantize(Decimal("0.01"))
                     logger.info(f"[AgentTools] Auto SL for SELL: {sl} ({cfg.get('default_sl_pct')}%)")
@@ -353,49 +353,46 @@ async def place_order(
         else:
             note_prefix = f"[{source_label.title()}]"
 
-        # ==================== 通过 Pipeline 统一下单 ====================
-        from app.core.pipeline import get_pipeline
+        # ==================== 直接通过 OrderExecutor 下单 (绕过 Pipeline) ====================
+        # Pipeline 只供量化策略使用，AI Hub / 手动下单直接走 OrderExecutor
+        from app.services.trading import OrderExecutor
         
-        pipeline = get_pipeline(user_id)
+        # 基础风控: 最大杠杆限制
+        from app.core.risk_config import risk_config as _rc
+        rc = _rc.load_for_user(user_id)
+        max_lev = rc.get("max_leverage", 20)
+        if int(leverage) > max_lev:
+            return json.dumps({
+                "success": False,
+                "error": f"杠杆 {leverage}x 超过风控上限 {max_lev}x",
+            }, ensure_ascii=False, default=str)
         
-        # 获取余额和持仓信息用于风控
-        wallet_result2 = await db.execute(
-            select(Wallet).where(Wallet.user_id == user_id)
-        )
-        wallet2 = wallet_result2.scalar_one_or_none()
-        available_balance = Decimal(str(wallet2.balance)) if wallet2 else Decimal("0")
-        total_equity = Decimal(str(wallet2.total_equity)) if wallet2 else Decimal("0")
-        
-        pos_result = await db.execute(
-            select(Position).where(
-                Position.user_id == user_id,
-                Position.status == PositionStatus.OPEN,
-            )
-        )
-        positions = pos_result.scalars().all()
-        open_positions = [
-            {"symbol": p.symbol, "side": p.side.value, "size": float(p.size)}
-            for p in positions
-        ]
-        
-        result = await pipeline.submit_order(
+        order = await OrderExecutor.create_order(
             db=db,
+            user_id=user_id,
             symbol=symbol,
-            side=side.lower(),
+            side=order_side,
+            order_type=otype,
             quantity=Decimal(str(quantity)),
+            price=order_price,
             leverage=int(leverage),
-            price=Decimal(str(current_price)) if current_price else None,
             stop_loss=sl,
             take_profit=tp,
-            source=source_label,
             note=f"{note_prefix} 下单",
-            available_balance=available_balance,
-            total_equity=total_equity,
-            open_positions=open_positions,
         )
         
-        if result.get("success"):
-            result["message"] = "订单已通过 Pipeline 执行"
+        result = {
+            "success": True,
+            "order_id": order.id,
+            "symbol": symbol,
+            "side": side,
+            "quantity": str(order.quantity),
+            "leverage": order.leverage,
+            "status": order.status.value,
+            "stop_loss": str(sl) if sl else None,
+            "take_profit": str(tp) if tp else None,
+            "message": "订单已执行",
+        }
         
         return json.dumps(result, ensure_ascii=False, default=str)
 

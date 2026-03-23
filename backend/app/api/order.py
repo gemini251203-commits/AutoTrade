@@ -128,7 +128,7 @@ async def create_order(
     db: DbSession,
 ):
     """
-    创建订单 (通过统一 Pipeline)
+    创建订单 (直接通过 OrderExecutor)
     
     订单类型:
     - market: 市价单 (立即成交)
@@ -137,61 +137,31 @@ async def create_order(
     - stop_limit: 止损限价单 (需要 trigger_price + price)
     - take_profit_market: 止盈市价单
     - take_profit_limit: 止盈限价单
-    
-    ⚠️ 所有订单通过 Pipeline 统一入口: Risk 审批 → Execution 执行
     """
-    from app.core.pipeline import get_pipeline
-    from sqlalchemy import select
-    from app.models.wallet import Wallet
-    from app.models.position import Position, PositionStatus
-    
     try:
-        pipeline = get_pipeline(current_user.id)
+        # 基础风控: 最大杠杆限制
+        from app.core.risk_config import risk_config
+        rc = risk_config.load_for_user(current_user.id)
+        max_lev = rc.get("max_leverage", 20)
+        if request.leverage > max_lev:
+            raise OrderError(f"杠杆 {request.leverage}x 超过风控上限 {max_lev}x")
         
-        # 获取余额和持仓用于风控
-        wallet_result = await db.execute(
-            select(Wallet).where(Wallet.user_id == current_user.id)
-        )
-        wallet = wallet_result.scalar_one_or_none()
-        
-        pos_result = await db.execute(
-            select(Position).where(
-                Position.user_id == current_user.id,
-                Position.status == PositionStatus.OPEN,
-            )
-        )
-        positions = pos_result.scalars().all()
-        open_positions = [
-            {"symbol": p.symbol, "side": p.side.value, "size": float(p.size)}
-            for p in positions
-        ]
-        
-        result = await pipeline.submit_order(
+        order = await OrderExecutor.create_order(
             db=db,
+            user_id=current_user.id,
             symbol=request.symbol,
-            side=request.side.value,
+            side=request.side,
+            order_type=request.order_type,
             quantity=request.quantity,
-            leverage=request.leverage,
-            order_type=request.order_type.value,
             price=request.price,
             trigger_price=request.trigger_price,
-            position_side=request.position_side.value if request.position_side else None,
+            leverage=request.leverage,
+            position_side=request.position_side,
             reduce_only=request.reduce_only,
             stop_loss=request.stop_loss,
             take_profit=request.take_profit,
-            source="manual",
             note=request.note or "",
-            available_balance=Decimal(str(wallet.balance)) if wallet else Decimal("0"),
-            total_equity=Decimal(str(wallet.total_equity)) if wallet else Decimal("0"),
-            open_positions=open_positions,
         )
-        
-        if not result.get("success"):
-            raise OrderError(result.get("error", "Pipeline 执行失败"))
-        
-        # 从 DB 加载完整 order 对象以构造响应
-        order_id = result.get("order_id")
-        order = await db.get(Order, order_id)
         
         await db.commit()
         await db.refresh(order)

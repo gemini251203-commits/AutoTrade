@@ -166,25 +166,26 @@ async def get_strategy_stats(
     db: DbSession,
 ):
     """
-    获取真实的全局策略统计
+    获取量化策略的统计（仅 source=quant 的交易）
     
     数据来源:
-    - total_trades: Order 表 FILLED 订单数
-    - total_pnl: Position 表已平仓位的 realized_pnl 之和
+    - total_trades: Order 表 FILLED 且 note 含 'Strategy:' 的订单
+    - total_pnl: Position 表 source=quant 已平仓位的 realized_pnl 之和
     - win_rate: realized_pnl > 0 的已平仓位占比
     """
     user_id = current_user.id
     
-    # 1. 总交易数: 所有已成交订单
+    # 1. 量化策略的已成交订单数
     r1 = await db.execute(
         select(func.count(Order.id)).where(
             Order.user_id == user_id,
             Order.status == OrderStatus.FILLED,
+            Order.note.like("Strategy:%"),
         )
     )
     total_trades = r1.scalar() or 0
     
-    # 2. 已平仓位的 realized_pnl 汇总
+    # 2. source=quant 已平仓位的 realized_pnl 汇总
     r2 = await db.execute(
         select(
             func.coalesce(func.sum(Position.realized_pnl), 0),
@@ -192,6 +193,7 @@ async def get_strategy_stats(
         ).where(
             Position.user_id == user_id,
             Position.status == PositionStatus.CLOSED,
+            Position.source == "quant",
         )
     )
     row = r2.one()
@@ -203,6 +205,7 @@ async def get_strategy_stats(
         select(func.count(Position.id)).where(
             Position.user_id == user_id,
             Position.status == PositionStatus.CLOSED,
+            Position.source == "quant",
             Position.realized_pnl > 0,
         )
     )

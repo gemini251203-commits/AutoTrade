@@ -176,11 +176,28 @@ async def get_balance(
     except Exception as e:
         logger.warning(f"[Wallet] Failed to calculate initial_balance: {e}")
     
+    # 计算手续费总额 (从 Order 表累计)
+    total_commission = Decimal("0")
+    try:
+        from app.models.order import Order, OrderStatus as OStatus
+        comm_q = await db.execute(
+            select(func.coalesce(func.sum(Order.commission), 0)).where(
+                Order.user_id == current_user.id,
+                Order.status == OStatus.FILLED,
+            )
+        )
+        total_commission = comm_q.scalar() or Decimal("0")
+    except Exception as e:
+        logger.warning(f"[Wallet] Failed to sum commission: {e}")
+    
+    # 真实净盈亏 = realized_pnl - 手续费
+    net_pnl = wallet.total_pnl - total_commission
+    
     return WalletBalanceResponse(
         available=wallet.balance,
         frozen=wallet.frozen,
         total_equity=wallet.total_equity,
-        total_pnl=wallet.total_pnl,
+        total_pnl=net_pnl,
         unrealized_pnl=unrealized_pnl,
         funding_balance=wallet.funding_balance,
         initial_balance=initial_balance,

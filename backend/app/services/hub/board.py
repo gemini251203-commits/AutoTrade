@@ -226,15 +226,13 @@ class HubBoard:
         db: AsyncSession,
         user_id: int,
     ) -> dict:
-        """执行共识决策"""
-        from app.core.pipeline import get_pipeline
+        """执行共识决策 (直接通过 OrderExecutor，绕过 Pipeline)"""
+        from app.services.trading import OrderExecutor
         from app.models.wallet import Wallet
-        from app.models.position import Position, PositionStatus
+        from app.models.order import OrderSide, OrderType
         from app.core.risk_config import risk_config
         
         try:
-            pipeline = get_pipeline(user_id)
-            
             # 获取余额
             result = await db.execute(
                 select(Wallet).where(Wallet.user_id == user_id)
@@ -244,25 +242,13 @@ class HubBoard:
                 return {"success": False, "error": "钱包不存在"}
             
             available_balance = Decimal(str(wallet.balance))
-            total_equity = Decimal(str(wallet.total_equity))
-            
-            # 获取持仓
-            pos_result = await db.execute(
-                select(Position).where(
-                    Position.user_id == user_id,
-                    Position.status == PositionStatus.OPEN,
-                )
-            )
-            positions = pos_result.scalars().all()
-            open_positions = [
-                {"symbol": p.symbol, "side": p.side.value, "size": float(p.size)}
-                for p in positions
-            ]
             
             # 读取风控配置
-            config = risk_config.load()
+            config = risk_config.load_for_user(user_id)
             risk_pct = config.get("risk_percent", 10.0)
             leverage = config.get("default_leverage", 5)
+            sl_pct = config.get("default_sl_pct", 2.0)
+            tp_pct = config.get("default_tp_pct", 4.0)
             
             # 计算下单数量
             from app.services.exchange import BinanceClient
@@ -276,23 +262,31 @@ class HubBoard:
             position_value = available_balance * Decimal(str(risk_pct / 100))
             quantity = (position_value * leverage) / current_price
             
-            # 通过 Pipeline 下单
-            side = "buy" if consensus["decision"] == "open_long" else "sell"
+            side_str = "buy" if consensus["decision"] == "open_long" else "sell"
+            order_side = OrderSide(side_str)
             
-            exec_result = await pipeline.submit_order(
+            # 自动 TP/SL
+            if side_str == "buy":
+                sl = (current_price * (1 - Decimal(str(sl_pct)) / 100)).quantize(Decimal("0.01"))
+                tp = (current_price * (1 + Decimal(str(tp_pct)) / 100)).quantize(Decimal("0.01"))
+            else:
+                sl = (current_price * (1 + Decimal(str(sl_pct)) / 100)).quantize(Decimal("0.01"))
+                tp = (current_price * (1 - Decimal(str(tp_pct)) / 100)).quantize(Decimal("0.01"))
+            
+            order = await OrderExecutor.create_order(
                 db=db,
+                user_id=user_id,
                 symbol=symbol,
-                side=side,
+                side=order_side,
+                order_type=OrderType.MARKET,
                 quantity=quantity,
                 leverage=leverage,
-                source="hub_board",
+                stop_loss=sl,
+                take_profit=tp,
                 note=f"[董事会共识] {consensus.get('vote_count', '')}",
-                available_balance=available_balance,
-                total_equity=total_equity,
-                open_positions=open_positions,
             )
             
-            return exec_result
+            return {"success": True, "order_id": order.id}
             
         except Exception as e:
             logger.error(f"[HubBoard] Execute consensus failed: {e}")
