@@ -153,6 +153,11 @@ services:
       - ./data_engine:/app/data_engine
     command: ["python", "-m", "data_engine.binance_spider"]
     restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f binance_spider || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     networks:
       - autotrade-network
 
