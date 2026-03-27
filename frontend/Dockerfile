@@ -45,7 +45,7 @@ EXPOSE 80
 
 # Health check (hits auth-exempt /nginx-health endpoint)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -q --spider http://localhost/nginx-health || exit 1
+    CMD wget -q --spider http://127.0.0.1/nginx-health || exit 1
 
 # Start via entrypoint (generates .htpasswd then starts nginx)
 CMD ["/entrypoint.sh"]
