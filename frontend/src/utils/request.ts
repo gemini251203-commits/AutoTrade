@@ -113,9 +113,10 @@ request.interceptors.response.use(
     const ctrl = (error.config as any)?._abortController as AbortController | undefined
     if (ctrl) _pendingControllers.delete(ctrl)
     
-    // ★ 被路由切换取消的请求 — 静默处理
+    // ★ 被路由切换取消的请求 — 完全静默（不触发 catch）
     if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
-      return Promise.reject(error)
+      // 返回一个永远不 resolve 的 Promise，防止上层 catch 报错
+      return new Promise(() => {})
     }
     
     const status = error.response?.status
