@@ -163,20 +163,30 @@ async def get_risk_status(current_user: CurrentUser):
     risk_bypass = False
     uptime = 0.0
     verdicts = []
-    
-    if pipeline and pipeline.risk_model:
-        circuit_breaker = pipeline.risk_model.is_circuit_breaker_active
-        risk_bypass = pipeline.risk_model.risk_bypass
+    pipeline_active = False
     
     if pipeline:
-        uptime = pipeline.uptime_seconds if hasattr(pipeline, 'uptime_seconds') else 0
+        # Pipeline 的 risk model 存储在 _risk 属性
+        risk = getattr(pipeline, '_risk', None)
+        if risk:
+            circuit_breaker = getattr(risk, '_circuit_breaker', False)
+            risk_bypass = getattr(risk, '_risk_bypass', False)
+        
+        # 通过 stats 判断是否活跃
+        stats = getattr(pipeline, '_stats', {})
+        pipeline_active = stats.get('ticks_processed', 0) > 0
+        
+        # 安全读取最近决策
         if hasattr(pipeline, '_recent_verdicts'):
-            verdicts = list(pipeline._recent_verdicts)[-10:]
+            try:
+                verdicts = list(pipeline._recent_verdicts)[-10:]
+            except Exception:
+                pass
     
     return RiskRuntimeStatus(
         circuit_breaker=circuit_breaker,
         risk_bypass=risk_bypass,
-        pipeline_active=pipeline is not None and pipeline.is_active if pipeline else False,
+        pipeline_active=pipeline_active,
         uptime_seconds=uptime,
         recent_verdicts=verdicts,
     )
@@ -197,15 +207,15 @@ async def control_circuit_breaker(
     from loguru import logger
     
     pipeline = get_pipeline()
-    if not pipeline or not pipeline.risk_model:
+    if not pipeline or not getattr(pipeline, '_risk', None):
         raise HTTPException(status_code=400, detail="Pipeline 未初始化")
     
     if req.action == "trigger":
-        pipeline.risk_model.trigger_circuit_breaker(req.reason or "手动触发")
+        pipeline._risk.trigger_circuit_breaker(req.reason or "手动触发")
         logger.warning(f"[RiskConfig] 用户 {current_user.id} 触发熔断: {req.reason}")
         return {"circuit_breaker": True, "message": "熔断已触发，所有交易已暂停"}
     elif req.action == "reset":
-        pipeline.risk_model.reset_circuit_breaker()
+        pipeline._risk.reset_circuit_breaker()
         logger.info(f"[RiskConfig] 用户 {current_user.id} 解除熔断")
         return {"circuit_breaker": False, "message": "熔断已解除"}
     else:
@@ -226,10 +236,10 @@ async def control_risk_bypass(
     from loguru import logger
     
     pipeline = get_pipeline()
-    if not pipeline or not pipeline.risk_model:
+    if not pipeline or not getattr(pipeline, '_risk', None):
         raise HTTPException(status_code=400, detail="Pipeline 未初始化")
     
-    pipeline.risk_model.set_risk_bypass(req.enabled)
+    pipeline._risk.set_risk_bypass(req.enabled)
     status_text = "已关闭" if req.enabled else "已开启"
     logger.info(f"[RiskConfig] 用户 {current_user.id} 风控{status_text}")
     
