@@ -554,55 +554,6 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Pipeline Status -->
-      <div v-if="pipelineStatus" class="pl-panel">
-        <div class="pl-header">
-          <div class="pl-title-row">
-            <span class="pl-dot" :style="{ background: pipelineStatus.circuit_breaker ? '#ef4444' : '#22c55e' }"></span>
-            <span class="pl-title">交易流水线</span>
-            <span class="pl-uptime">{{ (pipelineStatus.uptime_seconds || 0) >= 3600 ? Math.floor((pipelineStatus.uptime_seconds || 0) / 3600) + 'h ' + Math.floor(((pipelineStatus.uptime_seconds || 0) % 3600) / 60) + 'm' : Math.floor((pipelineStatus.uptime_seconds || 0) / 60) + 'm' }} 运行</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <button
-              class="pl-risk-btn"
-              :class="pipelineStatus.risk_bypass ? 'pl-risk-off' : 'pl-risk-on'"
-              :disabled="riskBypassLoading"
-              @click="handleRiskBypass"
-            >
-              {{ pipelineStatus.risk_bypass ? '⚠️ 风控已关闭 · 开启' : '✅ 风控开启中' }}
-            </button>
-            <span class="pl-badge" :class="pipelineStatus.circuit_breaker ? 'pl-badge-danger' : 'pl-badge-ok'">
-              {{ pipelineStatus.circuit_breaker ? '⚠ 熔断中' : '✦ 运行正常' }}
-            </span>
-          </div>
-        </div>
-        <div class="pl-flow">
-          <template v-for="(layer, idx) in pipelineStatus.layers" :key="layer.name">
-            <div class="pl-layer" :class="['pl-layer--' + layer.name.toLowerCase(), 'pl-layer--' + layer.status]">
-              <div class="pl-layer-top">
-                <span class="pl-layer-icon">
-                  {{ layer.name === 'Alpha' ? 'A' : layer.name === 'Portfolio' ? 'P' : layer.name === 'Risk' ? 'R' : 'E' }}
-                </span>
-                <span class="pl-layer-name">{{ layer.name }}</span>
-              </div>
-              <div class="pl-layer-count">{{ layer.count }}</div>
-              <div class="pl-layer-detail">{{ layer.detail }}</div>
-              <div class="pl-layer-status">
-                <span class="pl-status-dot" :class="layer.status"></span>
-                <span class="pl-status-text">{{ layer.status === 'active' ? '活跃' : layer.status === 'error' ? '异常' : '就绪' }}</span>
-              </div>
-            </div>
-            <div v-if="idx < pipelineStatus.layers.length - 1" class="pl-connector">
-              <div class="pl-connector-line"></div>
-              <div class="pl-connector-pulse" :class="{ 'pl-connector-active': layer.status === 'active' }"></div>
-              <svg class="pl-connector-arrow" width="12" height="12" viewBox="0 0 12 12">
-                <path d="M2 6H10M10 6L7 3M10 6L7 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-              </svg>
-            </div>
-          </template>
-        </div>
-      </div>
-
       <!-- Tabs -->
       <div class="flex gap-1 p-1 rounded-lg" style="background: rgba(255,255,255,0.03);">
         <button

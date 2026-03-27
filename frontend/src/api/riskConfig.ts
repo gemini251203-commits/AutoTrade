@@ -46,3 +46,33 @@ export async function updateRiskConfig(data: RiskConfigUpdateRequest): Promise<R
   const resp = await request.put<RiskConfigResponse>('/risk-config/', data)
   return resp.data
 }
+
+// ==================== Runtime Status ====================
+
+export interface RiskRuntimeStatus {
+  circuit_breaker: boolean
+  risk_bypass: boolean
+  pipeline_active: boolean
+  uptime_seconds: number
+  active_strategies: number
+  recent_verdicts: any[]
+}
+
+/** 获取风控运行时状态 */
+export async function getRiskStatus(): Promise<RiskRuntimeStatus> {
+  const resp = await request.get<RiskRuntimeStatus>('/risk-config/status')
+  return resp.data
+}
+
+/** 控制熔断器 */
+export async function controlCircuitBreaker(action: 'trigger' | 'reset', reason = '') {
+  const resp = await request.post('/risk-config/circuit-breaker', { action, reason })
+  return resp.data
+}
+
+/** 控制风控开关 */
+export async function controlRiskBypass(enabled: boolean) {
+  const resp = await request.post('/risk-config/risk-bypass', { enabled })
+  return resp.data
+}
+

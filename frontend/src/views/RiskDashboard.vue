@@ -16,8 +16,8 @@ import {
   TrendingUpOutline, SwapVerticalOutline, BanOutline,
 } from '@vicons/ionicons5'
 import MainLayout from '@/layouts/MainLayout.vue'
-import { getRiskConfig, updateRiskConfig } from '@/api/riskConfig'
-import type { RiskConfigResponse } from '@/api/riskConfig'
+import { getRiskConfig, updateRiskConfig, getRiskStatus, controlCircuitBreaker, controlRiskBypass } from '@/api/riskConfig'
+import type { RiskConfigResponse, RiskRuntimeStatus } from '@/api/riskConfig'
 
 const message = useMessage()
 
@@ -26,6 +26,10 @@ const loading = ref(true)
 const saving = ref(false)
 const config = ref<RiskConfigResponse | null>(null)
 const hasChanges = ref(false)
+const runtimeStatus = ref<RiskRuntimeStatus | null>(null)
+const runtimeLoading = ref(false)
+const cbLoading = ref(false)
+const bypassLoading = ref(false)
 
 // Editable form
 const form = ref({
@@ -77,7 +81,57 @@ function markChanged() {
   hasChanges.value = true
 }
 
-onMounted(loadConfig)
+// Runtime status
+async function loadRuntimeStatus() {
+  runtimeLoading.value = true
+  try {
+    runtimeStatus.value = await getRiskStatus()
+  } catch (e: any) {
+    console.warn('Failed to load runtime status', e)
+  } finally {
+    runtimeLoading.value = false
+  }
+}
+
+async function toggleCircuitBreaker() {
+  if (!runtimeStatus.value) return
+  cbLoading.value = true
+  try {
+    const action = runtimeStatus.value.circuit_breaker ? 'reset' : 'trigger'
+    await controlCircuitBreaker(action, action === 'trigger' ? '手动触发' : '')
+    await loadRuntimeStatus()
+    message.success(action === 'trigger' ? '🚨 熔断已触发' : '✅ 熔断已解除')
+  } catch (e: any) {
+    message.error('操作失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    cbLoading.value = false
+  }
+}
+
+async function toggleRiskBypass() {
+  if (!runtimeStatus.value) return
+  bypassLoading.value = true
+  try {
+    const newState = !runtimeStatus.value.risk_bypass
+    await controlRiskBypass(newState)
+    await loadRuntimeStatus()
+    message.success(newState ? '⚠️ 风控已关闭' : '✅ 风控已恢复')
+  } catch (e: any) {
+    message.error('操作失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    bypassLoading.value = false
+  }
+}
+
+function formatUptime(seconds: number): string {
+  if (seconds >= 3600) return Math.floor(seconds / 3600) + 'h ' + Math.floor((seconds % 3600) / 60) + 'm'
+  return Math.floor(seconds / 60) + 'm'
+}
+
+onMounted(() => {
+  loadConfig()
+  loadRuntimeStatus()
+})
 </script>
 
 <template>
@@ -337,6 +391,76 @@ onMounted(loadConfig)
             </div>
           </NCard>
 
+          <!-- Section 5: 运行时状态 -->
+          <NCard class="config-section section-runtime" :bordered="false">
+            <template #header>
+              <div class="section-header">
+                <NIcon :size="20" color="#22c55e"><FlashOutline /></NIcon>
+                <span>系统状态</span>
+                <NTag :type="runtimeStatus?.circuit_breaker ? 'error' : 'success'" size="small" round>
+                  {{ runtimeStatus?.circuit_breaker ? '熔断中' : '运行正常' }}
+                </NTag>
+              </div>
+            </template>
+
+            <div v-if="runtimeStatus" class="runtime-grid">
+              <!-- 熔断器 -->
+              <div class="runtime-card" :class="runtimeStatus.circuit_breaker ? 'card-danger' : 'card-ok'">
+                <div class="runtime-card-header">
+                  <span class="runtime-dot" :style="{ background: runtimeStatus.circuit_breaker ? '#ef4444' : '#22c55e' }"></span>
+                  <span class="runtime-label">熔断器</span>
+                </div>
+                <div class="runtime-value">{{ runtimeStatus.circuit_breaker ? '已触发' : '正常' }}</div>
+                <NButton
+                  size="small"
+                  :type="runtimeStatus.circuit_breaker ? 'success' : 'error'"
+                  secondary
+                  :loading="cbLoading"
+                  @click="toggleCircuitBreaker"
+                  style="margin-top: 8px; width: 100%"
+                >
+                  {{ runtimeStatus.circuit_breaker ? '解除熔断' : '触发熔断' }}
+                </NButton>
+              </div>
+
+              <!-- 风控开关 -->
+              <div class="runtime-card" :class="runtimeStatus.risk_bypass ? 'card-warn' : 'card-ok'">
+                <div class="runtime-card-header">
+                  <span class="runtime-dot" :style="{ background: runtimeStatus.risk_bypass ? '#f59e0b' : '#22c55e' }"></span>
+                  <span class="runtime-label">风控检查</span>
+                </div>
+                <div class="runtime-value">{{ runtimeStatus.risk_bypass ? '已关闭' : '开启中' }}</div>
+                <NButton
+                  size="small"
+                  :type="runtimeStatus.risk_bypass ? 'success' : 'warning'"
+                  secondary
+                  :loading="bypassLoading"
+                  @click="toggleRiskBypass"
+                  style="margin-top: 8px; width: 100%"
+                >
+                  {{ runtimeStatus.risk_bypass ? '恢复风控' : '关闭风控' }}
+                </NButton>
+              </div>
+
+              <!-- Pipeline 运行 -->
+              <div class="runtime-card card-info">
+                <div class="runtime-card-header">
+                  <span class="runtime-dot" :style="{ background: runtimeStatus.pipeline_active ? '#3b82f6' : '#6b7280' }"></span>
+                  <span class="runtime-label">量化流水线</span>
+                </div>
+                <div class="runtime-value">{{ runtimeStatus.pipeline_active ? '运行中' : '未启动' }}</div>
+                <div class="runtime-meta" v-if="runtimeStatus.uptime_seconds > 0">
+                  运行 {{ formatUptime(runtimeStatus.uptime_seconds) }}
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="runtime-loading">
+              <NSpin size="small" />
+              <span>加载状态中...</span>
+            </div>
+          </NCard>
+
         </div>
       </NSpin>
 
@@ -432,6 +556,80 @@ onMounted(loadConfig)
 }
 .section-blacklist {
   border-left: 3px solid #6b7280 !important;
+}
+.section-runtime {
+  border-left: 3px solid #22c55e !important;
+}
+
+/* Runtime status grid */
+.runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+@media (max-width: 640px) {
+  .runtime-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.runtime-card {
+  padding: 14px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: all 0.2s;
+}
+.runtime-card:hover {
+  background: rgba(255,255,255,0.06);
+}
+.runtime-card.card-danger {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+}
+.runtime-card.card-warn {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.05);
+}
+.runtime-card.card-ok {
+  border-color: rgba(34, 197, 94, 0.15);
+}
+.runtime-card.card-info {
+  border-color: rgba(59, 130, 246, 0.15);
+}
+.runtime-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.runtime-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.runtime-label {
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+.runtime-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #e5e7eb;
+}
+.runtime-meta {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+.runtime-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+  font-size: 13px;
+  padding: 16px;
 }
 
 .section-header {

@@ -138,3 +138,103 @@ def _generate_yaml(cfg: dict) -> str:
     
     lines.append("")
     return "\n".join(lines)
+
+
+# ==================== 运行时状态 ====================
+
+class RiskRuntimeStatus(BaseModel):
+    """风控运行时状态"""
+    circuit_breaker: bool = False
+    risk_bypass: bool = False
+    pipeline_active: bool = False
+    uptime_seconds: float = 0
+    active_strategies: int = 0
+    recent_verdicts: list = []
+
+
+@router.get("/status", response_model=RiskRuntimeStatus)
+async def get_risk_status(current_user: CurrentUser):
+    """获取风控运行时状态 (熔断/风控开关/最近决策)"""
+    from app.core.pipeline import get_pipeline
+    
+    pipeline = get_pipeline()
+    
+    circuit_breaker = False
+    risk_bypass = False
+    uptime = 0.0
+    verdicts = []
+    
+    if pipeline and pipeline.risk_model:
+        circuit_breaker = pipeline.risk_model.is_circuit_breaker_active
+        risk_bypass = pipeline.risk_model.risk_bypass
+    
+    if pipeline:
+        uptime = pipeline.uptime_seconds if hasattr(pipeline, 'uptime_seconds') else 0
+        if hasattr(pipeline, '_recent_verdicts'):
+            verdicts = list(pipeline._recent_verdicts)[-10:]
+    
+    return RiskRuntimeStatus(
+        circuit_breaker=circuit_breaker,
+        risk_bypass=risk_bypass,
+        pipeline_active=pipeline is not None and pipeline.is_active if pipeline else False,
+        uptime_seconds=uptime,
+        recent_verdicts=verdicts,
+    )
+
+
+class CircuitBreakerAction(BaseModel):
+    action: str    # "trigger" | "reset"
+    reason: str = ""
+
+
+@router.post("/circuit-breaker")
+async def control_circuit_breaker(
+    req: CircuitBreakerAction,
+    current_user: CurrentUser,
+):
+    """控制熔断器 (触发/解除)"""
+    from app.core.pipeline import get_pipeline
+    from loguru import logger
+    
+    pipeline = get_pipeline()
+    if not pipeline or not pipeline.risk_model:
+        raise HTTPException(status_code=400, detail="Pipeline 未初始化")
+    
+    if req.action == "trigger":
+        pipeline.risk_model.trigger_circuit_breaker(req.reason or "手动触发")
+        logger.warning(f"[RiskConfig] 用户 {current_user.id} 触发熔断: {req.reason}")
+        return {"circuit_breaker": True, "message": "熔断已触发，所有交易已暂停"}
+    elif req.action == "reset":
+        pipeline.risk_model.reset_circuit_breaker()
+        logger.info(f"[RiskConfig] 用户 {current_user.id} 解除熔断")
+        return {"circuit_breaker": False, "message": "熔断已解除"}
+    else:
+        raise HTTPException(status_code=400, detail="action 必须为 trigger 或 reset")
+
+
+class RiskBypassAction(BaseModel):
+    enabled: bool    # True=关闭风控, False=恢复风控
+
+
+@router.post("/risk-bypass")
+async def control_risk_bypass(
+    req: RiskBypassAction,
+    current_user: CurrentUser,
+):
+    """控制风控开关 (开启/关闭)"""
+    from app.core.pipeline import get_pipeline
+    from loguru import logger
+    
+    pipeline = get_pipeline()
+    if not pipeline or not pipeline.risk_model:
+        raise HTTPException(status_code=400, detail="Pipeline 未初始化")
+    
+    pipeline.risk_model.set_risk_bypass(req.enabled)
+    status_text = "已关闭" if req.enabled else "已开启"
+    logger.info(f"[RiskConfig] 用户 {current_user.id} 风控{status_text}")
+    
+    return {
+        "risk_bypass": req.enabled,
+        "message": f"风控{status_text}",
+    }
+
