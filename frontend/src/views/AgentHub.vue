@@ -658,6 +658,21 @@ function statusLabel(status: string) {
   return map[status] || status
 }
 
+// Wake condition display helpers
+function formatWakeRemaining(minutes: number): string {
+  if (minutes <= 0) return '即将超时'
+  if (minutes < 1) return '剩余 <1 分钟'
+  return `剩余 ${Math.round(minutes)} 分钟`
+}
+
+function formatWakeCondition(cond: { type: string; symbol: string; value: number }): string {
+  const sym = cond.symbol || '任意币种'
+  if (cond.type === 'price_above') return `${sym} > ${cond.value.toLocaleString()}`
+  if (cond.type === 'price_below') return `${sym} < ${cond.value.toLocaleString()}`
+  if (cond.type === 'change_pct') return `${sym} 变化 ≥ ${cond.value}%`
+  return `${cond.type}: ${cond.value}`
+}
+
 // 立刻生成今日复盘
 // ★ 模块级状态：即使用户切换页面，consolidation 请求也不会中断
 let _consolidationPromise: Promise<any> | null = null
@@ -1029,13 +1044,32 @@ async function exportDailyRecap(date: string) {
 
             <!-- 唤醒条件展示 -->
             <div
-              v-if="wakeConditionsMap[agent.id]"
-              class="text-[10px] mb-2 p-1.5 rounded flex items-center gap-1.5"
+              v-if="wakeConditionsMap[agent.id]?.has_conditions"
+              class="text-[10px] mb-2 p-2 rounded space-y-1"
               style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2);"
             >
-              <span class="text-blue-400 animate-pulse">◉</span>
-              <span class="text-blue-300 flex-1 truncate">{{ wakeConditionsMap[agent.id]!.display_text }}</span>
-              <span class="text-blue-500/60 whitespace-nowrap">{{ Math.round(wakeConditionsMap[agent.id]!.remaining_minutes) }}min</span>
+              <!-- 标题行: 状态 + 剩余时间 -->
+              <div class="flex items-center justify-between">
+                <span class="flex items-center gap-1 text-blue-400">
+                  <span class="animate-pulse">◉</span>
+                  <span class="font-semibold">等待唤醒</span>
+                </span>
+                <span class="text-blue-500/60">
+                  {{ formatWakeRemaining(wakeConditionsMap[agent.id]!.remaining_minutes) }}
+                </span>
+              </div>
+              <!-- 逐条展示条件 -->
+              <div
+                v-for="(cond, ci) in wakeConditionsMap[agent.id]!.conditions"
+                :key="ci"
+                class="flex items-center gap-1.5 text-blue-300 pl-3"
+              >
+                <span class="text-blue-500/50">{{ ci > 0 ? '或' : '┗' }}</span>
+                <span v-if="cond.type === 'price_above'" class="text-green-400">▲</span>
+                <span v-else-if="cond.type === 'price_below'" class="text-red-400">▼</span>
+                <span v-else class="text-yellow-400">⚡</span>
+                <span>{{ formatWakeCondition(cond) }}</span>
+              </div>
             </div>
 
             <!-- Actions -->
