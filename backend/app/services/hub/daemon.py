@@ -256,9 +256,13 @@ class HubDaemon:
         full_reply = ""
         has_error = False
         has_trade = False  # ★ 追踪是否产生了交易
+        _pending_trade_tool = False  # 标记是否刚调用了交易工具，等待结果验证
         
-        # ★ 交易检测关键词 — 在 tool_result 中检测更可靠
-        TRADE_KEYWORDS = ["order_id", "订单已", "已下单", "已平仓", '"success": true', '"success":true', "Pipeline"]
+        # ★ 交易失败关键词 — 出现这些说明下单被拒/被拦截，不算有效交易
+        TRADE_FAIL_KEYWORDS = [
+            "拒绝", "拦截", "rejected", "blocked", "insufficient",
+            "failed", "失败", "error", "错误", "不足",
+        ]
         
         try:
             async for event_str in hub_brain.chat_stream(
@@ -289,24 +293,24 @@ class HubDaemon:
                     tool_args = event.get("args", {})
                     args_str = _json.dumps(tool_args, ensure_ascii=False)[:200]
                     await self._save_log(user_id, agent.id, agent.name, "tool_call", f"[TOOL] {tool_name}({args_str})")
-                    # ★ 检测交易工具调用
+                    # ★ 标记交易工具调用（等 tool_result 验证成功后才计数）
                     if tool_name in ("place_order", "close_position"):
-                        has_trade = True  # 调用了下单/平仓工具
+                        _pending_trade_tool = True
                 
                 elif ev_type == "tool_result":
                     # 工具结果 — 即时写入 hub_logs
                     result_str = event.get("result", str(ev_content))
                     result_preview = result_str[:300]
                     await self._save_log(user_id, agent.id, agent.name, "tool_result", f"[RESULT] {result_preview}")
-                    # ★ 在 tool_result 中检测交易成功（比 full_reply 可靠得多）
-                    if not has_trade and any(kw in result_str for kw in TRADE_KEYWORDS):
-                        has_trade = True
+                    # ★ 仅在刚调用了交易工具后验证结果
+                    if _pending_trade_tool:
+                        _pending_trade_tool = False
+                        result_lower = result_str.lower()
+                        if not any(kw in result_lower for kw in TRADE_FAIL_KEYWORDS):
+                            has_trade = True  # 交易工具调用成功
                 
                 elif ev_type == "done":
                     full_reply = ev_content or ""
-                    # ★ 兜底：也在 final reply 中检测
-                    if not has_trade and any(kw in full_reply for kw in TRADE_KEYWORDS):
-                        has_trade = True
                 
                 elif ev_type == "error":
                     has_error = True
