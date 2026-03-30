@@ -3327,7 +3327,7 @@ async def set_wake_conditions(
     注意: 所有条件采用 AND 逻辑，全部满足才会触发唤醒。
 
     参数:
-        conditions_json: JSON 数组字符串，每个元素包含:
+        conditions_json: 唤醒条件数组。可以是 JSON 字符串或直接数组，每个元素包含:
             - type: "price_above" | "price_below" | "change_pct"
             - symbol: 交易对 (如 "BTCUSDT")，change_pct 可留空表示任意
             - value: 阈值 (价格或百分比数值)
@@ -3337,13 +3337,29 @@ async def set_wake_conditions(
     返回:
         设定结果确认 + 条件摘要
     """
+    # ★ 健壮的参数解析: 支持 AI 传入字符串、数组、dict 等多种格式
     try:
-        conditions = json.loads(conditions_json) if isinstance(conditions_json, str) else conditions_json
-    except (json.JSONDecodeError, TypeError):
-        return json.dumps({"error": "conditions_json 格式错误，需要 JSON 数组"}, ensure_ascii=False)
+        if isinstance(conditions_json, str):
+            conditions = json.loads(conditions_json)
+        elif isinstance(conditions_json, list):
+            conditions = conditions_json
+        elif isinstance(conditions_json, dict):
+            # AI 有时传入单个条件对象而非数组
+            conditions = [conditions_json]
+        else:
+            conditions = json.loads(str(conditions_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as e:
+        logger.warning(f"[AgentTools] set_wake_conditions parse error: {e}, raw={conditions_json!r}")
+        return json.dumps({"error": f"conditions_json 格式错误: {str(e)}，需要 JSON 数组"}, ensure_ascii=False)
 
     if not isinstance(conditions, list) or len(conditions) == 0:
         return json.dumps({"error": "请至少设定一个唤醒条件"}, ensure_ascii=False)
+
+    # ★ 安全的 timeout_minutes 类型转换 (AI 可能传入字符串或浮点数)
+    try:
+        timeout_minutes = int(float(timeout_minutes))
+    except (ValueError, TypeError):
+        timeout_minutes = 30
 
     # 验证条件格式
     valid_types = {"price_above", "price_below", "change_pct"}
@@ -3378,12 +3394,13 @@ async def set_wake_conditions(
                 agent_id = int(agent_id_str)
         finally:
             await r.aclose()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"[AgentTools] set_wake_conditions Redis error: {e}")
 
     if not agent_id:
+        logger.warning(f"[AgentTools] set_wake_conditions: no agent_id found in Redis for user {user_id}")
         return json.dumps({
-            "error": "无法获取当前 Agent ID，唤醒条件设定失败"
+            "error": "无法获取当前 Agent ID，唤醒条件设定失败。此工具仅在值班循环中可用。"
         }, ensure_ascii=False)
 
     # 调用 WakeMonitor 设定条件
@@ -3393,8 +3410,9 @@ async def set_wake_conditions(
             user_id=user_id,
             agent_id=agent_id,
             conditions=conditions,
-            timeout_minutes=int(timeout_minutes),
+            timeout_minutes=timeout_minutes,
         )
+        logger.info(f"[AgentTools] set_wake_conditions SUCCESS: agent={agent_id}, conditions={len(conditions)}, timeout={timeout_minutes}min")
         return json.dumps(result, ensure_ascii=False, default=str)
     except Exception as e:
         logger.error(f"[AgentTools] set_wake_conditions failed: {e}")

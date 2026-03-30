@@ -431,8 +431,12 @@ class HubBrain:
         Phase 5: 滑动窗口 — 防止多轮工具调用导致 messages 无限膨胀
         
         当 messages 中的 tool role 消息超过 max_tool_messages 条时，
-        将较老的 assistant(tool_calls) + tool(result) 消息组合并为一行摘要。
-        保持最近 max_tool_messages 条工具结果完整。
+        将较旧的 tool 消息内容原地截断为简短摘要。
+        
+        ★ 关键设计: 不删除任何消息，只截断内容。
+        因为删除 assistant(tool_calls) 消息会导致其对应的 tool 消息变成"孤儿"，
+        触发 OpenAI API 400 错误: "Messages with role 'tool' must be a response 
+        to a preceding message with 'tool_calls'"。
         
         注意: 此方法直接修改传入的 messages 列表 (in-place)。
         """
@@ -447,66 +451,27 @@ class HubBrain:
         
         # 需要压缩的 tool 消息: 除了最近 max_tool_messages 条外的所有
         to_compress_indices = tool_indices[:-max_tool_messages]
-        
-        # 收集需要压缩的 tool 调用信息
-        summaries = []
-        indices_to_remove = set()
+        compressed_count = 0
         
         for tool_idx in to_compress_indices:
             msg = messages[tool_idx]
             content = msg.get("content", "")
-            # 提取工具名称 (从 tool_call_id 或内容中)
-            tool_call_id = msg.get("tool_call_id", "")
             
-            # 生成精简摘要 (最多 80 字符)
-            summary = content[:80].replace("\n", " ")
-            if len(content) > 80:
+            # 已经是压缩过的，跳过
+            if content.startswith("[已压缩]"):
+                continue
+            
+            # 原地截断内容 (保留前 60 字符作为摘要)
+            summary = content[:60].replace("\n", " ")
+            if len(content) > 60:
                 summary += "..."
-            summaries.append(summary)
-            indices_to_remove.add(tool_idx)
-            
-            # 同时找到对应的 assistant message (它包含 tool_calls)
-            # 通常在 tool message 的前面
-            for prev_idx in range(tool_idx - 1, -1, -1):
-                prev_msg = messages[prev_idx]
-                # OpenAI 格式: assistant message 带 tool_calls 属性
-                if hasattr(prev_msg, 'tool_calls') and prev_msg.tool_calls:
-                    # 检查这个 assistant message 的 tool_calls 是否包含当前 tool_call_id
-                    for tc in prev_msg.tool_calls:
-                        if tc.id == tool_call_id:
-                            indices_to_remove.add(prev_idx)
-                            break
-                    break
-                # dict 格式
-                if isinstance(prev_msg, dict) and prev_msg.get("role") == "assistant":
-                    # 如果它有 tool_calls 且匹配
-                    if prev_msg.get("tool_calls"):
-                        indices_to_remove.add(prev_idx)
-                    break
+            msg["content"] = f"[已压缩] {summary}"
+            compressed_count += 1
         
-        if not summaries:
-            return
-        
-        # 合并摘要为一条 system 消息
-        merged_content = (
-            "[历史工具结果摘要 — 已压缩]\n"
-            + "\n".join(f"• {s}" for s in summaries[:10])  # 最多保留10条摘要
-        )
-        if len(summaries) > 10:
-            merged_content += f"\n... 及其他 {len(summaries) - 10} 条结果"
-        
-        # 从后往前删除，避免索引偏移
-        for idx in sorted(indices_to_remove, reverse=True):
-            if 0 < idx < len(messages):  # 不删除 system prompt (index 0)
-                messages.pop(idx)
-        
-        # 在 system prompt 后面插入合并摘要
-        messages.insert(1, {"role": "user", "content": merged_content})
-        
-        logger.info(
-            f"[HubBrain] Sliding window: compressed {len(summaries)} old tool results, "
-            f"removed {len(indices_to_remove)} messages"
-        )
+        if compressed_count > 0:
+            logger.info(
+                f"[HubBrain] Sliding window: truncated {compressed_count} old tool results in-place"
+            )
     
     async def _get_client(self, agent: HubAgent, user_id: int, db: AsyncSession):
         """获取 OpenAI 兼容的 client"""
@@ -565,6 +530,9 @@ class HubBrain:
             base_url=base_url,
         )
     
+    # 系统必备工具 — 不受 allowed_tools 过滤，始终对 AI 可用
+    _SYSTEM_TOOLS = {"set_wake_conditions"}
+    
     def _get_tools_spec(self, allowed_tools: list | None = None) -> list:
         """获取工具定义 (OpenAI function calling format)
         
@@ -580,7 +548,8 @@ class HubBrain:
         tools = []
         for name, func in TOOL_REGISTRY.items():
             # 🔒 权限过滤: 如果 allowed_tools 不为 None, 只保留列表内的工具
-            if allowed_tools is not None and name not in allowed_tools:
+            # ★ 系统必备工具 (如 set_wake_conditions) 始终可用，不受过滤
+            if allowed_tools is not None and name not in allowed_tools and name not in self._SYSTEM_TOOLS:
                 continue
             
             # 从函数签名提取参数
@@ -640,7 +609,8 @@ class HubBrain:
         from app.services.agent.tools import TOOL_REGISTRY, agent_source_var, agent_name_var
         
         # 🔒 授权检查: 拒绝未授权的工具调用
-        if allowed_tools is not None and tool_name not in allowed_tools:
+        # ★ 系统必备工具始终放行
+        if allowed_tools is not None and tool_name not in allowed_tools and tool_name not in self._SYSTEM_TOOLS:
             logger.warning(f"[HubBrain] Tool '{tool_name}' blocked by allowed_tools policy")
             return json.dumps({"error": f"工具 '{tool_name}' 未授权，请在 Agent 配置中启用"})
         
