@@ -3324,7 +3324,7 @@ async def set_wake_conditions(
     - price_below: 价格跌破下方 (如 BTC < 82000)
     - change_pct: 价格变化超过百分比 (如任意币种 ±2%)
 
-    注意: 所有条件采用 AND 逻辑，全部满足才会触发唤醒。
+    注意: 条件采用 OR 逻辑，任一条件满足即触发唤醒。
 
     参数:
         conditions_json: 唤醒条件数组。可以是 JSON 字符串或直接数组，每个元素包含:

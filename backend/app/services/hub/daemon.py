@@ -101,6 +101,9 @@ class HubDaemon:
                         logger.info(f"[HubDaemon] Agent #{agent_id} no longer active, stopping loop")
                         break
                     
+                    # ★ 提前保存 agent_name，避免 session 关闭后访问 ORM 对象失效
+                    agent_name = agent.name
+                    
                     # ★ 设置 Redis 上下文: 让 tools.py 中的 set_wake_conditions 知道当前 agent_id
                     await self._set_current_agent_context(user_id, agent_id)
                     
@@ -145,7 +148,7 @@ class HubDaemon:
                     # 写入系统日志 (前端可见)
                     try:
                         await self._save_log(
-                            user_id, agent_id, agent.name if agent else f"Agent #{agent_id}",
+                            user_id, agent_id, agent_name,
                             "system", f"[事件唤醒] {trigger_reason}",
                         )
                     except Exception:
@@ -587,11 +590,22 @@ class HubDaemon:
         
         CHECK_INTERVAL = 10  # 每 10 秒检查一次
         elapsed = 0
+        check_count = 0
+        
+        # ★ 首次检查日志: 确认唤醒监控已启动
+        has_conditions = await wake_monitor.get_conditions(user_id, agent_id)
+        if has_conditions:
+            logger.info(
+                f"[HubDaemon] WakeCheck STARTED for #{agent_id}: "
+                f"monitoring {len(has_conditions.get('conditions', []))} conditions, "
+                f"wait={total_wait}s"
+            )
         
         while elapsed < total_wait:
             sleep_time = min(CHECK_INTERVAL, total_wait - elapsed)
             await asyncio.sleep(sleep_time)
             elapsed += sleep_time
+            check_count += 1
             
             # 检查唤醒条件
             try:
@@ -601,11 +615,18 @@ class HubDaemon:
                     await wake_monitor.clear_conditions(user_id, agent_id)
                     logger.info(
                         f"[HubDaemon] WakeMonitor TRIGGERED for #{agent_id}: {reason} "
-                        f"(after {elapsed}s / {total_wait}s)"
+                        f"(after {elapsed}s / {total_wait}s, {check_count} checks)"
                     )
                     return True, reason
             except Exception as e:
                 logger.debug(f"[HubDaemon] Wake check error (ignored): {e}")
+            
+            # ★ 周期性调试日志: 每 60 秒打印一次状态
+            if has_conditions and check_count % 6 == 0:
+                logger.debug(
+                    f"[HubDaemon] WakeCheck #{agent_id}: {elapsed}s/{total_wait}s elapsed, "
+                    f"{check_count} checks done, no trigger yet"
+                )
         
         return False, ""
     

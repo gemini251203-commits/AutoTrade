@@ -6,7 +6,7 @@ Wake Monitor — AI 自主唤醒条件监控器
 
 设计:
 - 条件存储在 Redis (agent 停止后条件自然失效)
-- 条件采用 AND 逻辑: 所有条件都满足才触发
+- 条件采用 OR 逻辑: 任一条件满足即触发
 - MarketCollector 已推送价格到 Redis, 零额外 API 调用
 - 固定间隔轮询照常运行, 事件唤醒作为额外加速机制
 
@@ -120,7 +120,7 @@ class WakeMonitor:
                     target = sym or "任意币种"
                     summary_parts.append(f"{target} 变化 ≥ {val}%")
             
-            summary = " 且 ".join(summary_parts) if summary_parts else "无条件"
+            summary = " 或 ".join(summary_parts) if summary_parts else "无条件"
             
             logger.info(
                 f"[WakeMonitor] Conditions set for agent {user_id}:{agent_id}: "
@@ -160,7 +160,7 @@ class WakeMonitor:
     
     async def check_conditions(self, user_id: int, agent_id: int) -> Tuple[bool, str]:
         """
-        检查唤醒条件是否全部满足 (AND 逻辑)
+        检查唤醒条件是否有任一满足 (OR 逻辑)
         
         Returns:
             (triggered: bool, reason: str)
@@ -196,10 +196,7 @@ class WakeMonitor:
         if not current_prices:
             return False, ""
         
-        # AND 逻辑: 检查每个条件是否满足
-        all_met = True
-        met_reasons = []
-        
+        # OR 逻辑: 任一条件满足即触发
         for cond in conditions:
             ctype = cond.get("type", "")
             symbol = cond.get("symbol", "")
@@ -208,24 +205,17 @@ class WakeMonitor:
             if ctype == "price_above":
                 price = current_prices.get(symbol, 0)
                 if price > 0 and price >= value:
-                    met_reasons.append(f"{symbol} {price:.1f} ≥ {value}")
-                else:
-                    all_met = False
-                    break
+                    return True, f"{symbol} {price:.1f} ≥ {value}"
             
             elif ctype == "price_below":
                 price = current_prices.get(symbol, 0)
                 if price > 0 and price <= value:
-                    met_reasons.append(f"{symbol} {price:.1f} ≤ {value}")
-                else:
-                    all_met = False
-                    break
+                    return True, f"{symbol} {price:.1f} ≤ {value}"
             
             elif ctype == "change_pct":
                 threshold = value
                 # 检查指定币种或所有币种
                 targets = [symbol] if symbol else list(base_prices.keys())
-                target_met = False
                 
                 for sym in targets:
                     base = base_prices.get(sym, 0)
@@ -234,19 +224,7 @@ class WakeMonitor:
                         change = abs(curr - base) / base * 100
                         if change >= threshold:
                             direction = "↑" if curr > base else "↓"
-                            met_reasons.append(
-                                f"{sym} {direction}{change:.1f}% (基准 {base:.1f})"
-                            )
-                            target_met = True
-                            break
-                
-                if not target_met:
-                    all_met = False
-                    break
-        
-        if all_met and met_reasons:
-            reason = " & ".join(met_reasons)
-            return True, reason
+                            return True, f"{sym} {direction}{change:.1f}% (基准 {base:.1f})"
         
         return False, ""
     
@@ -337,7 +315,7 @@ class WakeMonitor:
                 target = sym or "任意币种"
                 parts.append(f"{target} 变化 ≥ {val}%")
         
-        conditions_text = " 且 ".join(parts)
+        conditions_text = " 或 ".join(parts)
         
         # 计算剩余等待时间
         remaining = ""
