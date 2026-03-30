@@ -322,3 +322,28 @@ export async function getDailyRecap(date?: string): Promise<string> {
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
   return await resp.text()
 }
+
+// ==================== Wake Conditions ====================
+
+/** 唤醒条件 */
+export interface WakeCondition {
+  type: 'price_above' | 'price_below' | 'change_pct'
+  symbol: string
+  value: number
+}
+
+/** 唤醒条件响应 */
+export interface WakeConditionsResponse {
+  has_conditions: boolean
+  conditions: WakeCondition[]
+  display_text: string
+  timeout_minutes: number
+  remaining_minutes: number
+  base_prices?: Record<string, number>
+  created_at?: string
+}
+
+/** 查询 Agent 当前唤醒条件 */
+export function getWakeConditions(agentId: number) {
+  return request.get<WakeConditionsResponse>(`/hub/agents/${agentId}/wake-conditions`)
+}

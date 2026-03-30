@@ -47,12 +47,34 @@ SYSTEM_OVERVIEW = """你是一个经验丰富的加密货币交易员，在 Auto
 不要被任何固定规则限制。你有自己的交易直觉和经验，根据实际盘面做判断。
 老板只给你一个大方向（写在你的角色设定里），具体怎么操作由你自己决定。
 
+## 效率原则 (极重要 — 直接影响运营成本)
+- 你可以一次调用多个工具! 比如同时查 BTC、ETH、SOL 的价格，不要一个一个查
+- **禁止逐个查询**: 需要查多个币种时，必须在同一轮同时调用，例如:
+  同时调 get_price(symbol=BTCUSDT) + get_price(symbol=ETHUSDT) + get_price(symbol=SOLUSDT)
+  而不是先查 BTC，等结果，再查 ETH，再等结果...
+- 同理，get_indicators、get_funding_rate 等也要一次性批量调用
+- 如果市场和上次看的差不多，简单说"变化不大"即可，不需要重复完整分析
+- 回复控制在 200 字以内，观望时 100 字以内即可
+
 ## 注意事项
 - 全程中文，说人话
 - 简洁，不写长文
 - 没把握就别动，说"我先看看"就行
 - 你有记忆，能想起之前说过什么、做过什么。如果情况和上次差不多，可以说"跟刚才差不多"
-- 禁止使用 Emoji"""
+- 禁止使用 Emoji
+
+## 智能唤醒机制
+你可以在每次分析结束后，使用 set_wake_conditions 工具设定唤醒条件。
+系统会在后台持续监控这些条件，满足时立即唤醒你进行分析，而不必等到下一次固定轮询。
+
+可用条件类型:
+- price_above: 价格突破上方 (如 BTC > 88000)
+- price_below: 价格跌破下方 (如 BTC < 82000)
+- change_pct: 价格离当前基准变化超过百分比 (如 ±2%)
+
+注意: 所有条件采用 AND 逻辑，全部满足时才会触发唤醒。
+设定示例: 你认为 BTC 在 85000-88000 区间震荡，可以设 price_above BTC>88000 来捕捉突破。
+每次分析完市场后，根据你识别的关键位设定合理的唤醒条件。"""
 
 
 class HubBrain:
@@ -182,11 +204,18 @@ class HubBrain:
                         "result": tool_result,
                     })
                     
+                    # ★ 压缩工具结果再喂给 AI (前端已收到完整结果)
+                    from app.services.hub.tool_compressor import compress_tool_result
+                    compressed_result = compress_tool_result(tool_name, tool_result)
+                    
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.id,
-                        "content": tool_result,
+                        "content": compressed_result,
                     })
+                
+                # ★ Phase 5: 滑动窗口 — 防止 messages 无限膨胀
+                self._apply_sliding_window(messages, max_tool_messages=8)
                 
                 # 继续下一轮 (让 AI 基于工具结果继续推理)
                 continue
@@ -396,6 +425,88 @@ class HubBrain:
         except Exception as e:
             logger.warning(f"[HubBrain] Failed to load shared context: {e}")
             return ""
+    
+    def _apply_sliding_window(self, messages: list, max_tool_messages: int = 8):
+        """
+        Phase 5: 滑动窗口 — 防止多轮工具调用导致 messages 无限膨胀
+        
+        当 messages 中的 tool role 消息超过 max_tool_messages 条时，
+        将较老的 assistant(tool_calls) + tool(result) 消息组合并为一行摘要。
+        保持最近 max_tool_messages 条工具结果完整。
+        
+        注意: 此方法直接修改传入的 messages 列表 (in-place)。
+        """
+        # 统计 tool role 消息数量
+        tool_indices = [
+            i for i, m in enumerate(messages)
+            if isinstance(m, dict) and m.get("role") == "tool"
+        ]
+        
+        if len(tool_indices) <= max_tool_messages:
+            return  # 不需要压缩
+        
+        # 需要压缩的 tool 消息: 除了最近 max_tool_messages 条外的所有
+        to_compress_indices = tool_indices[:-max_tool_messages]
+        
+        # 收集需要压缩的 tool 调用信息
+        summaries = []
+        indices_to_remove = set()
+        
+        for tool_idx in to_compress_indices:
+            msg = messages[tool_idx]
+            content = msg.get("content", "")
+            # 提取工具名称 (从 tool_call_id 或内容中)
+            tool_call_id = msg.get("tool_call_id", "")
+            
+            # 生成精简摘要 (最多 80 字符)
+            summary = content[:80].replace("\n", " ")
+            if len(content) > 80:
+                summary += "..."
+            summaries.append(summary)
+            indices_to_remove.add(tool_idx)
+            
+            # 同时找到对应的 assistant message (它包含 tool_calls)
+            # 通常在 tool message 的前面
+            for prev_idx in range(tool_idx - 1, -1, -1):
+                prev_msg = messages[prev_idx]
+                # OpenAI 格式: assistant message 带 tool_calls 属性
+                if hasattr(prev_msg, 'tool_calls') and prev_msg.tool_calls:
+                    # 检查这个 assistant message 的 tool_calls 是否包含当前 tool_call_id
+                    for tc in prev_msg.tool_calls:
+                        if tc.id == tool_call_id:
+                            indices_to_remove.add(prev_idx)
+                            break
+                    break
+                # dict 格式
+                if isinstance(prev_msg, dict) and prev_msg.get("role") == "assistant":
+                    # 如果它有 tool_calls 且匹配
+                    if prev_msg.get("tool_calls"):
+                        indices_to_remove.add(prev_idx)
+                    break
+        
+        if not summaries:
+            return
+        
+        # 合并摘要为一条 system 消息
+        merged_content = (
+            "[历史工具结果摘要 — 已压缩]\n"
+            + "\n".join(f"• {s}" for s in summaries[:10])  # 最多保留10条摘要
+        )
+        if len(summaries) > 10:
+            merged_content += f"\n... 及其他 {len(summaries) - 10} 条结果"
+        
+        # 从后往前删除，避免索引偏移
+        for idx in sorted(indices_to_remove, reverse=True):
+            if 0 < idx < len(messages):  # 不删除 system prompt (index 0)
+                messages.pop(idx)
+        
+        # 在 system prompt 后面插入合并摘要
+        messages.insert(1, {"role": "user", "content": merged_content})
+        
+        logger.info(
+            f"[HubBrain] Sliding window: compressed {len(summaries)} old tool results, "
+            f"removed {len(indices_to_remove)} messages"
+        )
     
     async def _get_client(self, agent: HubAgent, user_id: int, db: AsyncSession):
         """获取 OpenAI 兼容的 client"""

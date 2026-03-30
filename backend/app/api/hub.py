@@ -1020,3 +1020,77 @@ async def daily_recap(
     
     from fastapi.responses import PlainTextResponse
     return PlainTextResponse("\n".join(lines), media_type="text/markdown; charset=utf-8")
+
+
+# ============================================================
+# 路由: 唤醒条件查询
+# ============================================================
+
+@router.get("/agents/{agent_id}/wake-conditions")
+async def get_wake_conditions(
+    agent_id: int,
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """
+    查询 Agent 当前的唤醒等待条件
+    
+    返回:
+    - conditions: 条件列表
+    - display_text: 人类可读的展示文本
+    - timeout_minutes: 超时时间
+    - remaining_minutes: 剩余等待时间
+    - has_conditions: 是否有活跃条件
+    """
+    user_id = current_user.id
+    
+    # 验证 agent 归属
+    result = await db.execute(
+        select(HubAgent).where(
+            HubAgent.id == agent_id,
+            HubAgent.user_id == user_id,
+        )
+    )
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="智能体不存在")
+    
+    from app.services.hub.wake_monitor import wake_monitor
+    
+    config = await wake_monitor.get_conditions(user_id, agent_id)
+    
+    if not config:
+        return {
+            "has_conditions": False,
+            "conditions": [],
+            "display_text": "",
+            "timeout_minutes": 0,
+            "remaining_minutes": 0,
+        }
+    
+    display_text = wake_monitor.format_conditions_display(config)
+    
+    # 计算剩余时间
+    remaining_minutes = 0
+    created_at = config.get("created_at", "")
+    timeout = config.get("timeout_minutes", 30)
+    if created_at:
+        try:
+            from datetime import timezone as tz
+            created = datetime.fromisoformat(created_at)
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=tz.utc)
+            elapsed_min = (utc_now() - created).total_seconds() / 60
+            remaining_minutes = max(0, round(timeout - elapsed_min, 1))
+        except Exception:
+            pass
+    
+    return {
+        "has_conditions": True,
+        "conditions": config.get("conditions", []),
+        "display_text": display_text,
+        "timeout_minutes": timeout,
+        "remaining_minutes": remaining_minutes,
+        "base_prices": config.get("base_prices", {}),
+        "created_at": created_at,
+    }

@@ -3302,3 +3302,101 @@ async def search_historical_minutes(
         logger.warning(f"[AgentTools] search_historical_minutes error: {e}")
         return json.dumps({"error": f"搜索失败: {str(e)}"}, ensure_ascii=False, default=str)
 
+
+# ==================== 唤醒条件工具 ====================
+
+@register_tool
+async def set_wake_conditions(
+    db: AsyncSession,
+    user_id: int,
+    conditions_json: str = "[]",
+    timeout_minutes: int = 30,
+) -> str:
+    """
+    设定唤醒条件 — 告诉系统什么时候需要立即唤醒你
+
+    当你分析完市场后，如果发现价格正接近关键位置，
+    可以设定条件让系统在价格触发时立即唤醒你进行分析，
+    而不是等到下一次固定轮询。
+
+    条件类型:
+    - price_above: 价格突破上方 (如 BTC > 88000)
+    - price_below: 价格跌破下方 (如 BTC < 82000)
+    - change_pct: 价格变化超过百分比 (如任意币种 ±2%)
+
+    注意: 所有条件采用 AND 逻辑，全部满足才会触发唤醒。
+
+    参数:
+        conditions_json: JSON 数组字符串，每个元素包含:
+            - type: "price_above" | "price_below" | "change_pct"
+            - symbol: 交易对 (如 "BTCUSDT")，change_pct 可留空表示任意
+            - value: 阈值 (价格或百分比数值)
+            示例: [{"type":"price_above","symbol":"BTCUSDT","value":88000},{"type":"change_pct","symbol":"","value":2.0}]
+        timeout_minutes: 超时兜底 (5-60分钟，超时后自动唤醒)
+
+    返回:
+        设定结果确认 + 条件摘要
+    """
+    try:
+        conditions = json.loads(conditions_json) if isinstance(conditions_json, str) else conditions_json
+    except (json.JSONDecodeError, TypeError):
+        return json.dumps({"error": "conditions_json 格式错误，需要 JSON 数组"}, ensure_ascii=False)
+
+    if not isinstance(conditions, list) or len(conditions) == 0:
+        return json.dumps({"error": "请至少设定一个唤醒条件"}, ensure_ascii=False)
+
+    # 验证条件格式
+    valid_types = {"price_above", "price_below", "change_pct"}
+    for i, cond in enumerate(conditions):
+        if not isinstance(cond, dict):
+            return json.dumps({"error": f"第 {i+1} 个条件格式错误，需要 dict"}, ensure_ascii=False)
+        ctype = cond.get("type", "")
+        if ctype not in valid_types:
+            return json.dumps({
+                "error": f"第 {i+1} 个条件类型 '{ctype}' 无效，有效类型: {valid_types}"
+            }, ensure_ascii=False)
+        if ctype in ("price_above", "price_below") and not cond.get("symbol"):
+            return json.dumps({
+                "error": f"第 {i+1} 个条件 {ctype} 需要指定 symbol"
+            }, ensure_ascii=False)
+        try:
+            val = float(cond.get("value", 0))
+            if val <= 0:
+                return json.dumps({"error": f"第 {i+1} 个条件 value 必须大于 0"}, ensure_ascii=False)
+        except (ValueError, TypeError):
+            return json.dumps({"error": f"第 {i+1} 个条件 value 格式错误"}, ensure_ascii=False)
+
+    # 从上下文获取 agent_id — 通过 Redis 中存储的当前 agent 上下文
+    agent_id = 0
+    try:
+        import redis.asyncio as aioredis
+        from app.core.config import settings
+        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        try:
+            agent_id_str = await r.get(f"hub:current_agent:{user_id}")
+            if agent_id_str:
+                agent_id = int(agent_id_str)
+        finally:
+            await r.aclose()
+    except Exception:
+        pass
+
+    if not agent_id:
+        return json.dumps({
+            "error": "无法获取当前 Agent ID，唤醒条件设定失败"
+        }, ensure_ascii=False)
+
+    # 调用 WakeMonitor 设定条件
+    try:
+        from app.services.hub.wake_monitor import wake_monitor
+        result = await wake_monitor.set_conditions(
+            user_id=user_id,
+            agent_id=agent_id,
+            conditions=conditions,
+            timeout_minutes=int(timeout_minutes),
+        )
+        return json.dumps(result, ensure_ascii=False, default=str)
+    except Exception as e:
+        logger.error(f"[AgentTools] set_wake_conditions failed: {e}")
+        return json.dumps({"error": f"设定唤醒条件失败: {str(e)}"}, ensure_ascii=False)
+

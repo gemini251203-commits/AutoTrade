@@ -13,9 +13,10 @@ import {
   listHubAgents, createHubAgent, updateHubAgent, deleteHubAgent,
   controlHubAgent, getHubStatus, boardDeliberate, streamChatWithAgent,
   getHubLogs, saveHubLog, triggerConsolidation, setSecretary, getSecretary, clearHubLogs,
-  getMonthlyMinutes, listAllTools, getDailyRecap,
+  getMonthlyMinutes, listAllTools, getDailyRecap, getWakeConditions,
   type HubAgent, type HubStatus, type BoardResult,
   type HubAgentCreateRequest, type HubAgentUpdateRequest, type ToolInfo,
+  type WakeConditionsResponse,
 } from '@/api/hub'
 import request from '@/utils/request'
 import { CalendarOutline, ChevronBackOutline, ChevronForwardOutline } from '@vicons/ionicons5'
@@ -25,6 +26,9 @@ import { CalendarOutline, ChevronBackOutline, ChevronForwardOutline } from '@vic
 const agents = ref<HubAgent[]>([])
 const hubStatus = ref<HubStatus | null>(null)
 const loading = ref(false)
+
+// 唤醒条件状态 (agent_id -> WakeConditionsResponse)
+const wakeConditionsMap = ref<Record<number, WakeConditionsResponse>>({})
 
 // 全局作战指示
 const globalCommand = ref('')
@@ -324,6 +328,25 @@ async function loadData() {
     hubStatus.value = (statusRes as any).data || statusRes as any
     if (secRes) {
       secretaryAgentId.value = (secRes as any).data?.secretary_agent_id ?? (secRes as any).secretary_agent_id ?? null
+    }
+    // 并行加载活跃 agent 的唤醒条件
+    const activeAgents = agents.value.filter(a => a.is_active)
+    if (activeAgents.length > 0) {
+      const wakeResults = await Promise.allSettled(
+        activeAgents.map(a => getWakeConditions(a.id))
+      )
+      const newMap: Record<number, WakeConditionsResponse> = {}
+      wakeResults.forEach((result, idx) => {
+        if (result.status === 'fulfilled') {
+          const data = (result.value as any).data || result.value as any
+          if (data?.has_conditions) {
+            newMap[activeAgents[idx]!.id] = data
+          }
+        }
+      })
+      wakeConditionsMap.value = newMap
+    } else {
+      wakeConditionsMap.value = {}
     }
     // 连接成功
     connectionStatus.value = 'connected'
@@ -1002,6 +1025,17 @@ async function exportDailyRecap(date: string) {
             <!-- Error -->
             <div v-if="agent.last_error" class="text-[10px] text-red-400 mb-2 p-1.5 rounded bg-red-500/10 truncate">
               [ERR] {{ agent.last_error }}
+            </div>
+
+            <!-- 唤醒条件展示 -->
+            <div
+              v-if="wakeConditionsMap[agent.id]"
+              class="text-[10px] mb-2 p-1.5 rounded flex items-center gap-1.5"
+              style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2);"
+            >
+              <span class="text-blue-400 animate-pulse">◉</span>
+              <span class="text-blue-300 flex-1 truncate">{{ wakeConditionsMap[agent.id]!.display_text }}</span>
+              <span class="text-blue-500/60 whitespace-nowrap">{{ Math.round(wakeConditionsMap[agent.id]!.remaining_minutes) }}min</span>
             </div>
 
             <!-- Actions -->
