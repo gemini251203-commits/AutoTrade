@@ -85,7 +85,7 @@ async function handleRegister() {
     }
   } catch (err: any) {
     showError.value = true
-    errorMessage.value = err.response?.data?.detail || '注册失败'
+    errorMessage.value = err.response?.data?.error?.message || err.response?.data?.detail || '注册失败'
   } finally {
     loading.value = false
   }
