@@ -1034,7 +1034,7 @@ async function exportDailyRecap(date: string) {
               <span>运行 <b class="text-gray-300">{{ agent.total_runs }}</b></span>
               <span>交易 <b class="text-purple-400">{{ agent.total_trades }}</b></span>
               <span>T° <b class="text-gray-300">{{ agent.temperature }}</b></span>
-              <span v-if="agent.last_run_at" class="ml-auto text-gray-600 truncate" style="max-width: 100px;">{{ agent.last_run_at.slice(11, 19) }}</span>
+              <span v-if="agent.last_run_at" class="ml-auto text-gray-600 truncate" style="max-width: 100px;">{{ new Date(agent.last_run_at).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Shanghai' }) }}</span>
             </div>
 
             <!-- Error -->
