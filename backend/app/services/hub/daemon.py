@@ -257,6 +257,8 @@ class HubDaemon:
         has_error = False
         has_trade = False  # ★ 追踪是否产生了交易
         _pending_trade_tool = False  # 标记是否刚调用了交易工具，等待结果验证
+        wake_tool_called = False  # ★ 追踪是否调用了唤醒条件工具
+        all_ai_text: list[str] = []  # ★ 收集所有 AI 文本用于兜底提取唤醒条件
         
         # ★ 交易失败关键词 — 出现这些说明下单被拒/被拦截，不算有效交易
         TRADE_FAIL_KEYWORDS = [
@@ -286,6 +288,7 @@ class HubDaemon:
                 if ev_type == "text" and ev_content:
                     # AI 思考输出 — 即时写入 hub_logs
                     await self._save_log(user_id, agent.id, agent.name, "ai_text", ev_content)
+                    all_ai_text.append(ev_content)  # ★ 收集文本用于兜底唤醒条件提取
                 
                 elif ev_type == "tool_call":
                     # 工具调用 — 即时写入 hub_logs
@@ -296,6 +299,8 @@ class HubDaemon:
                     # ★ 标记交易工具调用（等 tool_result 验证成功后才计数）
                     if tool_name in ("place_order", "close_position"):
                         _pending_trade_tool = True
+                    if tool_name == "set_wake_conditions":
+                        wake_tool_called = True
                 
                 elif ev_type == "tool_result":
                     # 工具结果 — 即时写入 hub_logs
@@ -347,6 +352,11 @@ class HubDaemon:
         if has_trade:
             agent.total_trades += 1
         
+        # ★ 兜底: 如果 AI 没调用 set_wake_conditions 工具，尝试从文本中自动提取
+        if not wake_tool_called and not has_error:
+            combined_text = "\n".join(all_ai_text)
+            await self._auto_set_wake_from_text(user_id, agent.id, combined_text)
+        
         # ★ Phase 4: 执行后更新市场快照 (供下轮跳过判断)
         try:
             import redis.asyncio as aioredis
@@ -390,6 +400,101 @@ class HubDaemon:
                 await log_db.commit()
         except Exception as e:
             logger.warning(f"[HubDaemon] Failed to save log: {e}")
+    
+    async def _auto_set_wake_from_text(self, user_id: int, agent_id: int, text: str):
+        """
+        兜底机制: 当 AI 在文本中描述了唤醒条件但没调用工具时，
+        自动从文本中提取价格关键位并设定唤醒条件。
+        
+        支持的模式:
+        - "ETH跌破2080或突破2150" → price_below + price_above
+        - "BTC突破88000" → price_above
+        - "SOL跌破130" → price_below
+        - "BTCUSDT > 88000" → price_above
+        """
+        import re
+        
+        conditions: list[dict] = []
+        SYM = r'(BTC|ETH|SOL|BNB)(?:USDT)?'
+        
+        # Pattern 1: 组合 — "ETH跌破2080或突破2150"
+        for match in re.finditer(
+            SYM + r'\s*(?:跌破|下破|失守)\s*(\d+(?:\.\d+)?)\s*(?:或|/|,|，|、)\s*(?:突破|上破|站上)\s*(\d+(?:\.\d+)?)',
+            text
+        ):
+            sym = match.group(1) + "USDT"
+            conditions.append({"type": "price_below", "symbol": sym, "value": float(match.group(2))})
+            conditions.append({"type": "price_above", "symbol": sym, "value": float(match.group(3))})
+        
+        # Pattern 2: 组合反序 — "BTC突破88000或跌破85000"
+        for match in re.finditer(
+            SYM + r'\s*(?:突破|上破|站上)\s*(\d+(?:\.\d+)?)\s*(?:或|/|,|，|、)\s*(?:跌破|下破|失守)\s*(\d+(?:\.\d+)?)',
+            text
+        ):
+            sym = match.group(1) + "USDT"
+            conditions.append({"type": "price_above", "symbol": sym, "value": float(match.group(2))})
+            conditions.append({"type": "price_below", "symbol": sym, "value": float(match.group(3))})
+        
+        # Pattern 3: 单条 — "BTC突破88000" / "ETH站上2200"
+        for match in re.finditer(
+            SYM + r'\s*(?:突破|上破|站上|涨破|升破)\s*(\d+(?:\.\d+)?)',
+            text
+        ):
+            sym = match.group(1) + "USDT"
+            conditions.append({"type": "price_above", "symbol": sym, "value": float(match.group(2))})
+        
+        # Pattern 4: 单条 — "ETH跌破2080" / "BTC失守85000"
+        for match in re.finditer(
+            SYM + r'\s*(?:跌破|下破|失守|跌穿)\s*(\d+(?:\.\d+)?)',
+            text
+        ):
+            sym = match.group(1) + "USDT"
+            conditions.append({"type": "price_below", "symbol": sym, "value": float(match.group(2))})
+        
+        # Pattern 5: 符号 — "BTCUSDT > 88000" / "ETH < 2000"
+        for match in re.finditer(SYM + r'\s*[>＞]\s*(\d+(?:\.\d+)?)', text):
+            conditions.append({"type": "price_above", "symbol": match.group(1) + "USDT", "value": float(match.group(2))})
+        for match in re.finditer(SYM + r'\s*[<＜]\s*(\d+(?:\.\d+)?)', text):
+            conditions.append({"type": "price_below", "symbol": match.group(1) + "USDT", "value": float(match.group(2))})
+        
+        # 去重
+        seen: set[str] = set()
+        unique: list[dict] = []
+        for c in conditions:
+            key = f"{c['type']}:{c['symbol']}:{c['value']}"
+            if key not in seen:
+                seen.add(key)
+                unique.append(c)
+        
+        if not unique:
+            logger.debug(f"[HubDaemon] No wake conditions extracted from AI text for #{agent_id}")
+            return
+        
+        # 最多 5 个条件
+        unique = unique[:5]
+        
+        try:
+            from app.services.hub.wake_monitor import wake_monitor
+            await wake_monitor.set_conditions(
+                user_id=user_id,
+                agent_id=agent_id,
+                conditions=unique,
+                timeout_minutes=30,
+            )
+            summary = ", ".join(
+                f"{c['symbol']} {'>' if c['type']=='price_above' else '<'} {c['value']}"
+                for c in unique
+            )
+            logger.info(
+                f"[HubDaemon] AUTO-SET {len(unique)} wake conditions for #{agent_id}: {summary}"
+            )
+            await self._save_log(
+                user_id, agent_id, "System",
+                "system",
+                f"[自动设定唤醒] 从AI汇报中提取了 {len(unique)} 个条件: {summary}",
+            )
+        except Exception as e:
+            logger.warning(f"[HubDaemon] Auto-set wake conditions failed: {e}")
     
     @staticmethod
     def _get_time_period() -> tuple:
@@ -454,11 +559,14 @@ class HubDaemon:
             "   - 你认为需要观望就不操作\n"
             "   - 已有仓位或网格不合理时，主动调整或关闭\n"
             "4. 简要汇报你的判断和行动\n"
-            "5. 分析结束后，请用 set_wake_conditions 工具设定唤醒条件:\n"
+            "5. ⚠️ **必须执行** — 调用 set_wake_conditions 工具设定唤醒条件：\n"
+            "   这是强制步骤！你必须实际调用工具，不能只在文字中描述条件！\n"
             "   - 根据你对关键支撑/阻力位的判断，设定价格突破/跌破条件\n"
             "   - 条件示例: BTC 突破某阻力位 或 跌破某支撑位\n"
             "   - 设定合理的超时时间 (10-60 分钟)\n"
-            "   - 如果市场波动剧烈，设更紧的条件; 市场无聊时设更宽松的条件\n\n"
+            "   - 如果市场波动剧烈，设更紧的条件; 市场无聊时设更宽松的条件\n"
+            "   - ❌ 错误: 只在汇报中写'唤醒条件: BTC>88000'但不调用工具\n"
+            "   - ✅ 正确: 调用 set_wake_conditions(conditions_json=[...], timeout_minutes=30)\n\n"
             "注意: 调用工具时请明确指定 symbol 参数。风控原则: 单笔投入不超过账户余额的 30%，网格杠杆使用 10-20 倍，合约杠杆使用 10-15 倍。"
         )
     
