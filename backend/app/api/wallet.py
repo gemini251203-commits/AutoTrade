@@ -176,12 +176,15 @@ async def get_balance(
     except Exception as e:
         logger.warning(f"[Wallet] Failed to calculate initial_balance: {e}")
     
-    # 🔥 真实净盈亏 = 当前总权益 - 投入本金
-    # 这个值天然包含了所有手续费影响:
-    #   - 开仓手续费已从 frozen/balance 中扣除
+    # 🔥 已实现盈亏: 直接使用 wallet.total_pnl (每次 settle_pnl 原子累加, 最可靠)
+    # wallet.total_pnl 天然包含了所有手续费影响:
     #   - 平仓手续费已在 settle_pnl 中扣除 (pnl = raw_pnl - commission)
-    # 不应再额外减 commission，否则会双重扣除
-    real_pnl = wallet.total_equity - initial_balance if initial_balance > 0 else wallet.total_pnl
+    #   - 不依赖流水记录的完整性 (初始化时可能没有创建流水)
+    real_pnl = wallet.total_pnl
+    
+    # 如果流水中查不到投入本金 (初始化时未记录流水), 通过总权益反推
+    if initial_balance <= 0:
+        initial_balance = wallet.total_equity - real_pnl
     
     return WalletBalanceResponse(
         available=wallet.balance,
@@ -700,7 +703,7 @@ async def audit_wallet(
     """
     from app.models.position import Position
     from app.models.order import Order
-    from app.models.wallet_transaction import WalletTransaction
+    from app.models.wallet_transaction import WalletTransaction, TransactionType
     
     user_id = current_user.id
     wallet = await WalletManager.get_wallet(db, user_id, for_update=fix)
@@ -710,21 +713,21 @@ async def audit_wallet(
     # 1. 充值总额
     dep_result = await db.execute(
         select(func.coalesce(func.sum(WalletTransaction.amount), 0))
-        .where(WalletTransaction.user_id == user_id, WalletTransaction.type == "DEPOSIT")
+        .where(WalletTransaction.user_id == user_id, WalletTransaction.type == TransactionType.DEPOSIT.value)
     )
     deposits = dep_result.scalar() or Decimal("0")
     
     # 2. 资金费率收入
     fund_result = await db.execute(
         select(func.coalesce(func.sum(WalletTransaction.amount), 0))
-        .where(WalletTransaction.user_id == user_id, WalletTransaction.type == "FUNDING")
+        .where(WalletTransaction.user_id == user_id, WalletTransaction.type == TransactionType.FUNDING.value)
     )
     funding = fund_result.scalar() or Decimal("0")
     
-    # 3. 初始化余额 (simulation airdrop)
+    # 3. 初始化/重置余额
     init_result = await db.execute(
         select(func.coalesce(func.sum(WalletTransaction.amount), 0))
-        .where(WalletTransaction.user_id == user_id, WalletTransaction.type == "INIT")
+        .where(WalletTransaction.user_id == user_id, WalletTransaction.type == TransactionType.RESET.value)
     )
     init_balance = init_result.scalar() or Decimal("0")
     
