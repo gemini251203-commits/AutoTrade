@@ -100,8 +100,19 @@ class HubBrain:
         
         Yields: JSON 字符串, 每个是一个 SSE 事件
         """
-        # 1. 组装 system prompt
-        full_system_prompt = self._build_system_prompt(agent)
+        # 1. 加载活跃模板 (如果有绑定的话)
+        active_template = None
+        try:
+            from app.services.hub.prompt_engine import prompt_engine
+            active_template = await prompt_engine.get_active_template(db, agent)
+        except Exception as e:
+            logger.warning(f"[HubBrain] Failed to load active template: {e}")
+        
+        # ★ 暂存模板 ID，供 _execute_tool 写入 Position
+        self._current_template_id = active_template.id if active_template else (agent.active_template_id or 0)
+        
+        # 2. 组装 system prompt
+        full_system_prompt = self._build_system_prompt(agent, template=active_template)
         
         # 1.5 注入董事会共享记忆 (近期纪要)
         try:
@@ -357,15 +368,28 @@ class HubBrain:
             logger.warning(f"[HubBrain] Failed to load memory: {e}")
             return []
     
-    def _build_system_prompt(self, agent: HubAgent) -> str:
-        """组装完整的 system prompt"""
+    def _build_system_prompt(self, agent: HubAgent, template=None) -> str:
+        """
+        组装完整的 system prompt
+
+        优先级:
+        1. 如果传入了 template → 使用 PromptEngine (模板模式)
+        2. 否则 → 使用 agent.system_prompt (自由文本模式, 向后兼容)
+        """
         parts = [SYSTEM_OVERVIEW]
-        
-        if agent.system_prompt:
+
+        if template:
+            # 模板模式: 使用 PromptEngine 组装
+            from app.services.hub.prompt_engine import prompt_engine
+            prompt_text = prompt_engine.build_prompt(template, agent)
+            if prompt_text:
+                parts.append(f"\n## 你的专属角色指令\n{prompt_text}")
+        elif agent.system_prompt:
+            # 自由文本模式 (向后兼容)
             parts.append(f"\n## 你的专属角色指令\n{agent.system_prompt}")
-        
+
         parts.append(f"\n## 你的身份\n- 名称: {agent.name}\n- 角色: {agent.role}")
-        
+
         return "\n".join(parts)
     
     async def _load_shared_context(
@@ -606,7 +630,7 @@ class HubBrain:
         agent_name: str = "",
     ) -> str:
         """执行工具并返回结果"""
-        from app.services.agent.tools import TOOL_REGISTRY, agent_source_var, agent_name_var
+        from app.services.agent.tools import TOOL_REGISTRY, agent_source_var, agent_name_var, prompt_template_id_var
         
         # 🔒 授权检查: 拒绝未授权的工具调用
         # ★ 系统必备工具始终放行
@@ -619,6 +643,9 @@ class HubBrain:
         # ★ 设置 Agent 名称，用于订单归属追踪
         if agent_name:
             agent_name_var.set(agent_name)
+        # ★ 设置提示词模板 ID，用于 Position 收益追踪
+        if hasattr(self, '_current_template_id') and self._current_template_id:
+            prompt_template_id_var.set(self._current_template_id)
         
         func = TOOL_REGISTRY.get(tool_name)
         if not func:

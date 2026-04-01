@@ -1034,6 +1034,7 @@ async function exportDailyRecap(date: string) {
               <span>运行 <b class="text-gray-300">{{ agent.total_runs }}</b></span>
               <span>交易 <b class="text-purple-400">{{ agent.total_trades }}</b></span>
               <span>T° <b class="text-gray-300">{{ agent.temperature }}</b></span>
+              <NTag v-if="agent.active_template_id" size="tiny" :bordered="false" style="background: rgba(168,85,247,0.12); color: #c084fc; font-size: 10px; height: 16px; padding: 0 4px;">📋 模板</NTag>
               <span v-if="agent.last_run_at" class="ml-auto text-gray-600 truncate" style="max-width: 100px;">{{ new Date(agent.last_run_at).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Shanghai' }) }}</span>
             </div>
 
@@ -1333,10 +1334,20 @@ async function exportDailyRecap(date: string) {
 
         <!-- Row 4: System Prompt (巨大输入框) -->
         <div>
-          <label class="text-[11px] text-gray-500 mb-1.5 block font-semibold">
-            System Prompt (KPI)
-            <span class="text-gray-700 font-normal ml-2">— 在这里写入角色定位、交易风格、绩效目标</span>
-          </label>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-[11px] text-gray-500 font-semibold">
+              System Prompt (KPI)
+              <span class="text-gray-700 font-normal ml-2">— 在这里写入角色定位、交易风格、绩效目标</span>
+            </label>
+            <a href="/prompts" target="_blank" class="text-[10px] text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1">
+              📋 提示词模板管理 →
+            </a>
+          </div>
+          <div v-if="editingAgent?.active_template_id" class="mb-2 p-2 rounded-lg border border-purple-500/20 bg-purple-500/5 text-xs text-purple-300 flex items-center gap-2">
+            <span>📋</span>
+            <span>此 Agent 已绑定提示词模板，下方内容为备用提示词。激活的模板优先使用。</span>
+            <a href="/prompts" target="_blank" class="text-purple-400 hover:underline ml-auto">管理</a>
+          </div>
           <div class="rounded-lg border border-white/10 overflow-hidden" style="background: rgba(0,0,0,0.3);">
             <NInput
               v-model:value="editForm.system_prompt"

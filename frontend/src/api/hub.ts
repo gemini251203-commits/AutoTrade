@@ -65,6 +65,7 @@ export interface HubAgent {
   total_trades: number
   polling_interval: number
   allowed_tools: string[] | null
+  active_template_id: number | null
   created_at: string
   updated_at: string
 }

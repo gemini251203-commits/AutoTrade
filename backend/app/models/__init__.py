@@ -22,6 +22,8 @@ from .hub_agent import HubAgent, HubAgentStatus
 from .hub_log import HubLog
 from .board_minutes import BoardMinutes
 from .intercepted_order import InterceptedOrder
+from .prompt_template import PromptTemplate
+from .prompt_activation_log import PromptActivationLog
 
 
 __all__ = [
@@ -62,6 +64,8 @@ __all__ = [
     "HubLog",
     "BoardMinutes",
     "InterceptedOrder",
+    "PromptTemplate",
+    "PromptActivationLog",
 ]
 
 

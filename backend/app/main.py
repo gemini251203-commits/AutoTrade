@@ -14,7 +14,7 @@ from loguru import logger
 from app.core.config import settings
 from app.core.log_config import setup_logging
 from app.db.session import init_db
-from app.api import auth, wallet, order, task, market, ai, position, risk, grid, user_config, admin, ws, strategy, agent, journal, news, pipeline, trend, funding, risk_config, hub, tools
+from app.api import auth, wallet, order, task, market, ai, position, risk, grid, user_config, admin, ws, strategy, agent, journal, news, pipeline, trend, funding, risk_config, hub, tools, prompt
 from app.middleware.error_handler import setup_error_handlers
 from app.middleware.access_logger import AccessLoggerMiddleware
 from app.core.rate_limit import RateLimitMiddleware
@@ -44,6 +44,16 @@ async def lifespan(app: FastAPI):
     from app.db.session import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
         await init_default_admin(session)
+    
+    # 初始化预置提示词模板
+    try:
+        from app.api.prompt import _seed_preset_templates
+        async with AsyncSessionLocal() as session:
+            count = await _seed_preset_templates(session)
+            if count > 0:
+                logger.info(f"Seeded {count} preset prompt templates")
+    except Exception as e:
+        logger.warning(f"Preset template seeding skipped: {e}")
     
     # 启动市场数据采集器
     from app.services.market_collector import market_collector
@@ -234,6 +244,7 @@ app.include_router(funding.router, prefix="/api/funding", tags=["Funding"])
 app.include_router(risk_config.router, prefix="/api/risk-config", tags=["RiskConfig"])
 app.include_router(hub.router, prefix="/api/hub", tags=["Agent Hub"])
 app.include_router(tools.router, prefix="/api/tools", tags=["Tools"])
+app.include_router(prompt.router, prefix="/api/prompts", tags=["Prompts"])
 
 
 

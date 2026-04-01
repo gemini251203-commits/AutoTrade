@@ -156,6 +156,15 @@ class HubAgent(Base):
         comment="授权工具列表 (JSON数组). null=全部, []=禁用, ['get_price','place_order']=指定",
     )
     
+    # === 提示词模板关联 ===
+    active_template_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("prompt_templates.id", ondelete="SET NULL"),
+        nullable=True,
+        default=None,
+        comment="当前使用的提示词模板 ID (null=使用 system_prompt 自由文本)",
+    )
+    
     # === 时间戳 ===
     created_at: Mapped[datetime] = mapped_column(
         DateTime,

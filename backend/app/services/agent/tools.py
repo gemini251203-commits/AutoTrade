@@ -32,6 +32,8 @@ from app.core.time_utils import utc_now
 agent_source_var = contextvars.ContextVar('agent_source', default='agent')
 # Agent 名称上下文 — 由 brain.py 设置，用于订单归属追踪
 agent_name_var = contextvars.ContextVar('agent_name', default='')
+# 提示词模板 ID 上下文 — 由 brain.py/daemon 设置，用于提示词收益追踪
+prompt_template_id_var = contextvars.ContextVar('prompt_template_id', default=0)
 
 # ==================== 工具注册表 ====================
 

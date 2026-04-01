@@ -16,6 +16,7 @@ import {
   NewspaperOutline,
   ShieldCheckmarkOutline,
   GitNetworkOutline,
+  DocumentTextOutline,
 } from '@vicons/ionicons5'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
@@ -35,6 +36,7 @@ const navItems = [
   { key: 'journal', label: '交易日志', icon: BookOutline, route: '/journal' },
   { key: 'news', label: '新闻', icon: NewspaperOutline, route: '/news' },
   { key: 'hub', label: 'AI Hub', icon: GitNetworkOutline, route: '/hub' },
+  { key: 'prompts', label: '提示词', icon: DocumentTextOutline, route: '/prompts' },
 
   { key: 'wallet', label: '钱包', icon: WalletOutline, route: '/wallet' },
   { key: 'risk-config', label: '风控', icon: ShieldCheckmarkOutline, route: '/risk-config' },
@@ -50,6 +52,7 @@ const activeNavKey = computed(() => {
   if (path === '/journal') return 'journal'
   if (path === '/news') return 'news'
   if (path === '/hub') return 'hub'
+  if (path === '/prompts') return 'prompts'
   if (path === '/settings') return 'settings'
   if (path === '/wallet') return 'wallet'
   if (path === '/risk-config') return 'risk-config'

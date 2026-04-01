@@ -417,6 +417,15 @@ class OrderExecutor:
         if agent_name:
             position.agent_name = agent_name
         
+        # ★ 写入提示词模板 ID (用于提示词收益追踪)
+        try:
+            from app.services.agent.tools import prompt_template_id_var
+            tmpl_id = prompt_template_id_var.get(0)
+            if tmpl_id and tmpl_id > 0:
+                position.prompt_template_id = tmpl_id
+        except Exception:
+            pass
+        
         order.position_id = position.id
         logger.info(
             f"[OrderExecutor] Position opened: id={position.id}, "

@@ -247,6 +247,13 @@ class Position(Base):
         comment="下单 Agent 名称 (如 deepseek/gemini), 用于 Leaderboard 归属",
     )
     
+    prompt_template_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+        default=None,
+        comment="开仓时使用的提示词模板 ID (用于提示词收益追踪)",
+    )
+    
     # ============================================
     # 约束
     # ============================================

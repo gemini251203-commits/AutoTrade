@@ -23,6 +23,7 @@ const PipelineMonitor = () => import('@/views/PipelineMonitor.vue')
 const GridDashboard = () => import('@/views/GridDashboard.vue')
 const RiskDashboard = () => import('@/views/RiskDashboard.vue')
 const AgentHub = () => import('@/views/AgentHub.vue')
+const PromptManager = () => import('@/views/PromptManager.vue')
 
 
 // Route definitions
@@ -115,6 +116,12 @@ const routes: RouteRecordRaw[] = [
     path: '/hub',
     name: 'AgentHub',
     component: AgentHub,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/prompts',
+    name: 'PromptManager',
+    component: PromptManager,
     meta: { requiresAuth: true },
   },
 

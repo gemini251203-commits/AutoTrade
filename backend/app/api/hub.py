@@ -62,6 +62,7 @@ class HubAgentUpdateRequest(BaseModel):
     temperature: Optional[float] = None
     polling_interval: Optional[int] = None
     allowed_tools: Optional[List[str]] = None  # 显式设置, 覆盖旧值
+    active_template_id: Optional[int] = None    # 绑定提示词模板
 
 
 class HubAgentActionRequest(BaseModel):
@@ -89,6 +90,7 @@ class HubAgentResponse(BaseModel):
     total_trades: int
     polling_interval: int = 5
     allowed_tools: Optional[List[str]] = None
+    active_template_id: Optional[int] = None
     created_at: str
     updated_at: str
     
@@ -144,6 +146,7 @@ def _agent_to_response(agent: HubAgent) -> HubAgentResponse:
         total_trades=agent.total_trades,
         polling_interval=agent.polling_interval if hasattr(agent, 'polling_interval') else 5,
         allowed_tools=agent.allowed_tools if hasattr(agent, 'allowed_tools') else None,
+        active_template_id=agent.active_template_id if hasattr(agent, 'active_template_id') else None,
         created_at=agent.created_at.isoformat() if agent.created_at else "",
         updated_at=agent.updated_at.isoformat() if agent.updated_at else "",
     )
