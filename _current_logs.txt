@@ -1,0 +1,80 @@
+﻿autotrade-backend  | 2026-03-30 15:36:08 | INFO     | [HubBrain] Sliding window: truncated 2 old tool results in-place
+autotrade-backend  | INFO:     172.18.0.6:43354 - "GET /api/hub/logs?limit=15&offset=0 HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:43378 - "GET /api/hub/agents HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:43364 - "GET /api/hub/settings/secretary HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:43386 - "GET /api/hub/status HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:43388 - "GET /api/wallet/balance HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     127.0.0.1:43380 - "GET /health HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:43394 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:43436 - "GET /api/hub/logs?limit=15&offset=0 HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:43450 - "GET /api/hub/agents HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:43432 - "GET /api/hub/settings/secretary HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:43456 - "GET /api/wallet/balance HTTP/1.1" 200 OK
+autotrade-backend  | 2026-03-30 15:36:24 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT < 67200 鎴?ETHUSDT < 2020 鎴?SOLUSDT < 83.0 鎴?浠绘剰甯佺 鍙樺寲 鈮?2.5%, timeout=30min
+autotrade-backend  | 2026-03-30 15:36:24 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=4, timeout=30min
+autotrade-backend  | 2026-03-30 15:36:24 | INFO     | [HubBrain] Sliding window: truncated 1 old tool results in-place
+autotrade-backend  | INFO:     172.18.0.6:57024 - "GET /api/hub/status HTTP/1.1" 200 OK
+autotrade-backend  | 2026-03-30 15:36:33 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=20, Trades=13  [TRADED]
+autotrade-backend  | 2026-03-30 15:36:33 | INFO     | [HubDaemon] Agent #12 next cycle in 1800s (base=1800s 脳 1.0 [娲昏穬])
+autotrade-backend  | 2026-03-30 15:36:33 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 4 conditions, wait=1800s
+autotrade-backend  | INFO:     172.18.0.6:51240 - "GET /api/wallet/balance HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:51246 - "GET /api/wallet/balance HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:51260 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     127.0.0.1:46266 - "GET /health HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:52294 - "GET /api/hub/settings/secretary HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:52298 - "GET /api/hub/status HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:52302 - "GET /api/hub/logs?limit=15&offset=0 HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:52316 - "GET /api/wallet/balance HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:52322 - "GET /api/hub/agents HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:39402 - "GET /api/wallet/balance HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38040 - "GET /api/hub/agents HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38044 - "GET /api/hub/status HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38052 - "GET /api/hub/settings/secretary HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38060 - "GET /api/hub/logs?limit=15&offset=0 HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38070 - "GET /api/wallet/balance HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38074 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     127.0.0.1:41184 - "GET /health HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:54392 - "GET /api/hub/logs?limit=15&offset=0 HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:54382 - "GET /api/hub/status HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:54368 - "GET /api/hub/settings/secretary HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:54396 - "GET /api/hub/agents HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:54406 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:54414 - "GET /api/wallet/balance HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:60004 - "GET /api/hub/logs?limit=15&offset=0 HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:60010 - "GET /api/hub/agents HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:60026 - "GET /api/hub/status HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:60012 - "GET /api/hub/settings/secretary HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:60042 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:60054 - "GET /api/wallet/balance HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38122 - "GET /api/hub/logs?limit=15&offset=0 HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38134 - "GET /api/hub/settings/secretary HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38138 - "GET /api/hub/status HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38150 - "GET /api/hub/agents HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38152 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38160 - "GET /api/wallet/balance HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     127.0.0.1:53782 - "GET /health HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:45776 - "GET /api/hub/agents HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:45762 - "GET /api/hub/settings/secretary HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:45780 - "GET /api/hub/logs?limit=15&offset=0 HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:45792 - "GET /api/hub/status HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:45798 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:45804 - "GET /api/wallet/balance HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:52228 - "GET /api/hub/agents HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:52258 - "GET /api/hub/logs?limit=15&offset=0 HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:52242 - "GET /api/hub/settings/secretary HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:52274 - "GET /api/hub/status HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:52280 - "GET /api/wallet/balance HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:52294 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:47044 - "GET /api/hub/agents HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:47058 - "GET /api/hub/logs?limit=15&offset=0 HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:47070 - "GET /api/hub/status HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:47072 - "GET /api/hub/settings/secretary HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:47086 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:47088 - "GET /api/wallet/balance HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     127.0.0.1:33568 - "GET /health HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:59668 - "GET /api/hub/logs?limit=15&offset=0 HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:59680 - "GET /api/hub/status HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:59684 - "GET /api/hub/settings/secretary HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:59686 - "GET /api/hub/agents HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:59700 - "GET /api/wallet/balance HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:59716 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK

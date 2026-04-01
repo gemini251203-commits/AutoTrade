@@ -1,0 +1,23 @@
+﻿On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   backend/app/services/hub/daemon.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	_current_logs.txt
+	_error_logs.txt
+	_filtered_logs.txt
+	_git_log.txt
+	_git_status.txt
+	_remote_log2.txt
+	_remote_logs.txt
+	non_info_logs.txt
+	tmp_backend_logs.txt
+	tmp_log50.txt
+	walkthrough.md
+
+no changes added to commit (use "git add" and/or "git commit -a")

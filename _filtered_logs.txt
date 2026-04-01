@@ -1,0 +1,6 @@
+﻿autotrade-backend  | 2026-03-30 15:35:47 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-03-30 15:35:47 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | 2026-03-30 15:36:24 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT < 67200 鎴?ETHUSDT < 2020 鎴?SOLUSDT < 83.0 鎴?浠绘剰甯佺 鍙樺寲 鈮?2.5%, timeout=30min
+autotrade-backend  | 2026-03-30 15:36:33 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=20, Trades=13  [TRADED]
+autotrade-backend  | 2026-03-30 15:36:33 | INFO     | [HubDaemon] Agent #12 next cycle in 1800s (base=1800s 脳 1.0 [娲昏穬])
+autotrade-backend  | 2026-03-30 15:36:33 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 4 conditions, wait=1800s

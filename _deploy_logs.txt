@@ -1,0 +1,30 @@
+﻿autotrade-backend  | 2026-03-30 17:13:49 | INFO     | [MarketCollector] Backfilled 500 klines for XAUUSDT 5m
+autotrade-backend  | 2026-03-30 17:13:50 | INFO     | [MarketCollector] Backfilled 500 klines for XAUUSDT 15m
+autotrade-backend  | 2026-03-30 17:13:51 | INFO     | [MarketCollector] Backfilled 500 klines for XAUUSDT 30m
+autotrade-backend  | 2026-03-30 17:13:52 | INFO     | [MarketCollector] Backfilled 500 klines for XAUUSDT 1h
+autotrade-backend  | 2026-03-30 17:13:53 | INFO     | [MarketCollector] Backfilled 500 klines for XAUUSDT 4h
+autotrade-backend  | 2026-03-30 17:13:54 | INFO     | [MarketCollector] Backfilled 110 klines for XAUUSDT 1d
+autotrade-backend  | 2026-03-30 17:13:54 | INFO     | [MarketCollector] Backfill completed
+autotrade-backend  | 2026-03-30 17:13:54 | INFO     | [DeepBackfill] 寮€濮嬫繁搴﹀洖濉? 365澶? 鍛ㄦ湡=['1h', '4h', '1d']
+autotrade-backend  | 2026-03-30 17:14:01 | INFO     | [DeepBackfill] ASTERUSDT 1h 鏃犳洿澶氭暟鎹紝宸插埌灏藉ご
+autotrade-backend  | 2026-03-30 17:14:01 | INFO     | [DeepBackfill] ASTERUSDT 4h 鏃犳洿澶氭暟鎹紝宸插埌灏藉ご
+autotrade-backend  | 2026-03-30 17:14:02 | INFO     | [DeepBackfill] ASTERUSDT 1d 鏃犳洿澶氭暟鎹紝宸插埌灏藉ご
+autotrade-backend  | 2026-03-30 17:14:02 | INFO     | [DeepBackfill] XAUUSDT 1h 鏃犳洿澶氭暟鎹紝宸插埌灏藉ご
+autotrade-backend  | 2026-03-30 17:14:02 | INFO     | [DeepBackfill] XAUUSDT 4h 鏃犳洿澶氭暟鎹紝宸插埌灏藉ご
+autotrade-backend  | 2026-03-30 17:14:03 | INFO     | [DeepBackfill] XAUUSDT 1d 鏃犳洿澶氭暟鎹紝宸插埌灏藉ご
+autotrade-backend  | 2026-03-30 17:14:03 | INFO     | [DeepBackfill] 鉁?娣卞害鍥炲～瀹屾垚
+autotrade-backend  | 2026-03-30 17:14:03 | INFO     | [HubDaemon] WakeMonitor TRIGGERED for #12: BTCUSDT 67161.1 鈮?67200.0 (after 40s / 2700s, 4 checks)
+autotrade-backend  | 2026-03-30 17:14:03 | INFO     | [HubDaemon] Agent #12 EVENT WAKE: BTCUSDT 67161.1 鈮?67200.0
+autotrade-backend  | 2026-03-30 17:14:03 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-03-30 17:14:03 | INFO     | [load_board_memory] Loaded 2 days of board memory for user 12
+autotrade-backend  | 2026-03-30 17:14:03 | INFO     | [HubBrain] Loaded 8 memory entries for agent #12
+autotrade-backend  | 2026-03-30 17:14:03 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | INFO:     172.18.0.6:45970 - "GET /api/wallet/balance HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     127.0.0.1:55822 - "GET /health HTTP/1.1" 200 OK
+autotrade-backend  | 2026-03-30 17:14:18 | INFO     | [HubBrain] Sliding window: truncated 2 old tool results in-place
+autotrade-backend  | 2026-03-30 17:14:29 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT > 67225 鎴?BTCUSDT < 67100 鎴?浠绘剰甯佺 鍙樺寲 鈮?1.5%, timeout=25min
+autotrade-backend  | 2026-03-30 17:14:29 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=3, timeout=25min
+autotrade-backend  | 2026-03-30 17:14:29 | INFO     | [HubBrain] Sliding window: truncated 1 old tool results in-place
+autotrade-backend  | 2026-03-30 17:14:36 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=27, Trades=0
+autotrade-backend  | 2026-03-30 17:14:36 | INFO     | [HubDaemon] Agent #12 next cycle in 2700s (base=1800s 脳 1.5 [骞抽潤])
+autotrade-backend  | 2026-03-30 17:14:36 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 3 conditions, wait=2700s

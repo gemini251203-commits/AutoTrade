@@ -1,0 +1,59 @@
+﻿autotrade-backend  | [NewsCrawler] CryptoCompare API 閿欒: You need a valid auth key or api key to access this endpoint
+autotrade-backend  | 2026-03-30 16:00:43 | INFO     | [FundingRate] 鈴?寮€濮?8h 璧勯噾璐圭巼缁撶畻...
+autotrade-backend  | 2026-03-30 16:00:43 | INFO     | [FundingRate] 鉁?缁撶畻瀹屾垚: 1 绗斾粨浣?autotrade-backend  | 2026-03-30 16:01:51 | INFO     | [WS] Client disconnected, total=0
+autotrade-backend  | [NewsCrawler] CryptoCompare API 閿欒: You need a valid auth key or api key to access this endpoint
+autotrade-backend  | 2026-03-30 16:05:00 | INFO     | [MemoryConsolidator] 鈽?Daily cron triggered, starting consolidation...
+autotrade-backend  | 2026-03-30 16:05:00 | WARNING  | [MemoryConsolidator] Failed to get secretary from Redis for user 7: No module named 'app.core.redis'
+autotrade-backend  | 2026-03-30 16:05:00 | INFO     | [MemoryConsolidator] Fallback: using agent #6 as secretary for user 7
+autotrade-backend  | 2026-03-30 16:05:00 | INFO     | [MemoryConsolidator] Running for user 7, date=2026-03-30, secretary=6
+autotrade-backend  | 2026-03-30 16:05:00 | INFO     | [MemoryConsolidator] Consolidating for user 7, date 2026-03-30, secretary=6
+autotrade-backend  | 2026-03-30 16:05:00 | INFO     | [MemoryConsolidator] No data for user 7 on 2026-03-30
+autotrade-backend  | 2026-03-30 16:05:00 | INFO     | [MemoryConsolidator] Created new minutes for 2026-03-30
+autotrade-backend  | 2026-03-30 16:05:00 | WARNING  | [MemoryConsolidator] mem0 vectorization failed (non-fatal): unexpected indent (memory_service.py, line 331)
+autotrade-backend  | 2026-03-30 16:05:00 | INFO     | [MemoryConsolidator] Minutes saved for user 7, date 2026-03-30
+autotrade-backend  | 2026-03-30 16:05:00 | WARNING  | [MemoryConsolidator] Failed to get secretary from Redis for user 12: No module named 'app.core.redis'
+autotrade-backend  | 2026-03-30 16:05:00 | INFO     | [MemoryConsolidator] Fallback: using agent #12 as secretary for user 12
+autotrade-backend  | 2026-03-30 16:05:00 | INFO     | [MemoryConsolidator] Running for user 12, date=2026-03-30, secretary=12
+autotrade-backend  | 2026-03-30 16:05:00 | INFO     | [MemoryConsolidator] Consolidating for user 12, date 2026-03-30, secretary=12
+autotrade-backend  | 2026-03-30 16:05:00 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | 2026-03-30 16:05:00 | INFO     | [MemoryConsolidator] Using secretary agent #12 (Autotrade01), model=deepseek-chat
+autotrade-backend  | 2026-03-30 16:05:33 | INFO     | [MemoryConsolidator] Created new minutes for 2026-03-30
+autotrade-backend  | 2026-03-30 16:05:33 | WARNING  | [MemoryConsolidator] mem0 vectorization failed (non-fatal): unexpected indent (memory_service.py, line 331)
+autotrade-backend  | 2026-03-30 16:05:34 | INFO     | [MemoryConsolidator] Minutes saved for user 12, date 2026-03-30
+autotrade-backend  | 2026-03-30 16:05:34 | INFO     | [MemoryConsolidator] 鈽?Daily consolidation complete.
+autotrade-backend  | 2026-03-30 16:05:34 | INFO     | [MemoryConsolidator] Next run in 24.0h (at 2026-04-01 00:05 CST)
+autotrade-backend  | 2026-03-30 16:06:35 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-03-30 16:06:35 | INFO     | [load_board_memory] Loaded 2 days of board memory for user 12
+autotrade-backend  | 2026-03-30 16:06:35 | INFO     | [HubBrain] Loaded 11 memory entries for agent #12
+autotrade-backend  | 2026-03-30 16:06:35 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | 2026-03-30 16:06:51 | INFO     | [HubBrain] Sliding window: truncated 3 old tool results in-place
+autotrade-backend  | 2026-03-30 16:06:56 | INFO     | [HubBrain] Sliding window: truncated 2 old tool results in-place
+autotrade-backend  | 2026-03-30 16:07:11 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT > 68200 鎴?BTCUSDT < 67200 鎴?ETHUSDT > 2095 鎴?ETHUSDT < 2050 鎴?浠绘剰甯佺 鍙樺寲 鈮?2.0%, timeout=45min
+autotrade-backend  | 2026-03-30 16:07:11 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=5, timeout=45min
+autotrade-backend  | 2026-03-30 16:07:11 | INFO     | [HubBrain] Sliding window: truncated 1 old tool results in-place
+autotrade-backend  | 2026-03-30 16:07:19 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=21, Trades=14  [TRADED]
+autotrade-backend  | 2026-03-30 16:07:19 | INFO     | [HubDaemon] Agent #12 next cycle in 2700s (base=1800s 脳 1.5 [骞抽潤])
+autotrade-backend  | 2026-03-30 16:07:19 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 5 conditions, wait=2700s
+autotrade-backend  | [NewsCrawler] CryptoCompare API 閿欒: You need a valid auth key or api key to access this endpoint
+autotrade-backend  | [NewsCrawler] CryptoCompare API 閿欒: You need a valid auth key or api key to access this endpoint
+autotrade-backend  | [NewsCrawler] CryptoCompare API 閿欒: You need a valid auth key or api key to access this endpoint
+autotrade-backend  | [NewsCrawler] CryptoCompare API 閿欒: You need a valid auth key or api key to access this endpoint
+autotrade-backend  | [NewsCrawler] CryptoCompare API 閿欒: You need a valid auth key or api key to access this endpoint
+autotrade-backend  | [NewsCrawler] CryptoCompare API 閿欒: You need a valid auth key or api key to access this endpoint
+autotrade-backend  | [NewsCrawler] CryptoCompare API 閿欒: You need a valid auth key or api key to access this endpoint
+autotrade-backend  | [NewsCrawler] CryptoCompare API 閿欒: You need a valid auth key or api key to access this endpoint
+autotrade-backend  | [NewsCrawler] CryptoCompare API 閿欒: You need a valid auth key or api key to access this endpoint
+autotrade-backend  | 2026-03-30 16:52:26 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-03-30 16:52:26 | INFO     | [load_board_memory] Loaded 2 days of board memory for user 12
+autotrade-backend  | 2026-03-30 16:52:26 | INFO     | [HubBrain] Loaded 11 memory entries for agent #12
+autotrade-backend  | 2026-03-30 16:52:26 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | 2026-03-30 16:52:37 | INFO     | [HubBrain] Sliding window: truncated 2 old tool results in-place
+autotrade-backend  | 2026-03-30 16:52:42 | INFO     | [HubBrain] Sliding window: truncated 2 old tool results in-place
+autotrade-backend  | 2026-03-30 16:52:56 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT > 68200 鎴?BTCUSDT < 67200 鎴?ETHUSDT > 2095 鎴?ETHUSDT < 2050 鎴?浠绘剰甯佺 鍙樺寲 鈮?2.0%, timeout=45min
+autotrade-backend  | 2026-03-30 16:52:56 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=5, timeout=45min
+autotrade-backend  | 2026-03-30 16:52:56 | INFO     | [HubBrain] Sliding window: truncated 1 old tool results in-place
+autotrade-backend  | 2026-03-30 16:53:05 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=22, Trades=1  [TRADED]
+autotrade-backend  | 2026-03-30 16:53:05 | INFO     | [HubDaemon] Agent #12 next cycle in 2700s (base=1800s 脳 1.5 [骞抽潤])
+autotrade-backend  | 2026-03-30 16:53:05 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 5 conditions, wait=2700s
+autotrade-backend  | [NewsCrawler] CryptoCompare API 閿欒: You need a valid auth key or api key to access this endpoint
+autotrade-backend  | [NewsCrawler] CryptoCompare API 閿欒: You need a valid auth key or api key to access this endpoint
