@@ -1,0 +1,229 @@
+autotrade-backend  | 2026-04-01 10:34:22.069 | INFO     | app.middleware.error_handler:setup_error_handlers:125 - [ErrorHandler] Global error handlers registered
+autotrade-backend  | 2026-04-01 10:34:23 | WARNING  | Preset template seeding skipped: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.ForeignKeyViolationError'>: insert or update on table "prompt_templates" violates foreign key constraint "prompt_templates_user_id_fkey"
+autotrade-backend  | (Background on this error at: https://sqlalche.me/e/20/gkpj)
+autotrade-backend  | 2026-04-01 10:34:23 | INFO     | Autopilot strategy scheduler started
+autotrade-backend  | 2026-04-01 10:34:24 | INFO     | [Autopilot] Strategy scheduler started (auto-start DISABLED, manual only)
+autotrade-backend  | 2026-04-01 10:34:24 | INFO     | [HubDaemon] [STARTED] Agent #12 'Autotrade01' started for user 12
+autotrade-backend  | 2026-04-01 10:34:24 | INFO     | HubDaemon: resumed 1 active agent(s)
+autotrade-backend  | 2026-04-01 10:34:27 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-04-01 10:34:29 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | INFO:     172.18.0.6:36442 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:36448 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:48082 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:48096 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:34450 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:41508 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:41536 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:41604 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:45000 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | 2026-04-01 10:35:10 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT > 68742 或 BTCUSDT < 68213 或 ETHUSDT > 2179.85 或 ETHUSDT < 2085.36 或 SOLUSDT > 84.475 或 SOLUSDT < 83.01 或 BNBUSDT > 620.77 或 BNBUSDT < 614.17, timeout=30min
+autotrade-backend  | INFO:     172.18.0.6:45042 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | 2026-04-01 10:35:10 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=8, timeout=30min
+autotrade-backend  | 2026-04-01 10:35:21 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=89, Trades=9
+autotrade-backend  | 2026-04-01 10:35:21 | INFO     | [HubDaemon] Agent #12 next cycle in 3600s (base=3600s × 1.0 [活跃])
+autotrade-backend  | 2026-04-01 10:35:21 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 8 conditions, wait=3600s
+autotrade-backend  | INFO:     172.18.0.6:45346 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:33506 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:56728 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:56800 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:48790 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:48804 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | 2026-04-01 11:35:25 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-04-01 11:35:25 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | 2026-04-01 11:35:59 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT > 68742 或 BTCUSDT < 68213 或 ETHUSDT > 2179.85 或 ETHUSDT < 2085.35 或 SOLUSDT > 84.475 或 SOLUSDT < 83.01 或 BNBUSDT > 621.15 或 BNBUSDT < 614.17, timeout=30min
+autotrade-backend  | 2026-04-01 11:35:59 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=8, timeout=30min
+autotrade-backend  | 2026-04-01 11:36:06 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=90, Trades=9
+autotrade-backend  | 2026-04-01 11:36:06 | INFO     | [HubDaemon] Agent #12 next cycle in 3600s (base=3600s × 1.0 [活跃])
+autotrade-backend  | 2026-04-01 11:36:06 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 8 conditions, wait=3600s
+autotrade-backend  | 2026-04-01 12:36:08 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-04-01 12:36:08 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | 2026-04-01 12:36:44 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT > 68742 或 BTCUSDT < 68213 或 ETHUSDT > 2179.85 或 ETHUSDT < 2085.36 或 SOLUSDT > 84.55 或 SOLUSDT < 83.01 或 BNBUSDT > 621.15 或 BNBUSDT < 614.17, timeout=30min
+autotrade-backend  | 2026-04-01 12:36:44 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=8, timeout=30min
+autotrade-backend  | 2026-04-01 12:36:51 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=91, Trades=9
+autotrade-backend  | 2026-04-01 12:36:51 | INFO     | [HubDaemon] Agent #12 next cycle in 3600s (base=3600s × 1.0 [活跃])
+autotrade-backend  | 2026-04-01 12:36:51 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 8 conditions, wait=3600s
+autotrade-backend  | 2026-04-01 12:38:41 | INFO     | [HubDaemon] WakeMonitor TRIGGERED for #12: BNBUSDT 614.2 ≤ 614.17 (after 110s / 3600s, 11 checks)
+autotrade-backend  | 2026-04-01 12:38:41 | INFO     | [HubDaemon] Agent #12 EVENT WAKE: BNBUSDT 614.2 ≤ 614.17
+autotrade-backend  | 2026-04-01 12:38:41 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-04-01 12:38:41 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | 2026-04-01 12:39:02 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT > 68742 或 BTCUSDT < 68213 或 ETHUSDT > 2179.85 或 ETHUSDT < 2085.36 或 SOLUSDT > 83.01 或 SOLUSDT < 82.36 或 BNBUSDT > 621.15 或 BNBUSDT < 614.17, timeout=30min
+autotrade-backend  | 2026-04-01 12:39:02 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=8, timeout=30min
+autotrade-backend  | 2026-04-01 12:39:11 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=92, Trades=9
+autotrade-backend  | 2026-04-01 12:39:11 | INFO     | [HubDaemon] Agent #12 next cycle in 3600s (base=3600s × 1.0 [活跃])
+autotrade-backend  | 2026-04-01 12:39:11 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 8 conditions, wait=3600s
+autotrade-backend  | 2026-04-01 12:39:21 | INFO     | [HubDaemon] WakeMonitor TRIGGERED for #12: BNBUSDT 614.2 ≤ 614.17 (after 10s / 3600s, 1 checks)
+autotrade-backend  | 2026-04-01 12:39:21 | INFO     | [HubDaemon] Agent #12 EVENT WAKE: BNBUSDT 614.2 ≤ 614.17
+autotrade-backend  | 2026-04-01 12:39:21 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-04-01 12:39:22 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | 2026-04-01 12:39:41 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT > 68742 或 BTCUSDT < 68213 或 ETHUSDT > 2179 或 ETHUSDT < 2085 或 SOLUSDT > 83 或 SOLUSDT < 82.36 或 BNBUSDT > 614.17 或 BNBUSDT < 607.98, timeout=30min
+autotrade-backend  | 2026-04-01 12:39:41 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=8, timeout=30min
+autotrade-backend  | 2026-04-01 12:39:50 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=93, Trades=9
+autotrade-backend  | 2026-04-01 12:39:50 | INFO     | [HubDaemon] Agent #12 next cycle in 3600s (base=3600s × 1.0 [活跃])
+autotrade-backend  | 2026-04-01 12:39:50 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 8 conditions, wait=3600s
+autotrade-backend  | 2026-04-01 12:41:10 | INFO     | [HubDaemon] WakeMonitor TRIGGERED for #12: BNBUSDT 614.2 ≥ 614.17 (after 80s / 3600s, 8 checks)
+autotrade-backend  | 2026-04-01 12:41:10 | INFO     | [HubDaemon] Agent #12 EVENT WAKE: BNBUSDT 614.2 ≥ 614.17
+autotrade-backend  | 2026-04-01 12:41:10 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-04-01 12:41:10 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | 2026-04-01 12:41:29 | WARNING  | [AgentTools] set_wake_conditions: no agent_id found in Redis for user 12
+autotrade-backend  | 2026-04-01 12:41:39 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=94, Trades=9
+autotrade-backend  | 2026-04-01 12:41:39 | INFO     | [HubDaemon] Agent #12 next cycle in 3600s (base=3600s × 1.0 [活跃])
+autotrade-backend  | 2026-04-01 13:41:41 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-04-01 13:41:41 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | 2026-04-01 13:42:19 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT > 68742 或 BTCUSDT < 68213 或 ETHUSDT > 2179 或 ETHUSDT < 2085 或 SOLUSDT > 83.01 或 SOLUSDT < 82.36 或 BNBUSDT > 614.17 或 BNBUSDT < 607.98, timeout=30min
+autotrade-backend  | 2026-04-01 13:42:19 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=8, timeout=30min
+autotrade-backend  | 2026-04-01 13:42:27 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=95, Trades=9
+autotrade-backend  | 2026-04-01 13:42:27 | INFO     | [HubDaemon] Agent #12 next cycle in 3600s (base=3600s × 1.0 [活跃])
+autotrade-backend  | 2026-04-01 13:42:27 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 8 conditions, wait=3600s
+autotrade-backend  | 2026-04-01 13:42:47 | INFO     | [HubDaemon] WakeMonitor TRIGGERED for #12: BTCUSDT 68173.1 ≤ 68213.0 (after 20s / 3600s, 2 checks)
+autotrade-backend  | 2026-04-01 13:42:47 | INFO     | [HubDaemon] Agent #12 EVENT WAKE: BTCUSDT 68173.1 ≤ 68213.0
+autotrade-backend  | 2026-04-01 13:42:48 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-04-01 13:42:48 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | 2026-04-01 13:43:18 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT > 68213 或 BTCUSDT < 67123 或 ETHUSDT > 2179 或 ETHUSDT < 2085 或 SOLUSDT > 83 或 SOLUSDT < 82.36 或 BNBUSDT > 614 或 BNBUSDT < 607, timeout=30min
+autotrade-backend  | 2026-04-01 13:43:18 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=8, timeout=30min
+autotrade-backend  | 2026-04-01 13:43:26 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=96, Trades=9
+autotrade-backend  | 2026-04-01 13:43:26 | INFO     | [HubDaemon] Agent #12 next cycle in 3600s (base=3600s × 1.0 [活跃])
+autotrade-backend  | 2026-04-01 13:43:26 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 8 conditions, wait=3600s
+autotrade-backend  | 2026-04-01 14:03:47 | INFO     | [HubDaemon] WakeMonitor TRIGGERED for #12: BTCUSDT 68218.6 ≥ 68213.0 (after 1220s / 3600s, 122 checks)
+autotrade-backend  | 2026-04-01 14:03:47 | INFO     | [HubDaemon] Agent #12 EVENT WAKE: BTCUSDT 68218.6 ≥ 68213.0
+autotrade-backend  | 2026-04-01 14:03:47 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-04-01 14:03:47 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | 2026-04-01 14:04:07 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT > 68213.73 或 BTCUSDT < 67123.6 或 ETHUSDT > 2150.07 或 ETHUSDT < 2085.36 或 SOLUSDT > 83.01 或 SOLUSDT < 82.36 或 BNBUSDT > 614.17 或 BNBUSDT < 607.98, timeout=30min
+autotrade-backend  | 2026-04-01 14:04:07 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=8, timeout=30min
+autotrade-backend  | 2026-04-01 14:04:16 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=97, Trades=9
+autotrade-backend  | 2026-04-01 14:04:16 | INFO     | [HubDaemon] Agent #12 next cycle in 3600s (base=3600s × 1.0 [活跃])
+autotrade-backend  | 2026-04-01 14:04:16 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 8 conditions, wait=3600s
+autotrade-backend  | 2026-04-01 14:04:26 | INFO     | [HubDaemon] WakeMonitor TRIGGERED for #12: BTCUSDT 68218.6 ≥ 68213.73 (after 10s / 3600s, 1 checks)
+autotrade-backend  | 2026-04-01 14:04:26 | INFO     | [HubDaemon] Agent #12 EVENT WAKE: BTCUSDT 68218.6 ≥ 68213.73
+autotrade-backend  | 2026-04-01 14:04:26 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-04-01 14:04:26 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | 2026-04-01 14:04:46 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT > 68742 或 BTCUSDT < 67123 或 ETHUSDT > 2179 或 ETHUSDT < 2085 或 SOLUSDT > 83 或 SOLUSDT < 82.3 或 BNBUSDT > 621 或 BNBUSDT < 607, timeout=30min
+autotrade-backend  | 2026-04-01 14:04:46 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=8, timeout=30min
+autotrade-backend  | 2026-04-01 14:04:55 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=98, Trades=9
+autotrade-backend  | 2026-04-01 14:04:55 | INFO     | [HubDaemon] Agent #12 next cycle in 3600s (base=3600s × 1.0 [活跃])
+autotrade-backend  | 2026-04-01 14:04:55 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 8 conditions, wait=3600s
+autotrade-backend  | 2026-04-01 15:05:00 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-04-01 15:05:01 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | 2026-04-01 15:05:35 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT > 68742 或 BTCUSDT < 68213 或 ETHUSDT > 2151 或 ETHUSDT < 2085 或 SOLUSDT > 84.55 或 SOLUSDT < 83 或 BNBUSDT > 620 或 BNBUSDT < 607, timeout=30min
+autotrade-backend  | 2026-04-01 15:05:35 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=8, timeout=30min
+autotrade-backend  | 2026-04-01 15:05:45 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=99, Trades=9
+autotrade-backend  | 2026-04-01 15:05:45 | INFO     | [HubDaemon] Agent #12 next cycle in 3600s (base=3600s × 1.0 [活跃])
+autotrade-backend  | 2026-04-01 15:05:45 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 8 conditions, wait=3600s
+autotrade-backend  | INFO:     172.18.0.6:58280 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:34460 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:36488 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:40098 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:41282 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:57092 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:53426 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:54860 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38272 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38330 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:59184 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:39392 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:51170 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | 2026-04-01 15:25:26 | INFO     | [HubDaemon] WakeMonitor TRIGGERED for #12: BTCUSDT 68835.7 ≥ 68742.0 (after 1180s / 3600s, 118 checks)
+autotrade-backend  | 2026-04-01 15:25:26 | INFO     | [HubDaemon] Agent #12 EVENT WAKE: BTCUSDT 68835.7 ≥ 68742.0
+autotrade-backend  | 2026-04-01 15:25:26 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-04-01 15:25:26 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | INFO:     172.18.0.6:33342 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | 2026-04-01 15:26:09 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BNBUSDT < 610 或 BNBUSDT > 625 或 BTCUSDT < 68742 或 ETHUSDT > 2179 或 ETHUSDT < 2085 或 SOLUSDT > 84.55 或 SOLUSDT < 83, timeout=30min
+autotrade-backend  | 2026-04-01 15:26:09 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=7, timeout=30min
+autotrade-backend  | 2026-04-01 15:26:17 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=100, Trades=10  [TRADED]
+autotrade-backend  | 2026-04-01 15:26:17 | INFO     | [HubDaemon] Agent #12 next cycle in 3600s (base=3600s × 1.0 [活跃])
+autotrade-backend  | 2026-04-01 15:26:17 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 7 conditions, wait=3600s
+autotrade-backend  | INFO:     172.18.0.6:38234 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | 2026-04-01 15:26:37 | INFO     | [HubDaemon] WakeMonitor TRIGGERED for #12: BTCUSDT 68741.1 ≤ 68742.0 (after 20s / 3600s, 2 checks)
+autotrade-backend  | 2026-04-01 15:26:37 | INFO     | [HubDaemon] Agent #12 EVENT WAKE: BTCUSDT 68741.1 ≤ 68742.0
+autotrade-backend  | 2026-04-01 15:26:37 | INFO     | [HubDaemon] [CYCLE] Agent #12 'Autotrade01' executing cycle
+autotrade-backend  | 2026-04-01 15:26:37 | ERROR    | [Encryption] Invalid token - key may have been tampered or wrong encryption key
+autotrade-backend  | INFO:     172.18.0.6:42602 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:56376 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | 2026-04-01 15:27:13 | INFO     | [WakeMonitor] Conditions set for agent 12:12: BTCUSDT < 68213 或 ETHUSDT > 2179 或 ETHUSDT < 2085 或 SOLUSDT > 84 或 SOLUSDT < 83 或 BNBUSDT > 621 或 BNBUSDT < 610, timeout=30min
+autotrade-backend  | 2026-04-01 15:27:13 | INFO     | [AgentTools] set_wake_conditions SUCCESS: agent=12, conditions=7, timeout=30min
+autotrade-backend  | 2026-04-01 15:27:22 | INFO     | [HubDaemon] Agent #12 cycle done. Runs=101, Trades=10
+autotrade-backend  | 2026-04-01 15:27:22 | INFO     | [HubDaemon] Agent #12 next cycle in 3600s (base=3600s × 1.0 [活跃])
+autotrade-backend  | 2026-04-01 15:27:22 | INFO     | [HubDaemon] WakeCheck STARTED for #12: monitoring 7 conditions, wait=3600s
+autotrade-backend  | INFO:     172.18.0.6:54852 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:54896 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:41320 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:39572 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:58652 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:55298 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38164 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:43224 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:51722 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:34042 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:46306 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:46368 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:52216 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:60208 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:40868 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:35796 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38328 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:50002 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:60064 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:45470 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:60686 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:41944 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:41992 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:41988 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:40164 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:37984 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:41028 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:53018 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:52484 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:52548 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:48562 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:48608 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:37154 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:36004 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38658 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:59770 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:33198 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:46626 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:53446 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:33560 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:35646 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:45452 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:59796 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:50040 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:42664 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:36230 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:55900 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:59664 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:46886 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:51832 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:40254 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:38670 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:44428 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:44946 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:56550 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:40102 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:58026 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:58082 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:41020 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:51910 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:42368 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:52364 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:32854 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:54562 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:45860 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:43014 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:60072 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:60094 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:46150 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:40786 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:59268 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:59644 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:58760 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:58792 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:56070 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:58298 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:41696 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:41164 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:50766 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:56946 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:56980 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:55394 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:42444 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
+autotrade-backend  | INFO:     172.18.0.6:54278 - "GET /api/hub/agents/12/wake-conditions HTTP/1.1" 200 OK
