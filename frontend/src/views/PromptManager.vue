@@ -61,13 +61,13 @@ const activating = ref(false)
 
 // ==================== Options ====================
 const marketTagOptions = [
-  { label: '📈 趋势上涨', value: 'trending_up' },
-  { label: '📉 趋势下跌', value: 'trending_down' },
-  { label: '➡️ 横盘震荡', value: 'sideways' },
-  { label: '🌊 剧烈波动', value: 'high_volatility' },
-  { label: '💰 小资金 (<1000U)', value: 'small_fund' },
-  { label: '💎 中资金 (1000-10000U)', value: 'medium_fund' },
-  { label: '🏦 大资金 (>10000U)', value: 'large_fund' },
+  { label: ' 趋势上涨', value: 'trending_up' },
+  { label: ' 趋势下跌', value: 'trending_down' },
+  { label: '️ 横盘震荡', value: 'sideways' },
+  { label: ' 剧烈波动', value: 'high_volatility' },
+  { label: ' 小资金 (<1000U)', value: 'small_fund' },
+  { label: ' 中资金 (1000-10000U)', value: 'medium_fund' },
+  { label: ' 大资金 (>10000U)', value: 'large_fund' },
 ]
 
 const agentOptions = computed(() =>
@@ -280,10 +280,10 @@ function tagLabel(tag: string) {
 }
 function tagIcon(tag: string) {
   const icons: Record<string, string> = {
-    trending_up: '📈', trending_down: '📉', sideways: '➡️',
-    high_volatility: '🌊', small_fund: '💰', medium_fund: '💎', large_fund: '🏦',
+    trending_up: '', trending_down: '', sideways: '️',
+    high_volatility: '', small_fund: '', medium_fund: '', large_fund: '',
   }
-  return icons[tag] || '🏷️'
+  return icons[tag] || '️'
 }
 
 function formatTime(iso: string) {

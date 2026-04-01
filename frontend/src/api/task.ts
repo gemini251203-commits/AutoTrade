@@ -47,7 +47,7 @@ export interface TaskResponse {
   confirm_count: number | null
   expires_at: string | null
   
-  // 🔥 两阶段条件参数
+  //  两阶段条件参数
   condition_type: 'simple_breakout' | 'breakdown_reclaim' | 'breakout_pullback' | null
   condition_phase: number | null
   
@@ -84,7 +84,7 @@ export interface TaskCreate {
   confirm_count?: number
   timeout_hours?: number
   
-  // 🔥 两阶段条件类型
+  //  两阶段条件类型
   condition_type?: 'simple_breakout' | 'breakdown_reclaim' | 'breakout_pullback'
   
   // 风控

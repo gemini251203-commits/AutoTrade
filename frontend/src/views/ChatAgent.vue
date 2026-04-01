@@ -432,7 +432,7 @@ const formatTime = formatTimeBJ
           >
             <n-icon :component="sidebarCollapsed ? ChevronForwardOutline : ChevronBackOutline" />
           </button>
-          <button class="mobile-close-btn" @click="mobileShowSidebar = false">✕</button>
+          <button class="mobile-close-btn" @click="mobileShowSidebar = false"></button>
         </div>
 
         <template v-if="!sidebarCollapsed">
@@ -474,7 +474,7 @@ const formatTime = formatTimeBJ
                 @click.stop="handleDeleteConversation(conv.id)"
                 title="删除此会话"
               >
-                ✕
+                
               </button>
             </div>
           </div>
@@ -611,7 +611,7 @@ const formatTime = formatTimeBJ
                   <span></span><span></span><span></span>
                 </div>
                 <div class="thinking-text">
-                  <span class="thinking-label">💬 AI 思考中</span>
+                  <span class="thinking-label"> AI 思考中</span>
                 </div>
                 <div class="thinking-hint">正在组织回答...</div>
               </div>

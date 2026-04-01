@@ -127,7 +127,7 @@ export const useAuthStore = defineStore('auth', () => {
       const newRefreshToken = data.refresh_token || ''
       
       // Fetch user info with the NEW token
-      // ⚠️ 必须用 raw fetch 而不是 request — 因为 request 的拦截器
+      // ️ 必须用 raw fetch 而不是 request — 因为 request 的拦截器
       //    会用 localStorage 的旧 token 覆盖我们设置的新 token
       const userResponse = await fetch('/api/auth/me', {
         headers: {

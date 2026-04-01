@@ -14,7 +14,7 @@ import { ref, computed } from 'vue'
 import request from '@/utils/request'
 import type { WalletAPIResponse } from '@/types/wallet'
 
-// 🔒 类型契约: 使用 WalletAPIResponse 确保字段名与后端一致
+//  类型契约: 使用 WalletAPIResponse 确保字段名与后端一致
 // 如果写错字段名 (如 totalEquity 而非 total_equity)，TypeScript 会报错
 
 export const useWalletStore = defineStore('wallet', () => {

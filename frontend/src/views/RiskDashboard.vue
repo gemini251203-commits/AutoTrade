@@ -68,7 +68,7 @@ async function saveConfig() {
     config.value = data
     form.value = { ...data }
     hasChanges.value = false
-    message.success('✅ 风控配置已保存，下次下单立即生效')
+    message.success(' 风控配置已保存，下次下单立即生效')
   } catch (e: any) {
     message.error('保存失败: ' + (e.response?.data?.detail || e.message))
   } finally {
@@ -100,7 +100,7 @@ async function toggleCircuitBreaker() {
     const action = runtimeStatus.value.circuit_breaker ? 'reset' : 'trigger'
     await controlCircuitBreaker(action, action === 'trigger' ? '手动触发' : '')
     await loadRuntimeStatus()
-    message.success(action === 'trigger' ? '🚨 熔断已触发' : '✅ 熔断已解除')
+    message.success(action === 'trigger' ? ' 熔断已触发' : ' 熔断已解除')
   } catch (e: any) {
     message.error('操作失败: ' + (e.response?.data?.detail || e.message))
   } finally {
@@ -115,7 +115,7 @@ async function toggleRiskBypass() {
     const newState = !runtimeStatus.value.risk_bypass
     await controlRiskBypass(newState)
     await loadRuntimeStatus()
-    message.success(newState ? '⚠️ 风控已关闭' : '✅ 风控已恢复')
+    message.success(newState ? '️ 风控已关闭' : ' 风控已恢复')
   } catch (e: any) {
     message.error('操作失败: ' + (e.response?.data?.detail || e.message))
   } finally {

@@ -98,6 +98,7 @@ export interface HubAgentUpdateRequest {
   temperature?: number
   polling_interval?: number
   allowed_tools?: string[] | null
+  active_template_id?: number | null
 }
 
 /** Hub 全局状态 */

@@ -524,7 +524,7 @@ onMounted(loadAll)
                 <div v-if="t.step_evaluate" class="step"><strong>③ 评估:</strong> {{ t.step_evaluate }}</div>
                 <div v-if="t.step_decide" class="step"><strong>④ 决策:</strong> {{ t.step_decide }}</div>
                 <n-divider v-if="t.ai_reflection" style="margin: 8px 0" />
-                <div v-if="t.ai_reflection" class="step"><strong>💭 反思:</strong> {{ t.ai_reflection }}</div>
+                <div v-if="t.ai_reflection" class="step"><strong> 反思:</strong> {{ t.ai_reflection }}</div>
                 <div class="thinking-result">
                   <n-tag :type="t.decision === 'trade' ? 'success' : t.decision === 'skip' ? 'default' : 'warning'" size="small">
                     {{ t.decision === 'trade' ? '交易' : t.decision === 'skip' ? '跳过' : '观察' }}

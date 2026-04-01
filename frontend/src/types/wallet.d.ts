@@ -2,7 +2,7 @@
  * Wallet Type Definitions
  * ========================
  * 
- * 🔒 数据契约: 这些类型定义必须严格匹配后端 Pydantic 模型
+ *  数据契约: 这些类型定义必须严格匹配后端 Pydantic 模型
  * 
  * Backend Source:
  *   - backend/app/api/wallet.py → WalletBalanceResponse
@@ -16,8 +16,8 @@
 /**
  * GET /api/wallet/balance 响应
  * 
- * ⚠️ 字段命名: 必须使用下划线 (snake_case)，与后端一致
- * ⚠️ 值类型: 后端 Decimal 序列化后可能是字符串
+ * ️ 字段命名: 必须使用下划线 (snake_case)，与后端一致
+ * ️ 值类型: 后端 Decimal 序列化后可能是字符串
  */
 export interface WalletAPIResponse {
   /** 可用余额 (可用来下单的资金) */
@@ -26,10 +26,10 @@ export interface WalletAPIResponse {
   /** 冻结金额 (已下单锁定的资金) */
   frozen: string | number
   
-  /** 总权益 = available + frozen (⚠️ 下划线!) */
+  /** 总权益 = available + frozen (️ 下划线!) */
   total_equity: string | number
   
-  /** 总盈亏 (已实现盈亏累计) (⚠️ 下划线!) */
+  /** 总盈亏 (已实现盈亏累计) (️ 下划线!) */
   total_pnl: string | number
 
   /** 未实现盈亏 (持仓浮盈浮亏) */

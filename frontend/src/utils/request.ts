@@ -79,7 +79,7 @@ request.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`
     }
     
-    // ★ 为每个请求绑定 AbortController（除非已有 signal）
+    //  为每个请求绑定 AbortController（除非已有 signal）
     if (!config.signal) {
       const controller = new AbortController()
       config.signal = controller.signal
@@ -103,17 +103,17 @@ let pendingRequests: Array<(token: string) => void> = []
 
 request.interceptors.response.use(
   (response) => {
-    // ★ 请求完成，从 pending 集合中移除
+    //  请求完成，从 pending 集合中移除
     const ctrl = (response.config as any)?._abortController as AbortController | undefined
     if (ctrl) _pendingControllers.delete(ctrl)
     return response
   },
   async (error: AxiosError) => {
-    // ★ 清理 pending controller
+    //  清理 pending controller
     const ctrl = (error.config as any)?._abortController as AbortController | undefined
     if (ctrl) _pendingControllers.delete(ctrl)
     
-    // ★ 被路由切换取消的请求 — 完全静默（不触发 catch）
+    //  被路由切换取消的请求 — 完全静默（不触发 catch）
     if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
       // 返回一个永远不 resolve 的 Promise，防止上层 catch 报错
       return new Promise(() => {})

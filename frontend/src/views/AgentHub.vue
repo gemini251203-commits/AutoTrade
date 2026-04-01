@@ -380,7 +380,7 @@ async function loadWarRoomHistory(keyword?: string, page?: number, autoScroll = 
     logHasMore.value = data?.has_more ?? (logs.length >= logPageSize)
     logPage.value = p
     
-    // ★ 检测是否有新日志（比较第一条日志的时间戳）
+    //  检测是否有新日志（比较第一条日志的时间戳）
     const newFirstTime = logs[0]?.created_at || ''
     const oldFirstTime = (warRoomMessages.value[0] as any)?._rawTime || ''
     const hasNewContent = newFirstTime !== oldFirstTime
@@ -395,7 +395,7 @@ async function loadWarRoomHistory(keyword?: string, page?: number, autoScroll = 
       return msg
     }))
     
-    // ★ 只在有新内容且允许自动滚动时才滚动
+    //  只在有新内容且允许自动滚动时才滚动
     if (autoScroll && hasNewContent) scrollWarRoom()
   } catch (e) {
     console.error('Failed to load war room history:', e)
@@ -437,14 +437,14 @@ async function searchLogs() {
   await loadWarRoomHistory(logSearchKeyword.value.trim() || undefined)
 }
 
-// ★ 组件卸载标记 — 防止卸载后轮询请求继续发出
+//  组件卸载标记 — 防止卸载后轮询请求继续发出
 let _unmounted = false
 let _loadingData = false
 
 onMounted(() => {
   _unmounted = false
   loading.value = true
-  // ★ 不 await — 让数据在后台加载，不阻塞路由切换和页面渲染
+  //  不 await — 让数据在后台加载，不阻塞路由切换和页面渲染
   Promise.all([loadData(), loadWarRoomHistory()]).finally(() => {
     loading.value = false
   })
@@ -452,7 +452,7 @@ onMounted(() => {
   pollTimer = setInterval(() => {
     if (!_unmounted && !_loadingData) {
       loadData()
-      // ★ 自动刷新 War Room 日志（仅在首页且未搜索、且不在生成纪要时）
+      //  自动刷新 War Room 日志（仅在首页且未搜索、且不在生成纪要时）
       if (!logSearchKeyword.value && logPage.value === 1 && !consolidating.value) {
         loadWarRoomHistory()
       }
@@ -578,14 +578,27 @@ async function handleSave() {
       }
       // allowed_tools 始终显式传递（null = 全部，[] = 禁用，[...] = 指定）
       data.allowed_tools = editForm.value.allowed_tools
+
+      // ★ 检测用户是否修改了 system_prompt: 如果已绑定模板且内容有变化，自动解绑模板
+      if (editingAgent.value.active_template_id) {
+        const promptChanged = editForm.value.system_prompt !== editingAgent.value.system_prompt
+        if (promptChanged && editForm.value.system_prompt) {
+          data.active_template_id = null  // 解绑模板，让手动编辑生效
+          message.info('已自动解绑提示词模板，您的手动编辑将直接生效')
+        }
+      }
+
       await updateHubAgent(editingAgent.value.id, data)
+      message.success('保存成功')
     } else {
       await createHubAgent(editForm.value)
+      message.success('创建成功')
     }
     showEditModal.value = false
     await loadData()
-  } catch (e) {
+  } catch (e: any) {
     console.error('Save agent failed:', e)
+    message.error(`保存失败: ${e?.response?.data?.detail || e?.message || '未知错误'}`)
   }
 }
 
@@ -674,7 +687,7 @@ function formatWakeCondition(cond: { type: string; symbol: string; value: number
 }
 
 // 立刻生成今日复盘
-// ★ 模块级状态：即使用户切换页面，consolidation 请求也不会中断
+//  模块级状态：即使用户切换页面，consolidation 请求也不会中断
 let _consolidationPromise: Promise<any> | null = null
 
 async function handleConsolidate() {
@@ -686,7 +699,7 @@ async function handleConsolidate() {
   warRoomMessages.value.unshift(wrMsg('system', '[System] 正在生成今日《董事会纪要》，可能需要 30-60 秒...', { name: 'System' }))
   scrollWarRoom()
 
-  // ★ 使用原生 fetch（不受 axios 拦截器/组件生命周期影响，页面切换也不取消）
+  //  使用原生 fetch（不受 axios 拦截器/组件生命周期影响，页面切换也不取消）
   const token = (await import('@/utils/request')).getAuthToken()
   _consolidationPromise = fetch('/api/hub/memory/consolidate', {
     method: 'POST',
@@ -707,7 +720,7 @@ async function handleConsolidate() {
     const text = `[今日董事会纪要] (重要性: ${data.importance}/10)\n\n${data.summary}\n\n[核心教训]: ${data.key_lessons}`
     // 保存到 hub_logs
     try { await saveHubLog({ agent_name: '书记员', log_type: 'ai_text', content: text }) } catch {}
-    // ★ 刷新 War Room 日志列表，确保纪要立刻显示
+    //  刷新 War Room 日志列表，确保纪要立刻显示
     await loadWarRoomHistory()
     message.success('董事会纪要生成成功！')
   } catch (e: any) {
@@ -1034,7 +1047,7 @@ async function exportDailyRecap(date: string) {
               <span>运行 <b class="text-gray-300">{{ agent.total_runs }}</b></span>
               <span>交易 <b class="text-purple-400">{{ agent.total_trades }}</b></span>
               <span>T° <b class="text-gray-300">{{ agent.temperature }}</b></span>
-              <NTag v-if="agent.active_template_id" size="tiny" :bordered="false" style="background: rgba(168,85,247,0.12); color: #c084fc; font-size: 10px; height: 16px; padding: 0 4px;">📋 模板</NTag>
+              <NTag v-if="agent.active_template_id" size="tiny" :bordered="false" style="background: rgba(168,85,247,0.12); color: #c084fc; font-size: 10px; height: 16px; padding: 0 4px;"> 模板</NTag>
               <span v-if="agent.last_run_at" class="ml-auto text-gray-600 truncate" style="max-width: 100px;">{{ new Date(agent.last_run_at).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Shanghai' }) }}</span>
             </div>
 
@@ -1068,7 +1081,7 @@ async function exportDailyRecap(date: string) {
                 <span class="text-blue-500/50">{{ ci > 0 ? '或' : '┗' }}</span>
                 <span v-if="cond.type === 'price_above'" class="text-green-400">▲</span>
                 <span v-else-if="cond.type === 'price_below'" class="text-red-400">▼</span>
-                <span v-else class="text-yellow-400">⚡</span>
+                <span v-else class="text-yellow-400"></span>
                 <span>{{ formatWakeCondition(cond) }}</span>
               </div>
             </div>
@@ -1318,7 +1331,7 @@ async function exportDailyRecap(date: string) {
           <div>
             <label class="text-[11px] text-gray-500 mb-1 block font-semibold">
               API Key <span class="text-gray-700">(可选，覆盖全局)</span>
-              <span v-if="editingAgent?.has_api_key" class="text-green-500 ml-1">✓ 已保存</span>
+              <span v-if="editingAgent?.has_api_key" class="text-green-500 ml-1"> 已保存</span>
             </label>
             <NInput v-model:value="editForm.api_key" type="password" show-password-on="click" :placeholder="editingAgent?.has_api_key ? '•••••• (已保存，留空不修改)' : '留空则使用全局配置'" />
           </div>
@@ -1339,14 +1352,14 @@ async function exportDailyRecap(date: string) {
               System Prompt (KPI)
               <span class="text-gray-700 font-normal ml-2">— 在这里写入角色定位、交易风格、绩效目标</span>
             </label>
-            <a href="/prompts" target="_blank" class="text-[10px] text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1">
-              📋 提示词模板管理 →
-            </a>
+            <router-link to="/prompts" class="text-[10px] text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1">
+               提示词模板管理 →
+            </router-link>
           </div>
           <div v-if="editingAgent?.active_template_id" class="mb-2 p-2 rounded-lg border border-purple-500/20 bg-purple-500/5 text-xs text-purple-300 flex items-center gap-2">
-            <span>📋</span>
+            <span></span>
             <span>此 Agent 已绑定提示词模板，下方内容为备用提示词。激活的模板优先使用。</span>
-            <a href="/prompts" target="_blank" class="text-purple-400 hover:underline ml-auto">管理</a>
+            <router-link to="/prompts" class="text-purple-400 hover:underline ml-auto">管理</router-link>
           </div>
           <div class="rounded-lg border border-white/10 overflow-hidden" style="background: rgba(0,0,0,0.3);">
             <NInput
@@ -1368,7 +1381,7 @@ async function exportDailyRecap(date: string) {
         <div>
           <div class="flex items-center justify-between mb-2">
             <label class="text-[11px] text-gray-500 font-semibold">
-              🔒 工具权限
+               工具权限
               <span class="text-gray-600 font-normal ml-1">勾选授权工具，未勾选工具不会发送给 AI</span>
             </label>
             <div class="flex items-center gap-2">

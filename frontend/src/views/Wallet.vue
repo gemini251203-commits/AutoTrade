@@ -355,7 +355,7 @@ onMounted(async () => {
         <!-- Funding Account -->
         <div class="account-card funding">
           <div class="account-card-header">
-            <span class="account-icon">🏦</span>
+            <span class="account-icon"></span>
             <span class="account-title">资金账户</span>
           </div>
           <div class="account-balance">

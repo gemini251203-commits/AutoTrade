@@ -946,7 +946,7 @@ onMounted(() => {
             color: createMode === 'pipeline' ? '#a855f7' : '#6b7280',
           }"
         >
-          🔗 流水线策略
+           流水线策略
         </button>
         <button
           @click="createMode = 'yaml'"
@@ -956,7 +956,7 @@ onMounted(() => {
             color: createMode === 'yaml' ? '#a855f7' : '#6b7280',
           }"
         >
-          📝 传统 YAML 策略
+           传统 YAML 策略
         </button>
       </div>
 
@@ -1057,7 +1057,7 @@ onMounted(() => {
                 border: selectedAlpha === 'yaml_condition' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
               }"
             >
-              <div class="text-sm text-white font-medium">🔢 技术指标条件</div>
+              <div class="text-sm text-white font-medium"> 技术指标条件</div>
               <div class="text-xs text-gray-500 mt-1">RSI, MACD, EMA 等</div>
             </button>
             <button
@@ -1068,7 +1068,7 @@ onMounted(() => {
                 border: selectedAlpha === 'ai_agent' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
               }"
             >
-              <div class="text-sm text-white font-medium">🤖 AI 智能判断</div>
+              <div class="text-sm text-white font-medium"> AI 智能判断</div>
               <div class="text-xs text-gray-500 mt-1">AI 大模型综合分析</div>
             </button>
             <button
@@ -1079,7 +1079,7 @@ onMounted(() => {
                 border: selectedAlpha === 'chanlun_ai' ? '1px solid rgba(138,43,226,0.4)' : '1px solid rgba(255,255,255,0.06)',
               }"
             >
-              <div class="text-sm text-white font-medium">🔮 AI 缠论研判</div>
+              <div class="text-sm text-white font-medium"> AI 缠论研判</div>
               <div class="text-xs text-gray-500 mt-1">分型+背驰+AI推理</div>
             </button>
           </div>
@@ -1194,7 +1194,7 @@ onMounted(() => {
               <div class="text-right text-xs text-purple-400 mt-0.5">{{ riskMaxDailyTrades }} 次</div>
             </div>
             <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; margin-top: 8px;">
-              <div class="text-xs text-gray-400 mb-3">📌 专属止损止盈（覆盖全局设置）</div>
+              <div class="text-xs text-gray-400 mb-3"> 专属止损止盈（覆盖全局设置）</div>
               <div>
                 <label class="text-xs text-gray-500">默认止损 (%)</label>
                 <NSlider v-model:value="riskStopLossPct" :min="0.5" :max="20" :step="0.5" class="mt-1" />

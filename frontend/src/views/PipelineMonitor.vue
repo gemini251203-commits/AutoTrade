@@ -214,7 +214,7 @@ onUnmounted(() => {
                 @click="handleRiskBypass"
                 round
               >
-                {{ status.risk_bypass ? '❗ 已关闭 · 开启' : '✅ 已开启' }}
+                {{ status.risk_bypass ? ' 已关闭 · 开启' : ' 已开启' }}
               </NButton>
             </div>
           </div>

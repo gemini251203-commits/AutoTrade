@@ -150,7 +150,7 @@ export interface AnalyzeResponse {
  * @param symbol 可选指定币种
  * @returns 解析结果
  * 
- * ⚠️ AI 推理可能需要较长时间，使用 60s 超时
+ * ️ AI 推理可能需要较长时间，使用 60s 超时
  */
 export async function parseSignal(text: string, symbol?: string): Promise<ParseSignalResponse> {
   const response = await request.post<ParseSignalResponse>('/ai/parse-signal', {

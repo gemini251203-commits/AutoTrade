@@ -83,7 +83,7 @@ export async function getAccountRisk(): Promise<AccountRiskResponse> {
 /**
  * 手动触发风控检查
  * 
- * ⚠️ 此接口仅用于测试/管理
+ * ️ 此接口仅用于测试/管理
  * 
  * @returns 检查结果
  */
