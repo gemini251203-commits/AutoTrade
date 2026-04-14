@@ -436,24 +436,6 @@ async def board_deliberate(
 # 路由: War Room 日志
 # ============================================================
 
-class HubLogEntry(BaseModel):
-    """日志条目"""
-    id: int
-    agent_id: Optional[int]
-    agent_name: str
-    log_type: str
-    content: str
-    created_at: str
-    
-    model_config = ConfigDict(from_attributes=True)
-
-
-class HubLogSaveRequest(BaseModel):
-    """前端保存日志请求"""
-    agent_id: Optional[int] = None
-    agent_name: str = "System"
-    log_type: str = "system"
-    content: str
 
 
 @router.get("/logs")
@@ -604,8 +586,6 @@ async def trigger_consolidation(
         raise HTTPException(status_code=500, detail=f"坍缩失败: {str(e)}")
 
 
-class SecretarySettingRequest(BaseModel):
-    agent_id: Optional[int] = None
 
 
 @router.post("/settings/secretary")
