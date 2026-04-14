@@ -412,19 +412,58 @@ async def run_strategy_once(
     if not strategy:
         raise HTTPException(status_code=404, detail="策略不存在")
     
-    from app.services.agent.autopilot import autopilot
+    from app.services.quant.strategy import StrategyEngine
     try:
-        intervals = [strategy.interval]
-        reply = await autopilot._run_cycle(
-            user_id=current_user.id,
-            symbol=strategy.symbol,
-            intervals=intervals,
+        engine = StrategyEngine()
+        config = engine.parse_yaml(strategy.config_yaml)
+        
+        # 获取 K 线数据
+        from app.core.network import net_manager
+        async with net_manager.get_client(timeout=15.0) as client:
+            resp = await client.get(
+                "https://fapi.binance.com/fapi/v1/klines",
+                params={
+                    "symbol": strategy.symbol.upper(),
+                    "interval": strategy.interval,
+                    "limit": 200,
+                },
+            )
+            if resp.status_code != 200:
+                raise HTTPException(status_code=502, detail="获取行情数据失败")
+            raw = resp.json()
+            klines = [{
+                "open_time": k[0],
+                "open": float(k[1]),
+                "high": float(k[2]),
+                "low": float(k[3]),
+                "close": float(k[4]),
+                "volume": float(k[5]),
+            } for k in raw]
+        
+        # 执行策略信号计算
+        signal = engine.evaluate(config, klines)
+        
+        # 记录执行日志
+        log = StrategyLog(
             strategy_id=strategy.id,
+            signal_type=signal.get("signal", "hold"),
+            action="run_once",
+            side=signal.get("side"),
         )
+        db.add(log)
+        
+        # 更新策略最后运行时间
+        from app.core.time_utils import utc_now
+        strategy.last_run_at = utc_now()
+        strategy.last_signal = signal.get("signal", "hold")
+        await db.commit()
+        
         return {
             "message": f"策略 '{strategy.name}' 已执行一次决策",
-            "reply": reply,
+            "signal": signal,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"策略 '{strategy.name}' (#{strategy.id}) 决策执行失败")
         raise HTTPException(status_code=500, detail=f"决策执行失败: {str(e)}")

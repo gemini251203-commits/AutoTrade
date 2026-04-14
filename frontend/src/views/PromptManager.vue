@@ -102,8 +102,8 @@ async function loadData() {
       listTemplates(true),
       listHubAgents(),
     ])
-    templates.value = (tRes as any).data?.templates || (tRes as any).templates || []
-    agents.value = (aRes as any).data?.agents || (aRes as any).agents || []
+    templates.value = (tRes as any)?.templates || []
+    agents.value = (aRes as any)?.agents || []
   } catch (e) {
     console.error('Load prompt data failed:', e)
   } finally {
@@ -116,7 +116,7 @@ async function loadPerf(id: number) {
   perfData.value = null
   try {
     const res = await getTemplatePerformance(id)
-    perfData.value = (res as any).data || res as any
+    perfData.value = res as any
   } catch (e) {
     console.error('Load performance failed:', e)
   } finally {
@@ -128,7 +128,7 @@ async function loadRecommendation() {
   recLoading.value = true
   try {
     const res = await recommendTemplate()
-    const data = (res as any).data || res as any
+    const data = res as any
     recommendation.value = data?.recommendation || null
   } catch (e) {
     console.error('Load recommendation failed:', e)
@@ -237,7 +237,7 @@ async function handleActivate() {
   activating.value = true
   try {
     const res = await activateTemplate(activateTemplateId.value, activateAgentId.value)
-    const data = (res as any).data || res as any
+    const data = res as any
     message.success(data?.message || '已激活')
     showActivateModal.value = false
     await loadData()

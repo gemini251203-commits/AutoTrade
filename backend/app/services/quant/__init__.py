@@ -8,5 +8,5 @@ v2.0 核心模块
 - strategy: YAML 策略解析 + 条件评估
 - ai_reviewer: AI 审核员（多空博弈）
 - reflector: AI 反思记忆
-- strategy_scheduler: 后台策略自动调度 (原 autopilot)
+- strategy_scheduler: 后台策略自动调度
 """

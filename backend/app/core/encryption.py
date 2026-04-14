@@ -87,6 +87,53 @@ def decrypt_api_key(encrypted_key: str) -> str:
         raise ValueError("Decryption failed")
 
 
+
+def decrypt_api_key_safe(encrypted_key: str) -> str:
+    """
+    安全解密 API Key — 自动兼容多种加密格式
+    
+    按优先级依次尝试:
+    1. Fernet 解密
+    2. Base64 解码
+    3. 原始值直接返回 (sk-xxx 格式)
+    
+    Args:
+        encrypted_key: 加密后的 API Key
+        
+    Returns:
+        明文 API Key
+        
+    Raises:
+        ValueError: 所有解密方式均失败
+    """
+    if not encrypted_key:
+        return ""
+    
+    # 方法 1: Fernet
+    try:
+        return decrypt_api_key(encrypted_key)
+    except Exception:
+        pass
+    
+    # 方法 2: Base64 (历史兼容)
+    try:
+        decoded = base64.b64decode(encrypted_key.encode()).decode()
+        if decoded and decoded.isprintable() and len(decoded) > 5:
+            return decoded
+    except Exception:
+        pass
+    
+    # 方法 3: 原始值 (未加密的 key)
+    if encrypted_key.startswith("sk-") or len(encrypted_key) > 20:
+        return encrypted_key
+    
+    raise ValueError("Decryption failed - unknown format")
+
+
+# 别名 (向后兼容)
+encrypt_value = encrypt_api_key
+
+
 def mask_api_key(api_key: str, show_chars: int = 4) -> str:
     """
     脱敏显示 API Key

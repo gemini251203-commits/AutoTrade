@@ -11,7 +11,6 @@ import {
   NotificationsOutline,
   LogOutOutline,
   AnalyticsOutline,
-  ChatboxEllipsesOutline,
   BookOutline,
   NewspaperOutline,
   ShieldCheckmarkOutline,
@@ -32,7 +31,6 @@ const navItems = [
   { key: 'dashboard', label: 'Dashboard', icon: SpeedometerOutline, route: '/' },
   { key: 'signal', label: 'AI 信号助手', icon: HardwareChipOutline, route: '/signal' },
   { key: 'strategy', label: '量化策略', icon: AnalyticsOutline, route: '/strategy' },
-  { key: 'chat', label: 'AI Agent', icon: ChatboxEllipsesOutline, route: '/chat' },
   { key: 'journal', label: '交易日志', icon: BookOutline, route: '/journal' },
   { key: 'news', label: '新闻', icon: NewspaperOutline, route: '/news' },
   { key: 'hub', label: 'AI Hub', icon: GitNetworkOutline, route: '/hub' },
@@ -48,7 +46,6 @@ const activeNavKey = computed(() => {
   const path = route.path
   if (path === '/signal') return 'signal'
   if (path === '/strategy') return 'strategy'
-  if (path === '/chat') return 'chat'
   if (path === '/journal') return 'journal'
   if (path === '/news') return 'news'
   if (path === '/hub') return 'hub'

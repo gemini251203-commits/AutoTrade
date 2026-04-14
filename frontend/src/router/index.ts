@@ -15,11 +15,8 @@ const SignalAssistant = () => import('@/views/SignalAssistant.vue')
 const Wallet = () => import('@/views/Wallet.vue')
 const Admin = () => import('@/views/Admin.vue')
 const StrategyManager = () => import('@/views/StrategyManager.vue')
-const ChatAgent = () => import('@/views/ChatAgent.vue')
 const TradeJournal = () => import('@/views/TradeJournal.vue')
-const AutopilotDashboard = () => import('@/views/AutopilotDashboard.vue')
 const NewsCenter = () => import('@/views/NewsCenter.vue')
-const PipelineMonitor = () => import('@/views/PipelineMonitor.vue')
 const GridDashboard = () => import('@/views/GridDashboard.vue')
 const RiskDashboard = () => import('@/views/RiskDashboard.vue')
 const AgentHub = () => import('@/views/AgentHub.vue')
@@ -71,33 +68,15 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
-    path: '/chat',
-    name: 'ChatAgent',
-    component: ChatAgent,
-    meta: { requiresAuth: true },
-  },
-  {
     path: '/journal',
     name: 'TradeJournal',
     component: TradeJournal,
     meta: { requiresAuth: true },
   },
   {
-    path: '/autopilot',
-    name: 'AutopilotDashboard',
-    component: AutopilotDashboard,
-    meta: { requiresAuth: true },
-  },
-  {
     path: '/news',
     name: 'NewsCenter',
     component: NewsCenter,
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/pipeline',
-    name: 'PipelineMonitor',
-    component: PipelineMonitor,
     meta: { requiresAuth: true },
   },
   {

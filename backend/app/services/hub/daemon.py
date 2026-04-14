@@ -1,16 +1,10 @@
 """
 Hub Daemon — 智能体中枢守护进程
 ====================================
-平行于 autopilot.py, 完全独立的调度器。
-
 职责:
 - 定时扫描 active 智能体
 - 独裁者模式: 单 Agent 自主循环
 - 董事会模式: 多 AI 辩论 → 执行共识
-
-与 autopilot.py 的关系:
-- 完全不修改 autopilot.py
-- 智能体可通过 tools 调用 start_autopilot 间接使用老引擎
 """
 
 import asyncio
@@ -251,6 +245,22 @@ class HubDaemon:
         logger.info(f"[HubDaemon] [CYCLE] Agent #{agent.id} '{agent.name}' executing cycle")
         
         prompt = self._build_cycle_prompt(agent, wake_reason=wake_reason)
+        
+        # ★ 强制注入多级别行情特征 (多周期共振)
+        try:
+            from app.services.agent.tools import get_klines
+            tf_snapshot = []
+            for sym in ["BTCUSDT", "ETHUSDT"]:
+                for interval in ["15m", "1h", "4h"]:
+                    kl_res = await get_klines(db, user_id, symbol=sym, interval=interval, limit=1)
+                    kl_data = _json.loads(kl_res)
+                    if "data" in kl_data and kl_data["data"]:
+                        k = kl_data["data"][0]
+                        tf_snapshot.append(f"[{sym} {interval}] 收盘:{k['close']:.1f} (高:{k['high']:.1f} 低:{k['low']:.1f})")
+            if tf_snapshot:
+                prompt += "\n\n📊 系统多级别环境快照 (请强制参考各周期高低点与结构):\n" + "\n".join(tf_snapshot)
+        except Exception as e:
+            logger.warning(f"[HubDaemon] Multi-TF context injection failed: {e}")
         
         # ★ 核心改造: 直接遍历 chat_stream, 逐事件推送到 hub_logs
         full_reply = ""
@@ -567,7 +577,10 @@ class HubDaemon:
             "   - 如果市场波动剧烈，设更紧的条件; 市场无聊时设更宽松的条件\n"
             "   - ❌ 错误: 只在汇报中写'唤醒条件: BTC>88000'但不调用工具\n"
             "   - ✅ 正确: 调用 set_wake_conditions(conditions_json=[...], timeout_minutes=30)\n\n"
-            "注意: 调用工具时请明确指定 symbol 参数。风控原则: 单笔投入不超过账户余额的 30%，网格杠杆使用 10-20 倍，合约杠杆使用 10-15 倍。"
+            "注意: 调用工具时请明确指定 symbol 参数。\n"
+            "💰 资金分配与杠杆铁律:\n"
+            "   - 每次开仓【实际占用保证金】必须在 100~300 USDT 之间，合约杠杆固定设定为 20 倍！\n"
+            "   - 绝对禁止开出几 U 或十几 U 的蚂蚁仓！请务必根据当前币价仔细计算下单数量(quantity)，确保 quantity × price ÷ 20 ≈ 100 甚至更多。"
         )
     
     def get_running_agents(self) -> list:

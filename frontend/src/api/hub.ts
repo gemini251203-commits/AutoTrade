@@ -37,7 +37,7 @@ export interface ToolListResponse {
 
 /** 获取系统所有工具 */
 export function listAllTools() {
-  return request.get<ToolListResponse>('/tools/')
+  return request.get<ToolListResponse>('/tools/').then(res => res.data)
 }
 
 // ==================== Types (1:1 mirror of Pydantic) ====================
@@ -136,27 +136,27 @@ export interface BoardResult {
 
 /** 列出智能体 */
 export function listHubAgents() {
-  return request.get<{ agents: HubAgent[] }>('/hub/agents')
+  return request.get<{ agents: HubAgent[] }>('/hub/agents').then(res => res.data)
 }
 
 /** 创建智能体 */
 export function createHubAgent(data: HubAgentCreateRequest) {
-  return request.post<HubAgent>('/hub/agents', data)
+  return request.post<HubAgent>('/hub/agents', data).then(res => res.data)
 }
 
 /** 更新智能体 */
 export function updateHubAgent(agentId: number, data: HubAgentUpdateRequest) {
-  return request.put<HubAgent>(`/hub/agents/${agentId}`, data)
+  return request.put<HubAgent>(`/hub/agents/${agentId}`, data).then(res => res.data)
 }
 
 /** 删除智能体 */
 export function deleteHubAgent(agentId: number) {
-  return request.delete(`/hub/agents/${agentId}`)
+  return request.delete(`/hub/agents/${agentId}`).then(res => res.data)
 }
 
 /** 控制智能体 (start/stop/run_once) */
 export function controlHubAgent(agentId: number, action: string) {
-  return request.post<HubAgent>(`/hub/agents/${agentId}/activate`, { action })
+  return request.post<HubAgent>(`/hub/agents/${agentId}/activate`, { action }).then(res => res.data)
 }
 
 /** 日志条目 */
@@ -171,22 +171,22 @@ export interface HubLogEntry {
 
 /** 获取历史日志 */
 export function getHubLogs(params?: { limit?: number; offset?: number; keyword?: string; agent_id?: number }) {
-  return request.get<{ logs: HubLogEntry[] }>('/hub/logs', { params })
+  return request.get<{ logs: HubLogEntry[] }>('/hub/logs', { params }).then(res => res.data)
 }
 
 /** 保存一条日志 */
 export function saveHubLog(data: { agent_id?: number | null; agent_name?: string; log_type?: string; content: string }) {
-  return request.post('/hub/logs', data)
+  return request.post('/hub/logs', data).then(res => res.data)
 }
 
 /** 获取 Hub 全局状态 */
 export function getHubStatus() {
-  return request.get<HubStatus>('/hub/status')
+  return request.get<HubStatus>('/hub/status').then(res => res.data)
 }
 
 /** 董事会辩论 */
 export function boardDeliberate(topic: string, symbol: string = 'BTCUSDT') {
-  return request.post<BoardResult>('/hub/board/deliberate', { topic, symbol })
+  return request.post<BoardResult>('/hub/board/deliberate', { topic, symbol }).then(res => res.data)
 }
 
 // chatWithAgent() 已移除: EventSource 只支持 GET，但后端是 POST。
@@ -259,7 +259,7 @@ export function triggerConsolidation() {
     importance: number
   }>('/hub/memory/consolidate', null, {
     timeout: 180_000,  // 180s — AI 生成纪要需要较长时间
-  })
+  }).then(res => res.data)
 }
 
 /** 获取近 N 天董事会纪要 */
@@ -275,7 +275,7 @@ export function getBoardMinutes(days: number = 7) {
       pnl_total: number
       created_at: string
     }>
-  }>('/hub/memory/minutes', { params: { days } })
+  }>('/hub/memory/minutes', { params: { days } }).then(res => res.data)
 }
 
 /** 获取指定月份的董事会纪要 (日历视图用) */
@@ -291,7 +291,7 @@ export function getMonthlyMinutes(year: number, month: number) {
       pnl_total: number
       created_at: string
     }>
-  }>('/hub/memory/minutes', { params: { year, month } })
+  }>('/hub/memory/minutes', { params: { year, month } }).then(res => res.data)
 }
 
 /** 设置首席书记员 */
@@ -299,17 +299,17 @@ export function setSecretary(agentId: number | null) {
   return request.post<{ success: boolean; secretary_agent_id: number | null }>(
     '/hub/settings/secretary',
     { agent_id: agentId },
-  )
+  ).then(res => res.data)
 }
 
 /** 获取首席书记员 */
 export function getSecretary() {
-  return request.get<{ secretary_agent_id: number | null }>('/hub/settings/secretary')
+  return request.get<{ secretary_agent_id: number | null }>('/hub/settings/secretary').then(res => res.data)
 }
 
 /** 清空 War Room 日志 */
 export function clearHubLogs() {
-  return request.delete<{ success: boolean }>('/hub/logs')
+  return request.delete<{ success: boolean }>('/hub/logs').then(res => res.data)
 }
 
 /** 每日复盘一键导出 (返回 Markdown 纯文本) */
@@ -347,5 +347,5 @@ export interface WakeConditionsResponse {
 
 /** 查询 Agent 当前唤醒条件 */
 export function getWakeConditions(agentId: number) {
-  return request.get<WakeConditionsResponse>(`/hub/agents/${agentId}/wake-conditions`)
+  return request.get<WakeConditionsResponse>(`/hub/agents/${agentId}/wake-conditions`).then(res => res.data)
 }

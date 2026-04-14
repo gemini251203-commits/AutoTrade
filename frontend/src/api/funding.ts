@@ -44,12 +44,12 @@ export interface MyFees {
 
 /** 获取所有交易对当前费率 */
 export function getFundingRates() {
-  return request.get<FundingRatesResponse>('/funding/rates')
+  return request.get<FundingRatesResponse>('/funding/rates').then(res => res.data)
 }
 
 /** 获取单个交易对详情 */
 export function getFundingRateDetail(symbol: string) {
-  return request.get<FundingRate>(`/funding/rates/${symbol}`)
+  return request.get<FundingRate>(`/funding/rates/${symbol}`).then(res => res.data)
 }
 
 /** 获取历史费率 */
@@ -57,10 +57,10 @@ export function getFundingHistory(symbol: string, limit = 100) {
   return request.get<{ symbol: string; history: FundingHistory[]; count: number }>(
     `/funding/history/${symbol}`,
     { params: { limit } }
-  )
+  ).then(res => res.data)
 }
 
 /** 获取用户累计资金费用 */
 export function getMyFundingFees() {
-  return request.get<MyFees>('/funding/my-fees')
+  return request.get<MyFees>('/funding/my-fees').then(res => res.data)
 }

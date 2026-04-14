@@ -4,27 +4,39 @@
 
 ```
 tests/
-├── integration/         # 全链路集成测试
-│   ├── test_connection.py       # 网络连通性和 AI 服务测试
-│   ├── test_dataflow.py         # API 端点和字段一致性测试
-│   ├── test_dataflow_complete.py # 完整数据流验证 (Auth→Wallet→Position→Risk→Close)
-│   └── test_simple.py           # 简化调试测试
-├── grid/                # 网格交易测试
-│   ├── test_grid.py             # 网格创建测试
-│   ├── test_grid_start.py       # 网格启动测试
-│   └── test_full_lifecycle.py   # 网格完整生命周期测试
-└── wallet/              # 钱包测试
-    └── test_wallet.py           # 多用户钱包隔离测试
+├── __init__.py
+├── README.md                    # 本文件
+├── test_trading_logic.py        # 交易核心逻辑测试 (费率/滑点/P&L/保证金/止盈止损/强平/资金流转)
+├── test_circuit_breaker.py      # API 断路器状态机测试 (CLOSED→OPEN→HALF_OPEN→恢复)
+├── test_encryption.py           # API Key 加密/解密/脱敏/多格式兼容测试
+├── test_risk_model.py           # 风控配置加载 (默认值/类型安全/热加载/边界检查)
+└── test_grid_strategy.py        # 网格策略算法测试 (等差/等比网格/数量计算/利润计算)
 ```
 
 ## 运行方式
 
-集成测试需要后端服务运行在 `localhost:8000`：
+### 纯逻辑单元测试 (无需后端服务)
 
 ```bash
-# 单个测试
-python tests/integration/test_dataflow_complete.py
+cd backend
 
-# 网格测试 (需要数据库连接)
-python tests/grid/test_grid.py
+# 运行全部单元测试
+python -m pytest tests/ -v
+
+# 运行单个测试文件
+python -m pytest tests/test_trading_logic.py -v
+python -m pytest tests/test_circuit_breaker.py -v
+python -m pytest tests/test_encryption.py -v
+python -m pytest tests/test_risk_model.py -v
+python -m pytest tests/test_grid_strategy.py -v
 ```
+
+### 测试分类
+
+| 文件 | 类别 | 依赖 | 说明 |
+|------|------|------|------|
+| `test_trading_logic.py` | 单元测试 | 无外部依赖 | 交易引擎核心公式验证 |
+| `test_circuit_breaker.py` | 单元测试 | 无外部依赖 | 断路器状态机转换逻辑 |
+| `test_encryption.py` | 单元测试 | 需 `cryptography` 包 | API Key 安全存储验证 |
+| `test_risk_model.py` | 单元测试 | 需 `pyyaml` 包 | 风控参数加载与验证 |
+| `test_grid_strategy.py` | 单元测试 | 无外部依赖 | 网格价格数学计算 |

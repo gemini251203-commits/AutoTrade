@@ -20,105 +20,27 @@ from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select, func
 
 from app.api.deps import CurrentUser, DbSession
 from app.models.hub_agent import HubAgent, HubAgentStatus
 from app.core.time_utils import utc_now
+from app.core.encryption import encrypt_api_key, decrypt_api_key_safe
+from app.schemas.hub import (
+    HubAgentCreateRequest,
+    HubAgentUpdateRequest,
+    HubAgentActionRequest,
+    HubAgentResponse,
+    HubAgentListResponse,
+    HubStatusResponse,
+    HubBoardRequest,
+    HubChatRequest,
+    HubLogSaveRequest,
+    HubLogEntry,
+    SecretarySettingRequest,
+)
 
 router = APIRouter(tags=["Agent Hub"])
-
-
-# ============================================================
-# Pydantic Schemas (契约层)
-# ============================================================
-
-class HubAgentCreateRequest(BaseModel):
-    """创建智能体请求"""
-    name: str
-    role: str = "trader"
-    avatar: str = "BOT"
-    provider: str = "deepseek"
-    model: str = "deepseek-chat"
-    api_base_url: Optional[str] = None
-    api_key: Optional[str] = None    # 明文入, 后端加密
-    system_prompt: str = ""
-    temperature: float = 0.7
-    polling_interval: int = 5
-    allowed_tools: Optional[List[str]] = None  # null=全部, []=禁用, ["get_price",...]=指定
-
-
-class HubAgentUpdateRequest(BaseModel):
-    """更新智能体请求"""
-    name: Optional[str] = None
-    role: Optional[str] = None
-    avatar: Optional[str] = None
-    provider: Optional[str] = None
-    model: Optional[str] = None
-    api_base_url: Optional[str] = None
-    api_key: Optional[str] = None    # 非空时重新加密
-    system_prompt: Optional[str] = None
-    temperature: Optional[float] = None
-    polling_interval: Optional[int] = None
-    allowed_tools: Optional[List[str]] = None  # 显式设置, 覆盖旧值
-    active_template_id: Optional[int] = None    # 绑定提示词模板
-
-
-class HubAgentActionRequest(BaseModel):
-    """智能体动作请求"""
-    action: str  # "start" | "stop" | "run_once"
-
-
-class HubAgentResponse(BaseModel):
-    """智能体响应 (不含 api_key_enc)"""
-    id: int
-    name: str
-    role: str
-    avatar: str
-    provider: str
-    model: str
-    api_base_url: Optional[str]
-    has_api_key: bool = False
-    system_prompt: str
-    temperature: float
-    status: str
-    is_active: bool
-    last_run_at: Optional[str]
-    last_error: Optional[str]
-    total_runs: int
-    total_trades: int
-    polling_interval: int = 5
-    allowed_tools: Optional[List[str]] = None
-    active_template_id: Optional[int] = None
-    created_at: str
-    updated_at: str
-    
-    model_config = ConfigDict(from_attributes=True)
-
-
-class HubAgentListResponse(BaseModel):
-    """智能体列表响应"""
-    agents: List[HubAgentResponse]
-
-
-class HubStatusResponse(BaseModel):
-    """Hub 全局状态响应"""
-    mode: str            # "dictator" | "board" | "idle"
-    active_count: int
-    total_agents: int
-    active_agents: List[HubAgentResponse]
-
-
-class HubBoardRequest(BaseModel):
-    """董事会辩论请求"""
-    topic: str
-    symbol: str = "BTCUSDT"
-
-
-class HubChatRequest(BaseModel):
-    """对话请求"""
-    message: str
 
 
 # ============================================================
@@ -150,45 +72,6 @@ def _agent_to_response(agent: HubAgent) -> HubAgentResponse:
         created_at=agent.created_at.isoformat() if agent.created_at else "",
         updated_at=agent.updated_at.isoformat() if agent.updated_at else "",
     )
-
-
-# ============================================================
-# Helper: API Key 加密/解密
-# ============================================================
-
-def _encrypt_key(plain: str) -> str:
-    """加密 API Key (复用系统加密方案)"""
-    try:
-        from app.core.encryption import encrypt_value
-        return encrypt_value(plain)
-    except ImportError:
-        # Fallback: 简单 base64 (生产环境应使用 Fernet)
-        import base64
-        return base64.b64encode(plain.encode()).decode()
-
-
-def _decrypt_key(encrypted: str) -> str:
-    """解密 API Key — 自动兼容多种加密格式"""
-    if not encrypted:
-        return ""
-    # 方法 1: Fernet
-    try:
-        from app.core.encryption import decrypt_api_key
-        return decrypt_api_key(encrypted)
-    except Exception:
-        pass
-    # 方法 2: Base64
-    try:
-        import base64
-        decoded = base64.b64decode(encrypted.encode()).decode()
-        if decoded and decoded.isprintable() and len(decoded) > 5:
-            return decoded
-    except Exception:
-        pass
-    # 方法 3: 原始值
-    if encrypted.startswith("sk-") or len(encrypted) > 20:
-        return encrypted
-    raise ValueError("Decryption failed")
 
 
 # ============================================================
@@ -227,7 +110,7 @@ async def create_agent(
         provider=body.provider,
         model=body.model,
         api_base_url=body.api_base_url,
-        api_key_enc=_encrypt_key(body.api_key) if body.api_key else None,
+        api_key_enc=encrypt_api_key(body.api_key) if body.api_key else None,
         system_prompt=body.system_prompt,
         temperature=body.temperature,
         polling_interval=body.polling_interval,
@@ -264,7 +147,7 @@ async def update_agent(
     if "api_key" in update_data:
         api_key = update_data.pop("api_key")
         if api_key:
-            agent.api_key_enc = _encrypt_key(api_key)
+            agent.api_key_enc = encrypt_api_key(api_key)
     
     for field, value in update_data.items():
         if hasattr(agent, field):

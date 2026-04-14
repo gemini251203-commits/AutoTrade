@@ -46,15 +46,7 @@ import {
   type StrategyStats,
 } from '@/api/strategy'
 import { formatDateBJ } from '@/utils/time'
-import {
-  getPipelineStatus,
-  controlRiskBypass,
-  type PipelineStatusResponse,
-} from '@/api/pipeline'
-import {
-  getAutopilotLogs,
-  type AutopilotLogResponse,
-} from '@/api/chat'
+
 import {
   listTrendSchemes,
   runTrendAnalysis,
@@ -68,10 +60,9 @@ const strategies = ref<StrategyResponse[]>([])
 const templates = ref<StrategyTemplate[]>([])
 
 const loading = ref(false)
-const riskBypassLoading = ref(false)
+
 const error = ref('')
-const pipelineStatus = ref<PipelineStatusResponse | null>(null)
-const decisionLogs = ref<AutopilotLogResponse[]>([])
+
 const trendSchemes = ref<TrendSchemeResponse[]>([])
 const trendLoading = ref(false)
 
@@ -84,8 +75,8 @@ const viewingLogs = ref<StrategyLogResponse[]>([])
 const viewingStrategyName = ref('')
 const logsLoading = ref(false)
 
-// Create mode: 'pipeline' | 'yaml'
-const createMode = ref<'pipeline' | 'yaml'>('pipeline')
+// Create mode: 'wizard' (向导构建) | 'yaml' (手动编写)
+const createMode = ref<'wizard' | 'yaml'>('yaml')
 
 // Real stats from API
 const realStats = ref<StrategyStats>({ total_trades: 0, win_trades: 0, win_rate: 0, total_pnl: 0 })
@@ -154,31 +145,8 @@ const compareOptions = [
 ]
 
 // Tab state
-type TabKey = 'strategies' | 'timeline' | 'trend'
+type TabKey = 'strategies' | 'trend'
 const activeTab = ref<TabKey>('strategies')
-const timelineFilter = ref<'all' | 'ai' | 'strategy'>('all')
-const strategyNameFilter = ref<string>('')
-
-// 从日志中提取去重的策略名列表
-const uniqueStrategyNames = computed(() => {
-  const names = new Set<string>()
-  for (const l of decisionLogs.value) {
-    if (l.strategy_name) names.add(l.strategy_name)
-  }
-  return Array.from(names)
-})
-
-const filteredDecisionLogs = computed(() => {
-  let logs = decisionLogs.value
-  // 来源筛选
-  if (timelineFilter.value === 'ai') logs = logs.filter(l => !l.strategy_name)
-  else if (timelineFilter.value === 'strategy') logs = logs.filter(l => !!l.strategy_name)
-  // 策略名筛选
-  if (strategyNameFilter.value) {
-    logs = logs.filter(l => l.strategy_name === strategyNameFilter.value)
-  }
-  return logs
-})
 
 // ==================== Computed ====================
 
@@ -215,7 +183,7 @@ async function fetchAll() {
 
 function openCreateModal(template?: StrategyTemplate) {
   editingStrategy.value = null
-  createMode.value = 'pipeline'
+  createMode.value = 'yaml'
   wizardStep.value = 1
   formName.value = template?.name || ''
   formSymbol.value = 'BTCUSDT'
@@ -234,7 +202,7 @@ function openEditModal(strategy: StrategyResponse) {
   showCreateModal.value = true
 }
 
-function buildPipelineYaml(): string {
+function buildWizardYaml(): string {
   const lines: string[] = []
   lines.push(`name: "${formName.value}"`)
   lines.push(`symbol: ${formSymbol.value}`)
@@ -318,7 +286,7 @@ async function handleSave() {
   try {
     const yaml = editingStrategy.value
       ? formYaml.value
-      : (createMode.value === 'yaml' ? formYaml.value : buildPipelineYaml())
+      : (createMode.value === 'yaml' ? formYaml.value : buildWizardYaml())
     const data = {
       name: formName.value,
       symbol: formSymbol.value.toUpperCase(),
@@ -381,7 +349,6 @@ async function handleRunOnce(strategy: StrategyResponse) {
   runningOnce.value = strategy.id
   try {
     await runStrategyOnce(strategy.id)
-    await fetchDecisionLogs()
     await fetchAll()
   } catch (e: any) {
     error.value = e.response?.data?.detail || '执行失败'
@@ -404,19 +371,7 @@ async function openLogs(strategy: StrategyResponse) {
 }
 
 
-async function handleRiskBypass() {
-  if (!pipelineStatus.value) return
-  riskBypassLoading.value = true
-  try {
-    const newState = !pipelineStatus.value.risk_bypass
-    await controlRiskBypass(newState)
-    pipelineStatus.value = await getPipelineStatus()
-  } catch (e: any) {
-    error.value = '风控开关操作失败'
-  } finally {
-    riskBypassLoading.value = false
-  }
-}
+
 
 const formatDate = formatDateBJ
 
@@ -426,29 +381,9 @@ function pnlColor(v: number) {
   return '#6b7280'
 }
 
-async function fetchDecisionLogs() {
-  try {
-    decisionLogs.value = await getAutopilotLogs(500)
-  } catch (e) {
-    console.warn('Failed to fetch decision logs', e)
-  }
-}
 
-function decisionColor(d: string) {
-  if (d === 'open_long') return '#22c55e'
-  if (d === 'open_short') return '#ef4444'
-  if (d === 'close_long' || d === 'close_short') return '#f59e0b'
-  if (d === 'error') return '#ef4444'
-  return '#6b7280'
-}
 
-function decisionLabel(d: string) {
-  const map: Record<string, string> = {
-    hold: '观望', open_long: '做多', open_short: '做空',
-    close_long: '平多', close_short: '平空', error: '异常',
-  }
-  return map[d] || d
-}
+
 
 async function fetchTrendSchemes() {
   trendLoading.value = true
@@ -509,8 +444,6 @@ async function fetchStats() {
 onMounted(() => {
   fetchAll()
   fetchStats()
-  // 加载 Pipeline 状态
-  getPipelineStatus().then(s => pipelineStatus.value = s).catch(() => {})
 })
 </script>
 
@@ -567,16 +500,6 @@ onMounted(() => {
           策略列表
         </button>
 
-        <button
-          @click="activeTab = 'timeline'; fetchDecisionLogs()"
-          class="px-4 py-2 rounded-md text-sm transition-all"
-          :style="{
-            background: activeTab === 'timeline' ? 'rgba(138,43,226,0.15)' : 'transparent',
-            color: activeTab === 'timeline' ? '#a855f7' : '#6b7280',
-          }"
-        >
-          决策时间线
-        </button>
         <button
           @click="activeTab = 'trend'; fetchTrendSchemes()"
           class="px-4 py-2 rounded-md text-sm transition-all"
@@ -667,7 +590,7 @@ onMounted(() => {
                       class="px-2 py-0.5 rounded text-[10px] font-medium tracking-wide flex items-center gap-1"
                       style="background: rgba(168,85,247,0.1); color: #a855f7; border: 1px solid rgba(168,85,247,0.2);"
                     >
-                      Pipeline
+                      量化
                     </span>
                     <span
                       v-else
@@ -772,71 +695,6 @@ onMounted(() => {
       </template>
 
 
-
-      <!-- Decision Timeline Tab -->
-      <template v-else-if="activeTab === 'timeline'">
-        <!-- 来源筛选按钮 -->
-        <div class="tl-filters">
-          <button
-            v-for="f in [
-              { key: 'all', label: '全部', count: decisionLogs.length },
-              { key: 'ai', label: 'Autopilot', count: decisionLogs.filter(l => !l.strategy_name).length },
-              { key: 'strategy', label: '量化策略', count: decisionLogs.filter(l => !!l.strategy_name).length },
-            ]"
-            :key="f.key"
-            :class="['tl-filter-btn', { active: timelineFilter === f.key && !strategyNameFilter }]"
-            @click="timelineFilter = f.key as any; strategyNameFilter = ''"
-          >
-            {{ f.label }} ({{ f.count }})
-          </button>
-          <!-- 按策略名筛选 -->
-          <select
-            v-if="uniqueStrategyNames.length > 1"
-            v-model="strategyNameFilter"
-            class="tl-strategy-select"
-            @change="strategyNameFilter && (timelineFilter = 'strategy')"
-          >
-            <option value="">所有策略</option>
-            <option v-for="name in uniqueStrategyNames" :key="name" :value="name">{{ name }}</option>
-          </select>
-        </div>
-
-        <div v-if="filteredDecisionLogs.length === 0" class="text-center py-16">
-          <p class="text-gray-500 mt-4">暂无决策记录</p>
-          <p class="text-gray-600 text-sm mt-1">启动策略自动交易后，AI 的每次决策将显示在此</p>
-        </div>
-        <div v-else class="tl-list">
-          <div
-            v-for="log in filteredDecisionLogs"
-            :key="log.id"
-            class="tl-item"
-          >
-            <div class="tl-dot" :style="{ background: decisionColor(log.decision) }"></div>
-            <div class="tl-content">
-              <div class="tl-header">
-                <!-- 来源标签 -->
-                <span v-if="log.strategy_name" class="tl-source tl-source-strategy">
-                  {{ log.strategy_name }}
-                </span>
-                <span v-else class="tl-source tl-source-ai">
-                  Autopilot
-                </span>
-                <span class="tl-badge" :style="{ color: decisionColor(log.decision), borderColor: decisionColor(log.decision) + '40' }">
-                  {{ decisionLabel(log.decision) }}
-                </span>
-                <span class="tl-symbol">{{ log.symbol }}</span>
-                <span class="tl-time">{{ formatDate(log.created_at) }}</span>
-              </div>
-              <div class="tl-summary">{{ log.summary }}</div>
-              <details v-if="log.thinking" class="tl-thinking">
-                <summary>查看 AI 思考过程</summary>
-                <pre class="tl-pre">{{ log.thinking }}</pre>
-              </details>
-            </div>
-          </div>
-        </div>
-      </template>
-
       <!-- Trend Analysis Tab -->
       <template v-else-if="activeTab === 'trend'">
         <div v-if="trendLoading" class="flex justify-center py-12">
@@ -936,18 +794,8 @@ onMounted(() => {
       style="width: 680px; background: #18181b; border: 1px solid rgba(255,255,255,0.06);"
       :bordered="false"
     >
-      <!-- Mode Tabs (Pipeline vs YAML) -->
+      <!-- Mode Tabs (向导 vs YAML) -->
       <div v-if="!editingStrategy" class="flex gap-1 p-1 rounded-lg mb-4" style="background: rgba(255,255,255,0.03);">
-        <button
-          @click="createMode = 'pipeline'"
-          class="flex-1 px-4 py-2 rounded-md text-sm transition-all"
-          :style="{
-            background: createMode === 'pipeline' ? 'rgba(138,43,226,0.15)' : 'transparent',
-            color: createMode === 'pipeline' ? '#a855f7' : '#6b7280',
-          }"
-        >
-           流水线策略
-        </button>
         <button
           @click="createMode = 'yaml'"
           class="flex-1 px-4 py-2 rounded-md text-sm transition-all"
@@ -956,12 +804,22 @@ onMounted(() => {
             color: createMode === 'yaml' ? '#a855f7' : '#6b7280',
           }"
         >
-           传统 YAML 策略
+           YAML 策略
+        </button>
+        <button
+          @click="createMode = 'wizard'"
+          class="flex-1 px-4 py-2 rounded-md text-sm transition-all"
+          :style="{
+            background: createMode === 'wizard' ? 'rgba(138,43,226,0.15)' : 'transparent',
+            color: createMode === 'wizard' ? '#a855f7' : '#6b7280',
+          }"
+        >
+           向导构建
         </button>
       </div>
 
       <!-- Step indicator (Pipeline mode only) -->
-      <div v-if="!editingStrategy && createMode === 'pipeline'" class="flex items-center gap-2 mb-6">
+      <div v-if="!editingStrategy && createMode === 'wizard'" class="flex items-center gap-2 mb-6">
         <template v-for="step in 5" :key="step">
           <div
             class="flex items-center gap-1.5 cursor-pointer"
@@ -1046,7 +904,7 @@ onMounted(() => {
         </template>
 
         <!-- Step 1: Alpha (Pipeline mode) -->
-        <template v-if="wizardStep === 1 && !editingStrategy && createMode === 'pipeline'">
+        <template v-if="wizardStep === 1 && !editingStrategy && createMode === 'wizard'">
           <div class="text-sm text-gray-300 mb-3">选择信号源模块：AI 根据什么来判断买卖时机？</div>
           <div class="grid grid-cols-3 gap-3">
             <button
@@ -1122,7 +980,7 @@ onMounted(() => {
         </template>
 
         <!-- Step 2: Portfolio -->
-        <template v-if="wizardStep === 2 && !editingStrategy && createMode === 'pipeline'">
+        <template v-if="wizardStep === 2 && !editingStrategy && createMode === 'wizard'">
           <div class="text-sm text-gray-300 mb-3">选择仓位管理模型：每次用多少资金开仓？</div>
           <div class="grid grid-cols-2 gap-3">
             <button
@@ -1175,7 +1033,7 @@ onMounted(() => {
         </template>
 
         <!-- Step 3: Risk -->
-        <template v-if="wizardStep === 3 && !editingStrategy && createMode === 'pipeline'">
+        <template v-if="wizardStep === 3 && !editingStrategy && createMode === 'wizard'">
           <div class="text-sm text-gray-300 mb-3">配置风控参数：设定安全边界</div>
           <div class="p-4 rounded-lg space-y-4" style="background: rgba(255,255,255,0.02);">
             <div>
@@ -1210,7 +1068,7 @@ onMounted(() => {
         </template>
 
         <!-- Step 4: Execution -->
-        <template v-if="wizardStep === 4 && !editingStrategy && createMode === 'pipeline'">
+        <template v-if="wizardStep === 4 && !editingStrategy && createMode === 'wizard'">
           <div class="text-sm text-gray-300 mb-3">选择执行方式：如何下单？</div>
           <div class="grid grid-cols-3 gap-3">
             <button
@@ -1258,7 +1116,7 @@ onMounted(() => {
         </template>
 
         <!-- Step 5: Basic Info -->
-        <template v-if="(wizardStep === 5 && createMode === 'pipeline') || editingStrategy">
+        <template v-if="(wizardStep === 5 && createMode === 'wizard') || editingStrategy">
           <div v-if="!editingStrategy" class="text-sm text-gray-300 mb-3">最后一步：填写策略名称</div>
           <div>
             <label class="block text-xs text-gray-500 mb-1.5">策略名称</label>
@@ -1312,7 +1170,7 @@ onMounted(() => {
         </template>
 
         <!-- Navigation -->
-        <div v-if="createMode === 'pipeline' || editingStrategy" class="flex justify-between pt-2">
+        <div v-if="createMode === 'wizard' || editingStrategy" class="flex justify-between pt-2">
           <button
             v-if="wizardStep > 1 && !editingStrategy"
             @click="wizardStep--"
@@ -1556,460 +1414,6 @@ onMounted(() => {
   .template-card .text-sm {
     font-size: 12px;
   }
-}
-
-/* Pipeline Panel — Premium */
-.pl-panel {
-  background: linear-gradient(160deg, rgba(20,16,36,0.95) 0%, rgba(12,12,24,0.98) 100%);
-  border: 1px solid rgba(139,92,246,0.15);
-  border-radius: 18px;
-  padding: 22px 26px;
-  position: relative;
-  overflow: hidden;
-}
-.pl-panel::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 20% 0%, rgba(139,92,246,0.08) 0%, transparent 70%),
-              radial-gradient(ellipse at 80% 100%, rgba(34,197,94,0.06) 0%, transparent 70%);
-  pointer-events: none;
-}
-.pl-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-  position: relative;
-}
-.pl-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.pl-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  animation: pl-pulse 2s ease-in-out infinite;
-  box-shadow: 0 0 8px currentColor;
-}
-@keyframes pl-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.85); }
-}
-.pl-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #f0f0f0;
-  letter-spacing: 0.5px;
-}
-.pl-uptime {
-  font-size: 11px;
-  color: #6b7280;
-  font-family: 'JetBrains Mono', monospace;
-  background: rgba(255,255,255,0.04);
-  padding: 2px 8px;
-  border-radius: 6px;
-}
-.pl-badge {
-  font-size: 11px;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-weight: 600;
-  letter-spacing: 0.6px;
-}
-.pl-badge-ok {
-  background: rgba(34,197,94,0.12);
-  color: #4ade80;
-  border: 1px solid rgba(34,197,94,0.2);
-  box-shadow: 0 0 12px rgba(34,197,94,0.1);
-}
-.pl-badge-danger {
-  background: rgba(239,68,68,0.12);
-  color: #f87171;
-  border: 1px solid rgba(239,68,68,0.2);
-  box-shadow: 0 0 12px rgba(239,68,68,0.1);
-  animation: pl-pulse 1.5s ease-in-out infinite;
-}
-.pl-risk-btn {
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid;
-  transition: all 0.2s;
-}
-.pl-risk-on {
-  background: rgba(34,197,94,0.12);
-  color: #4ade80;
-  border-color: rgba(34,197,94,0.2);
-}
-.pl-risk-off {
-  background: rgba(245,158,11,0.12);
-  color: #fbbf24;
-  border-color: rgba(245,158,11,0.3);
-  animation: pl-pulse 1.5s ease-in-out infinite;
-}
-.pl-risk-btn:hover { opacity: 0.8; }
-.pl-risk-btn:disabled { opacity: 0.5; cursor: wait; }
-.pl-flow {
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-  gap: 0;
-  position: relative;
-}
-
-/* Layer card */
-.pl-layer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 16px 18px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.06);
-  min-width: 140px;
-  flex: 1;
-  cursor: default;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-}
-.pl-layer::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  transition: opacity 0.3s;
-}
-.pl-layer:hover {
-  transform: translateY(-4px);
-  border-color: rgba(255,255,255,0.12);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-}
-.pl-layer--active::before { opacity: 1; }
-.pl-layer--idle::before { opacity: 0.3; }
-.pl-layer--error::before { opacity: 1; }
-
-/* Layer-specific gradient & accent */
-.pl-layer--alpha { background: linear-gradient(180deg, rgba(168,85,247,0.12) 0%, rgba(168,85,247,0.03) 100%); }
-.pl-layer--alpha::before { background: linear-gradient(90deg, #a855f7, #8b5cf6); }
-.pl-layer--alpha .pl-layer-count { color: #c084fc; }
-
-.pl-layer--portfolio { background: linear-gradient(180deg, rgba(59,130,246,0.12) 0%, rgba(59,130,246,0.03) 100%); }
-.pl-layer--portfolio::before { background: linear-gradient(90deg, #3b82f6, #2563eb); }
-.pl-layer--portfolio .pl-layer-count { color: #60a5fa; }
-
-.pl-layer--risk { background: linear-gradient(180deg, rgba(251,191,36,0.12) 0%, rgba(251,191,36,0.03) 100%); }
-.pl-layer--risk::before { background: linear-gradient(90deg, #f59e0b, #d97706); }
-.pl-layer--risk .pl-layer-count { color: #fbbf24; }
-
-.pl-layer--execution { background: linear-gradient(180deg, rgba(34,197,94,0.12) 0%, rgba(34,197,94,0.03) 100%); }
-.pl-layer--execution::before { background: linear-gradient(90deg, #22c55e, #16a34a); }
-.pl-layer--execution .pl-layer-count { color: #4ade80; }
-
-/* Layer inner elements */
-.pl-layer-top {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-.pl-layer-icon {
-  font-size: 16px;
-  line-height: 1;
-}
-.pl-layer-name {
-  font-size: 12px;
-  font-weight: 700;
-  color: #e5e7eb;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-}
-.pl-layer-count {
-  font-size: 28px;
-  font-weight: 800;
-  font-family: 'JetBrains Mono', monospace;
-  line-height: 1.1;
-  margin-bottom: 4px;
-}
-.pl-layer-detail {
-  font-size: 10px;
-  color: #6b7280;
-  text-align: center;
-  line-height: 1.4;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.pl-layer:hover .pl-layer-detail {
-  white-space: normal;
-  overflow: visible;
-}
-.pl-layer-status {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-}
-.pl-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-.pl-status-dot.active {
-  background: #22c55e;
-  box-shadow: 0 0 6px rgba(34,197,94,0.6);
-}
-.pl-status-dot.idle {
-  background: #4b5563;
-}
-.pl-status-dot.error {
-  background: #ef4444;
-  box-shadow: 0 0 6px rgba(239,68,68,0.6);
-  animation: pl-pulse 1s ease-in-out infinite;
-}
-.pl-status-text {
-  font-size: 10px;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-/* Connector between layers */
-.pl-connector {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  position: relative;
-  flex-shrink: 0;
-}
-.pl-connector-line {
-  position: absolute;
-  top: 50%;
-  left: 4px;
-  right: 4px;
-  height: 1px;
-  background: rgba(255,255,255,0.08);
-  transform: translateY(-50%);
-}
-.pl-connector-pulse {
-  position: absolute;
-  top: 50%;
-  left: 4px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: rgba(139,92,246,0.3);
-  transform: translateY(-50%);
-  opacity: 0;
-}
-.pl-connector-active {
-  animation: pl-data-flow 2s ease-in-out infinite;
-  opacity: 1;
-}
-@keyframes pl-data-flow {
-  0% { left: 4px; opacity: 0; }
-  20% { opacity: 0.8; }
-  80% { opacity: 0.8; }
-  100% { left: calc(100% - 12px); opacity: 0; }
-}
-.pl-connector-arrow {
-  position: relative;
-  color: #4b5563;
-  z-index: 1;
-}
-
-/* Mobile responsive */
-@media (max-width: 768px) {
-  .pl-panel {
-    padding: 14px 12px;
-  }
-  .pl-flow {
-    flex-direction: column;
-    gap: 4px;
-    align-items: stretch;
-  }
-  .pl-layer {
-    flex-direction: row;
-    min-width: 0;
-    padding: 10px 14px;
-    gap: 12px;
-  }
-  .pl-layer-top {
-    margin-bottom: 0;
-    min-width: 80px;
-  }
-  .pl-layer-count {
-    font-size: 20px;
-    margin-bottom: 0;
-    min-width: 40px;
-    text-align: right;
-  }
-  .pl-layer-detail {
-    flex: 1;
-    text-align: left;
-  }
-  .pl-layer-status {
-    margin-top: 0;
-  }
-  .pl-connector {
-    width: auto;
-    height: 16px;
-    justify-content: center;
-  }
-  .pl-connector-line {
-    top: 50%;
-    left: 50%;
-    right: auto;
-    width: 1px;
-    height: 12px;
-    transform: translate(-50%, -50%);
-  }
-  .pl-connector-pulse { display: none; }
-  .pl-connector-arrow {
-    transform: rotate(90deg);
-  }
-  .pl-uptime { display: none; }
-}
-
-/* Decision Timeline */
-.tl-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.tl-item {
-  display: flex;
-  gap: 14px;
-  padding: 14px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-}
-.tl-item:last-child { border-bottom: none; }
-.tl-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  margin-top: 5px;
-  flex-shrink: 0;
-  box-shadow: 0 0 6px currentColor;
-}
-.tl-content { flex: 1; min-width: 0; }
-.tl-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 6px;
-}
-.tl-badge {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 1px 8px;
-  border-radius: 4px;
-  border: 1px solid;
-}
-.tl-symbol {
-  font-size: 12px;
-  font-weight: 600;
-  color: #e5e7eb;
-  font-family: 'JetBrains Mono', monospace;
-}
-.tl-filters {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-.tl-filter-btn {
-  padding: 5px 12px;
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 16px;
-  background: transparent;
-  color: #9ca3af;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.tl-filter-btn:hover {
-  border-color: rgba(139,92,246,0.3);
-  color: #d8b4fe;
-}
-.tl-filter-btn.active {
-  border-color: rgba(139,92,246,0.5);
-  background: rgba(139,92,246,0.12);
-  color: #a855f7;
-  font-weight: 600;
-}
-.tl-strategy-select {
-  padding: 4px 10px;
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 16px;
-  background: rgba(30,30,40,0.8);
-  color: #d1d5db;
-  font-size: 12px;
-  cursor: pointer;
-  outline: none;
-  transition: all 0.2s;
-  margin-left: 4px;
-}
-.tl-strategy-select:hover,
-.tl-strategy-select:focus {
-  border-color: rgba(139,92,246,0.4);
-  color: #e9d5ff;
-}
-.tl-source {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.tl-source-ai {
-  color: #10b981;
-  background: rgba(16,185,129,0.12);
-  border: 1px solid rgba(16,185,129,0.2);
-}
-.tl-source-strategy {
-  color: #a78bfa;
-  background: rgba(139,92,246,0.1);
-  border: 1px solid rgba(139,92,246,0.2);
-}
-.tl-time {
-  font-size: 11px;
-  color: #4b5563;
-  margin-left: auto;
-}
-.tl-summary {
-  font-size: 13px;
-  color: #d1d5db;
-  line-height: 1.5;
-}
-.tl-thinking {
-  margin-top: 8px;
-}
-.tl-thinking summary {
-  font-size: 11px;
-  color: #6b7280;
-  cursor: pointer;
-  user-select: none;
-}
-.tl-thinking summary:hover { color: #a78bfa; }
-.tl-pre {
-  font-size: 12px;
-  color: #9ca3af;
-  white-space: pre-wrap;
-  word-break: break-all;
-  background: rgba(0,0,0,0.2);
-  padding: 10px;
-  border-radius: 8px;
-  margin-top: 6px;
-  max-height: 300px;
-  overflow-y: auto;
 }
 
 /* Trend Analysis */

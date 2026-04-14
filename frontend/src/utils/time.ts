@@ -107,7 +107,7 @@ export function formatDateTimeBJ(iso: string | null | undefined): string {
 }
 
 /**
- * 格式化为北京时间 HH:mm:ss (用于 PipelineMonitor 时间戳)
+ * 格式化为北京时间 HH:mm:ss
  */
 export function formatHHMMSSBJ(iso: string | null | undefined): string {
   if (!iso) return '--'

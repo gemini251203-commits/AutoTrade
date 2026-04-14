@@ -94,22 +94,22 @@ export function listTemplates(includePresets: boolean = true) {
   return request.get<{ templates: PromptTemplate[]; total: number }>(
     '/prompts/templates',
     { params: { include_presets: includePresets } },
-  )
+  ).then(res => res.data)
 }
 
 /** 创建模板 */
 export function createTemplate(data: PromptTemplateCreateRequest) {
-  return request.post<PromptTemplate>('/prompts/templates', data)
+  return request.post<PromptTemplate>('/prompts/templates', data).then(res => res.data)
 }
 
 /** 更新模板 */
 export function updateTemplate(templateId: number, data: PromptTemplateUpdateRequest) {
-  return request.put<PromptTemplate>(`/prompts/templates/${templateId}`, data)
+  return request.put<PromptTemplate>(`/prompts/templates/${templateId}`, data).then(res => res.data)
 }
 
 /** 删除模板 */
 export function deleteTemplate(templateId: number) {
-  return request.delete(`/prompts/templates/${templateId}`)
+  return request.delete(`/prompts/templates/${templateId}`).then(res => res.data)
 }
 
 /** 激活模板到指定 Agent */
@@ -117,24 +117,24 @@ export function activateTemplate(templateId: number, agentId: number, reason?: s
   return request.post(`/prompts/templates/${templateId}/activate`, {
     agent_id: agentId,
     reason,
-  })
+  }).then(res => res.data)
 }
 
 /** 取消模板绑定 */
 export function deactivateTemplate(templateId: number, agentId: number) {
   return request.post(`/prompts/templates/${templateId}/deactivate`, {
     agent_id: agentId,
-  })
+  }).then(res => res.data)
 }
 
 /** 获取模板收益表现 */
 export function getTemplatePerformance(templateId: number) {
-  return request.get<TemplatePerformance>(`/prompts/templates/${templateId}/performance`)
+  return request.get<TemplatePerformance>(`/prompts/templates/${templateId}/performance`).then(res => res.data)
 }
 
 /** 复制模板 */
 export function duplicateTemplate(templateId: number) {
-  return request.post<PromptTemplate>(`/prompts/templates/${templateId}/duplicate`)
+  return request.post<PromptTemplate>(`/prompts/templates/${templateId}/duplicate`).then(res => res.data)
 }
 
 /** 市况推荐 */
@@ -142,5 +142,5 @@ export function recommendTemplate(marketRegime?: string, fundSize?: number) {
   return request.get<{ recommendation: PromptTemplate | null; message: string }>(
     '/prompts/recommend',
     { params: { market_regime: marketRegime, fund_size: fundSize } },
-  )
+  ).then(res => res.data)
 }

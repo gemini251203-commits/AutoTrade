@@ -1,3 +1,0 @@
-
----STDERR---
-Connection to 45.77.26.211 port 22 timed out

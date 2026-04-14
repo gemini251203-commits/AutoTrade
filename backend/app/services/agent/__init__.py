@@ -1,11 +1,11 @@
 """
 Agent Service Module
 =====================
-AI 交易代理服务
+AI 交易代理工具集
 
 模块:
-- prompts: AI 角色提示词
-- tools: Agent 工具 (调用后端服务)
-- agent: Agent 核心引擎
-- memory: 会话记忆管理
+- tools/: Agent 工具包 (35+ 工具函数, 按功能域拆分为 9 个子模块)
+  - _registry: TOOL_REGISTRY + register_tool 装饰器
+  - market, account, trading, analysis, strategy,
+    trend, grid, journal, news_alerts
 """

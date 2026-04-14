@@ -88,3 +88,24 @@ backend/*.txt
 
 # 📂 External reference files (not part of this project)
 _reference/
+
+# 🧹 Temp/debug files in project root
+/_*
+/check_*.py
+/database_fix.py
+/*.sh
+!/.gitignore
+
+# 📁 Backup directories
+server_backup/
+
+# 📋 Root-level temp outputs
+/优化方案.md
+
+# 🔐 Environment template (keep this one!)
+!.env.example
+
+# 🧪 Backend temp fix scripts
+backend/_fix_*.py
+backend/diag_*.txt
+backend/error_trace.txt

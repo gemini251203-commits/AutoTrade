@@ -31,7 +31,9 @@ from app.models.hub_agent import HubAgent
 SYSTEM_OVERVIEW = """你是一个经验丰富的加密货币交易员，在 AutoTrade 系统中工作。
 
 你可以通过工具查看行情、技术指标、账户余额、持仓情况，也可以直接下单交易。
-你的交易指令会经过系统的风控层自动审核，不用担心杠杆过高或亏损过大的问题。
+你的交易指令会经过系统的风控层审核。
+老板的资金非常充裕，因此请大胆使用资金，每次开合约仓位的【实际占用保证金】必须控制在 100~300 USDT 的级别，并且统一使用 20 倍杠杆！
+绝对不要下只有几 U 或十几 U 保证金的“蚂蚁仓”浪费行情机会，请务必根据当前币价自行计算合适的 quantity 数量。
 
 ## 你的工作方式
 像一个真实的人一样思考和说话。用中文。
@@ -184,8 +186,14 @@ class HubBrain:
             choice = response.choices[0]
             finish_reason = choice.finish_reason  # ★ 检测截断
             
+            # ★ 取出附带的文本推理并广播
+            content_text = choice.message.content or ""
+            
             # 检查是否有 tool_call
             if choice.message.tool_calls:
+                if content_text:
+                    yield json.dumps({"type": "text", "content": content_text})
+                
                 # 有工具调用
                 messages.append(choice.message)
                 
@@ -202,12 +210,44 @@ class HubBrain:
                         "args": tool_args,
                     })
                     
-                    # 执行工具 (传入 allowed_tools 进行授权检查)
-                    tool_result = await self._execute_tool(
-                        tool_name, tool_args, db, user_id,
-                        allowed_tools=agent.allowed_tools,
-                        agent_name=agent.name,
-                    )
+                    # ★ 幻觉过滤拦截 (针对交易工具)
+                    is_blocked = False
+                    intercept_kws = ["观望", "暂不", "不操作", "等待", "空仓", "平稳"]
+                    
+                    if tool_name in ["place_order", "close_position"] and any(kw in content_text for kw in intercept_kws):
+                        logger.warning(f"[HubBrain] Intercepted hallucinated tool call: {tool_name} by #{agent.id} due to wait-and-see keywords.")
+                        is_blocked = True
+                        tool_result = json.dumps({"error": "[系统物理拦截] 文本推理表明观望/等待，已强行剥夺本次危险开仓/平仓权限！请继续观望。"})
+                        
+                        # 强行记录为被阻拦的交易 (会被 Consolidator 扫到纪要的【被阻拦的交易】模块)
+                        try:
+                            from app.models.autopilot_log import AutopilotLog
+                            sym = tool_args.get("symbol", "未知币种")
+                            if tool_name == "place_order":
+                                dec = "想做多" if str(tool_args.get("side", "")).lower() == "buy" else "想做空"
+                            else:
+                                dec = "想平仓"
+                                
+                            db.add(AutopilotLog(
+                                user_id=user_id,
+                                symbol=sym,
+                                strategy_name="Hub Interceptor",
+                                action_taken=False,
+                                decision=dec,
+                                error_message="[AI幻觉拦截] 文本内包含观望/等待字眼，但发生大模型工具调用幻觉试图盲目交易，已被系统底层阻断",
+                                summary=(content_text[:300] + "...") if len(content_text)>300 else (content_text or "无文本")
+                            ))
+                            await db.commit()
+                        except Exception as lg_e:
+                            logger.error(f"[HubBrain] Failed to record hallucination block log: {lg_e}")
+                    
+                    if not is_blocked:
+                        # 执行普通工具 (传入 allowed_tools 进行授权检查)
+                        tool_result = await self._execute_tool(
+                            tool_name, tool_args, db, user_id,
+                            allowed_tools=agent.allowed_tools,
+                            agent_name=agent.name,
+                        )
                     
                     yield json.dumps({
                         "type": "tool_result",
@@ -507,8 +547,8 @@ class HubBrain:
         
         if agent.api_key_enc:
             try:
-                from app.api.hub import _decrypt_key
-                api_key = _decrypt_key(agent.api_key_enc)
+                from app.core.encryption import decrypt_api_key_safe
+                api_key = decrypt_api_key_safe(agent.api_key_enc)
             except Exception:
                 pass
         

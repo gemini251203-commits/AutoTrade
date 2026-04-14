@@ -442,13 +442,13 @@ onMounted(() => {
                 </NButton>
               </div>
 
-              <!-- Pipeline 运行 -->
+              <!-- 策略引擎 -->
               <div class="runtime-card card-info">
                 <div class="runtime-card-header">
-                  <span class="runtime-dot" :style="{ background: runtimeStatus.pipeline_active ? '#3b82f6' : '#6b7280' }"></span>
-                  <span class="runtime-label">量化流水线</span>
+                  <span class="runtime-dot" :style="{ background: '#3b82f6' }"></span>
+                  <span class="runtime-label">系统运行</span>
                 </div>
-                <div class="runtime-value">{{ runtimeStatus.pipeline_active ? '运行中' : '未启动' }}</div>
+                <div class="runtime-value">{{ runtimeStatus.uptime_seconds > 0 ? '运行中' : '未启动' }}</div>
                 <div class="runtime-meta" v-if="runtimeStatus.uptime_seconds > 0">
                   运行 {{ formatUptime(runtimeStatus.uptime_seconds) }}
                 </div>

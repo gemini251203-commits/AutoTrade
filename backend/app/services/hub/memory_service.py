@@ -88,10 +88,10 @@ async def _get_user_api_configs(user_id: int) -> dict:
                 )
                 agent = result.scalar_one_or_none()
                 if agent and agent.api_key_enc:
-                    # Hub Agent 用 _decrypt_key 解密（不同于 UserAIConfig 的 decrypt_api_key）
+                    # Hub Agent 用 decrypt_api_key_safe 解密（支持多种加密格式）
                     try:
-                        from app.api.hub import _decrypt_key
-                        agent_key = _decrypt_key(agent.api_key_enc)
+                        from app.core.encryption import decrypt_api_key_safe
+                        agent_key = decrypt_api_key_safe(agent.api_key_enc)
                     except Exception:
                         # fallback: 尝试另一种解密方式
                         agent_key = decrypt_api_key(agent.api_key_enc)
@@ -328,7 +328,7 @@ async def search_memories(
                 break
     
     logger.error(f"[MemoryService] Search failed after retries: {last_err}")
-        return []
+    return []
 
 
 async def get_relevant_context(

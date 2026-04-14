@@ -1,7 +1,0 @@
-Total log lines today: 1
-Hub/agent lines: 0
-Trade lines: 0
-
-=== HUB/AGENT LOGS ===
-
-=== TRADE LOGS ===

@@ -1,11 +1,11 @@
 """
 Agent Alpha — AI Agent → Insight 适配器
 =========================================
-将 agent/autopilot.py 的 AI 分析决策包装为 AlphaModel
+将 AI 的分析决策包装为 AlphaModel
 
-关键变化:
-- Agent 分析后只产出 Insight, 不再直接调用 create_order
-- 交易执行由 Pipeline 的 Execution 层负责
+职责:
+- Agent 分析后产出 Insight, 不直接调用 create_order
+- 交易执行由量化引擎 (Quant) 负责
 - 保留 AI 的分析推理, 记录在 Insight.metadata 中
 """
 
