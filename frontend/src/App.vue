@@ -86,6 +86,11 @@ html, body, #app {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Eliminate 300ms tap delay on mobile */
+a, button, [role="button"], input, select, textarea, label, .n-button {
+  touch-action: manipulation;
+}
+
 /* Glassmorphism Utilities */
 .glass-panel {
   background: rgba(24, 24, 27, 0.4);
@@ -108,10 +113,10 @@ html, body, #app {
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-/* Transitions */
+/* Transitions — kept fast (150ms) to avoid perceived lag */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.15s ease;
 }
 
 .fade-enter-from,
