@@ -549,10 +549,12 @@ async def trigger_consolidation(
         import redis.asyncio as aioredis
         from app.core.config import settings
         r = aioredis.from_url(settings.redis_url, decode_responses=True)
-        val = await r.get(f"hub:secretary:{current_user.id}")
-        await r.close()
-        if val:
-            secretary_agent_id = int(val)
+        try:
+            val = await r.get(f"hub:secretary:{current_user.id}")
+            if val:
+                secretary_agent_id = int(val)
+        finally:
+            await r.aclose()
     except Exception:
         pass
     
@@ -598,12 +600,14 @@ async def set_secretary(
     from app.core.config import settings
     
     r = aioredis.from_url(settings.redis_url, decode_responses=True)
-    key = f"hub:secretary:{current_user.id}"
-    if body.agent_id:
-        await r.set(key, str(body.agent_id))
-    else:
-        await r.delete(key)
-    await r.close()
+    try:
+        key = f"hub:secretary:{current_user.id}"
+        if body.agent_id:
+            await r.set(key, str(body.agent_id))
+        else:
+            await r.delete(key)
+    finally:
+        await r.aclose()
     
     return {"success": True, "secretary_agent_id": body.agent_id}
 
@@ -617,8 +621,10 @@ async def get_secretary(
     from app.core.config import settings
     
     r = aioredis.from_url(settings.redis_url, decode_responses=True)
-    val = await r.get(f"hub:secretary:{current_user.id}")
-    await r.close()
+    try:
+        val = await r.get(f"hub:secretary:{current_user.id}")
+    finally:
+        await r.aclose()
     
     return {"secretary_agent_id": int(val) if val else None}
 

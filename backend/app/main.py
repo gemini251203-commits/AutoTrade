@@ -156,7 +156,7 @@ async def lifespan(app: FastAPI):
     try:
         import redis.asyncio as aioredis
         r = aioredis.from_url(settings.redis_url)
-        await r.close()
+        await r.aclose()
         logger.info("Redis connection closed")
     except Exception:
         pass

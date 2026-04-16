@@ -227,15 +227,14 @@ class TpSlPreviewRequest(BaseModel):
 
 class TpSlPreviewResponse(BaseModel):
     """止盈止损盈亏预览响应"""
-    model_config = {"json_encoders": {Decimal: str}}
 
-    take_profit_pnl: Decimal  # 止盈盈亏 (USDT)
-    take_profit_pct: Decimal  # 止盈收益率 (%)
-    stop_loss_pnl: Decimal    # 止损盈亏 (USDT)
-    stop_loss_pct: Decimal    # 止损收益率 (%)
-    risk_reward_ratio: Decimal  # 风险回报比
-    margin_required: Decimal  # 所需保证金
-    notional: Decimal         # 名义价值
+    take_profit_pnl: float  # 止盈盈亏 (USDT)
+    take_profit_pct: float  # 止盈收益率 (%)
+    stop_loss_pnl: float    # 止损盈亏 (USDT)
+    stop_loss_pct: float    # 止损收益率 (%)
+    risk_reward_ratio: float  # 风险回报比
+    margin_required: float  # 所需保证金
+    notional: float         # 名义价值
 
 
 @router.post("/tp-sl-preview", response_model=TpSlPreviewResponse)

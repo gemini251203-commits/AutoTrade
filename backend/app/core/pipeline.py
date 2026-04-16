@@ -562,7 +562,6 @@ def get_pipeline(user_id: int = 1) -> TradingPipeline:
     确保所有交易统一经过 Risk → Execution 流程。
     
     自动注册 ExternalSignalAlpha 适配器:
-    - autopilot: Autopilot AI 的交易信号
     - news_monitor: 新闻监控的交易信号
     """
     global _global_pipeline
@@ -572,7 +571,6 @@ def get_pipeline(user_id: int = 1) -> TradingPipeline:
         
         _global_pipeline = TradingPipeline(
             alphas=[
-                ExternalSignalAlpha(name="autopilot"),
                 ExternalSignalAlpha(name="news_monitor"),
             ],
             portfolio=None,             # submit_order 不需要 Portfolio
@@ -583,3 +581,4 @@ def get_pipeline(user_id: int = 1) -> TradingPipeline:
         logger.info(f"[Pipeline] Global pipeline created for user_id={user_id} with signal adapters")
     
     return _global_pipeline
+
