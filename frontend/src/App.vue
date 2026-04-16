@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { NConfigProvider, NMessageProvider, NDialogProvider, darkTheme, NGlobalStyle } from 'naive-ui'
-import { RouterView } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 
 // Initialize auth on app startup to restore session from localStorage
@@ -69,11 +68,7 @@ const themeOverrides = {
     <NMessageProvider>
       <NDialogProvider>
         <NGlobalStyle />
-        <RouterView v-slot="{ Component }">
-          <Transition name="page" mode="out-in" appear>
-            <component :is="Component" />
-          </Transition>
-        </RouterView>
+        <RouterView />
       </NDialogProvider>
     </NMessageProvider>
   </NConfigProvider>
@@ -156,20 +151,7 @@ html, body, #app {
   -webkit-text-fill-color: transparent;
 }
 
-/* ==================== Route Transitions ==================== */
-.page-enter-active {
-  transition: opacity 0.18s ease, transform 0.18s ease;
-}
-.page-leave-active {
-  transition: opacity 0.12s ease;
-}
-.page-enter-from {
-  opacity: 0;
-  transform: translateY(8px);
-}
-.page-leave-to {
-  opacity: 0;
-}
+
 
 /* ==================== Card Slide-Up Animation ==================== */
 @keyframes slideUp {
