@@ -69,11 +69,9 @@ const themeOverrides = {
     <NMessageProvider>
       <NDialogProvider>
         <NGlobalStyle />
-        <RouterView v-slot="{ Component, route }">
+        <RouterView v-slot="{ Component }">
           <Transition name="page" mode="out-in" appear>
-            <Suspense :key="route.path">
-              <component :is="Component" />
-            </Suspense>
+            <component :is="Component" />
           </Transition>
         </RouterView>
       </NDialogProvider>
