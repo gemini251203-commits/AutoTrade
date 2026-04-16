@@ -297,6 +297,8 @@ onMounted(() => {
     loading.value = false
   })
   pollTimer = setInterval(() => {
+    // 标签页不可见时跳过，节省连接池
+    if (document.visibilityState !== 'visible') return
     if (!_unmounted && !_loadingData) {
       loadData()
       if (!logSearchKeyword.value && logPage.value === 1 && !consolidating.value) {

@@ -4,7 +4,7 @@
  * ==============
  * 订单列表组件 - 显示用户挂单和历史订单
  */
-import { ref, onMounted, computed, h } from 'vue'
+import { ref, computed, h } from 'vue'
 import { NDataTable, NTag, NButton, NTabs, NTabPane, useMessage, NPopconfirm } from 'naive-ui'
 import { listOrders, cancelOrder as apiCancelOrder, type OrderResponse } from '@/api/order'
 
@@ -183,9 +183,9 @@ const columns = [
   },
 ]
 
-onMounted(() => {
-  fetchOrders()
-})
+// 智能轮询: 5秒间隔，标签页后台自动暂停
+import { useVisibilityPolling } from '@/composables/useVisibilityPolling'
+useVisibilityPolling(fetchOrders, 5000)
 
 // 辅助函数: 安全格式化数字
 function formatNumber(val: string | number | null | undefined, decimals: number = 2): string {

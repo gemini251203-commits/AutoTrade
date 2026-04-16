@@ -69,10 +69,12 @@ const themeOverrides = {
     <NMessageProvider>
       <NDialogProvider>
         <NGlobalStyle />
-        <RouterView v-slot="{ Component }">
-          <Suspense>
-            <component :is="Component" />
-          </Suspense>
+        <RouterView v-slot="{ Component, route }">
+          <Transition name="page" mode="out-in" appear>
+            <Suspense :key="route.path">
+              <component :is="Component" />
+            </Suspense>
+          </Transition>
         </RouterView>
       </NDialogProvider>
     </NMessageProvider>
@@ -154,5 +156,41 @@ html, body, #app {
   background: linear-gradient(135deg, #ae69ff 0%, #8a2be2 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+/* ==================== Route Transitions ==================== */
+.page-enter-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.page-leave-active {
+  transition: opacity 0.12s ease;
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.page-leave-to {
+  opacity: 0;
+}
+
+/* ==================== Card Slide-Up Animation ==================== */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.35s ease both;
+}
+
+/* ==================== Button Micro-interactions ==================== */
+button:not(:disabled):active {
+  transform: scale(0.97);
 }
 </style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed, type Component } from 'vue'
+import { ref, computed, type Component } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { NIcon, NTooltip } from 'naive-ui'
 import { 
@@ -16,6 +16,7 @@ import {
   ShieldCheckmarkOutline,
   GitNetworkOutline,
   DocumentTextOutline,
+  EllipsisHorizontalOutline,
 } from '@vicons/ionicons5'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
@@ -38,7 +39,7 @@ const navItems = [
 
   { key: 'wallet', label: '钱包', icon: WalletOutline, route: '/wallet' },
   { key: 'risk-config', label: '风控', icon: ShieldCheckmarkOutline, route: '/risk-config' },
-  { key: 'settings', label: 'Settings', icon: SettingsOutline, route: '/settings' },
+  { key: 'settings', label: '设置', icon: SettingsOutline, route: '/settings' },
 ]
 
 // Current active nav item
@@ -56,32 +57,39 @@ const activeNavKey = computed(() => {
   return 'dashboard'
 })
 
-// Mobile Nav Items (all items)
-const mobileNavItems = computed(() => navItems)
+// ==================== 移动端底部导航 ====================
+// 底栏核心 4 项 (高频页面) + "更多" 按钮
+const mobileCorePrimaryKeys = ['dashboard', 'hub', 'strategy', 'wallet']
+const mobileCoreItems = computed(() => 
+  navItems.filter(item => mobileCorePrimaryKeys.includes(item.key))
+)
+// "更多"面板中的项目
+const mobileMoreItems = computed(() => 
+  navItems.filter(item => !mobileCorePrimaryKeys.includes(item.key))
+)
+// "更多"面板打开状态
+const showMorePanel = ref(false)
+// 当前路由是否在"更多"列表中 → "更多"按钮需高亮
+const isMoreActive = computed(() => 
+  mobileMoreItems.value.some(item => item.key === activeNavKey.value)
+)
 
 // Navigate to route
 function handleNav(item: typeof navItems[0]) {
   if (route.path === item.route) return  // already here
+  showMorePanel.value = false  // 关闭面板
   router.push(item.route)
 }
 
-// 调试: 组件挂载时加载钱包数据 + 定时轮询
-let walletTimer: ReturnType<typeof setInterval> | null = null
+function handleMoreNav(item: typeof navItems[0]) {
+  showMorePanel.value = false
+  if (route.path === item.route) return
+  router.push(item.route)
+}
 
-onMounted(async () => {
-  await walletStore.fetchBalance()
-  // 每 3 秒刷新一次余额 (包括 Unrealized PnL)
-  walletTimer = setInterval(() => {
-    walletStore.fetchBalance()
-  }, 10000)
-})
-
-onUnmounted(() => {
-  if (walletTimer) {
-    clearInterval(walletTimer)
-    walletTimer = null
-  }
-})
+// 智能轮询: 15 秒间隔，标签页后台自动暂停
+import { useVisibilityPolling } from '@/composables/useVisibilityPolling'
+useVisibilityPolling(() => walletStore.fetchBalance(), 15000)
 
 // Handle logout
 function handleLogout() {
@@ -255,24 +263,70 @@ function handleLogout() {
       </main>
     </div>
 
-    <!-- Mobile Bottom Navigation -->
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-[90] bg-[#0a0a0f]/90 backdrop-blur-xl border-t border-white/10 flex items-center overflow-x-auto no-scrollbar px-1 pb-[env(safe-area-inset-bottom)]">
+    <!-- Mobile Bottom Navigation (5 items: 4 core + "更多") -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-[90] bg-[#0a0a0f]/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
+      <!-- Core 4 items -->
       <button 
-        v-for="item in mobileNavItems" 
+        v-for="item in mobileCoreItems" 
         :key="item.key"
         @click="handleNav(item)"
-        class="flex flex-col items-center justify-center flex-shrink-0 min-w-[56px] py-2 transition-all active:scale-95"
+        class="flex flex-col items-center justify-center flex-1 py-2.5 transition-all active:scale-95"
         :class="activeNavKey === item.key ? 'text-purple-400' : 'text-gray-500'"
       >
         <div 
-          class="p-1 rounded-xl transition-colors"
+          class="p-1.5 rounded-xl transition-colors"
           :class="activeNavKey === item.key ? 'bg-purple-500/10' : ''"
         >
-          <NIcon size="20"><component :is="item.icon" /></NIcon>
+          <NIcon size="22"><component :is="item.icon" /></NIcon>
         </div>
-        <span class="text-[9px] mt-0.5 font-medium whitespace-nowrap">{{ item.label }}</span>
+        <span class="text-[10px] mt-0.5 font-medium">{{ item.label }}</span>
+      </button>
+
+      <!-- "更多" 按钮 -->
+      <button 
+        @click="showMorePanel = !showMorePanel"
+        class="flex flex-col items-center justify-center flex-1 py-2.5 transition-all active:scale-95"
+        :class="isMoreActive || showMorePanel ? 'text-purple-400' : 'text-gray-500'"
+      >
+        <div 
+          class="p-1.5 rounded-xl transition-colors"
+          :class="isMoreActive || showMorePanel ? 'bg-purple-500/10' : ''"
+        >
+          <NIcon size="22"><EllipsisHorizontalOutline /></NIcon>
+        </div>
+        <span class="text-[10px] mt-0.5 font-medium">更多</span>
       </button>
     </nav>
+
+    <!-- "更多" 弹出面板 -->
+    <Transition name="more-overlay">
+      <div 
+        v-if="showMorePanel" 
+        class="md:hidden fixed inset-0 z-[85] bg-black/60 backdrop-blur-sm"
+        @click="showMorePanel = false"
+      />
+    </Transition>
+    <Transition name="more-panel">
+      <div 
+        v-if="showMorePanel" 
+        class="md:hidden fixed bottom-[60px] left-0 right-0 z-[88] pb-[env(safe-area-inset-bottom)]"
+      >
+        <div class="mx-3 mb-2 rounded-2xl bg-[#18181b]/95 backdrop-blur-xl border border-white/10 shadow-[0_-8px_40px_rgba(0,0,0,0.5)] overflow-hidden">
+          <div class="grid grid-cols-3 gap-1 p-3">
+            <button
+              v-for="item in mobileMoreItems"
+              :key="item.key"
+              @click="handleMoreNav(item)"
+              class="flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl transition-all active:scale-95"
+              :class="activeNavKey === item.key ? 'bg-purple-500/10 text-purple-400' : 'text-gray-400 hover:bg-white/5'"
+            >
+              <NIcon size="22"><component :is="item.icon" /></NIcon>
+              <span class="text-[11px] font-medium">{{ item.label }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -291,4 +345,31 @@ main::-webkit-scrollbar-thumb {
 main::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+/* "更多" 面板动画 */
+.more-panel-enter-active {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+}
+.more-panel-leave-active {
+  transition: transform 0.2s ease, opacity 0.15s ease;
+}
+.more-panel-enter-from {
+  transform: translateY(100%);
+  opacity: 0;
+}
+.more-panel-leave-to {
+  transform: translateY(100%);
+  opacity: 0;
+}
+
+/* 遮罩动画 */
+.more-overlay-enter-active,
+.more-overlay-leave-active {
+  transition: opacity 0.2s ease;
+}
+.more-overlay-enter-from,
+.more-overlay-leave-to {
+  opacity: 0;
+}
 </style>
+

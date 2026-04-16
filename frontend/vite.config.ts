@@ -33,8 +33,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'vendor': ['vue', 'vue-router', 'pinia'],
-          'charts': ['lightweight-charts'],
+          'vendor-vue': ['vue', 'vue-router', 'pinia'],
+          'vendor-ui': ['naive-ui', '@vicons/ionicons5'],
+          'vendor-charts': ['lightweight-charts'],
         },
       },
     },

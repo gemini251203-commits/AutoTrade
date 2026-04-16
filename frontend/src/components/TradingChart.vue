@@ -446,6 +446,8 @@ let isDestroyed = false  // 防止组件销毁后继续更新
 
 function startLiveUpdates() {
   updateInterval = setInterval(async () => {
+    // 标签页不可见时跳过，节省连接池
+    if (document.visibilityState !== 'visible') return
     // 检查组件是否已销毁或图表不存在
     if (isDestroyed || !candlestickSeries || !chart) return
     

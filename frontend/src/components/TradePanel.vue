@@ -272,8 +272,8 @@ async function openPosition(side: 'long' | 'short') {
       message.success(`${side === 'long' ? '开多' : '开空'} 成功!`)
     }
     
-    await walletStore.fetchBalance()
-    await fetchExistingPosition()
+    // 并行刷新余额和仓位 (原串行 T₁+T₂ → 并行 max(T₁,T₂))
+    await Promise.all([walletStore.fetchBalance(), fetchExistingPosition()])
     
     // 清空输入
     notional.value = null
@@ -389,7 +389,9 @@ onMounted(async () => {
     }
   }, 500)
   
-  positionInterval = setInterval(fetchExistingPosition, 5000)
+  positionInterval = setInterval(() => {
+    if (document.visibilityState === 'visible') fetchExistingPosition()
+  }, 5000)
 })
 
 onUnmounted(() => {
@@ -561,17 +563,21 @@ onUnmounted(() => {
     <div class="order-buttons">
       <button 
         class="order-btn long"
+        :class="{ 'btn-loading': loading }"
         :disabled="loading || (existingPosition?.side === 'short')"
         @click="openPosition('long')"
       >
-        {{ loading ? '处理中...' : '开多' }}
+        <span v-if="loading" class="btn-spinner" />
+        {{ loading ? '处理中' : '开多' }}
       </button>
       <button 
         class="order-btn short"
+        :class="{ 'btn-loading': loading }"
         :disabled="loading || (existingPosition?.side === 'long')"
         @click="openPosition('short')"
       >
-        {{ loading ? '处理中...' : '开空' }}
+        <span v-if="loading" class="btn-spinner" />
+        {{ loading ? '处理中' : '开空' }}
       </button>
     </div>
     
@@ -1136,5 +1142,33 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 input[type="number"] {
   -moz-appearance: textfield;
+}
+
+/* 下单按钮 Loading 动画 */
+.btn-loading {
+  opacity: 0.85;
+  pointer-events: none;
+  animation: btnPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes btnPulse {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 0.6; }
+}
+
+.btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

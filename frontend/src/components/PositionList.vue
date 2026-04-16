@@ -9,7 +9,7 @@
  * - 修改止盈止损 (弹窗)
  * - 部分平仓 (滑块 + 预计收益)
  */
-import { ref, onMounted, onUnmounted, computed, h, watch } from 'vue'
+import { ref, computed, h, watch } from 'vue'
 import { NDataTable, NTag, NButton, useMessage, NPopconfirm, NModal, NInputNumber, NSlider, NCard } from 'naive-ui'
 import request from '@/utils/request'
 import { useWalletStore } from '@/stores/wallet'
@@ -236,8 +236,7 @@ async function saveLeverage() {
     })
     message.success(`杠杆已修改为 ${leverageForm.value.leverage}x`)
     showLeverageModal.value = false
-    await fetchPositions()
-    await walletStore.fetchBalance()
+    await Promise.all([fetchPositions(), walletStore.fetchBalance()])
   } catch (e: any) {
     message.error(e.response?.data?.detail || '修改杠杆失败')
   } finally {
@@ -272,8 +271,7 @@ async function executeClose() {
     message.success(`平仓成功! 盈亏: ${parseFloat(resp.realized_pnl).toFixed(2)} USDT`)
     showCloseModal.value = false
     
-    await fetchPositions()
-    await walletStore.fetchBalance()
+    await Promise.all([fetchPositions(), walletStore.fetchBalance()])
   } catch (e: any) {
     message.error(e.response?.data?.detail || '平仓失败')
   } finally {
@@ -392,19 +390,11 @@ const columns = [
   },
 ]
 
-// 定时刷新
-let refreshTimer: number | null = null
+// 导入智能轮询
+import { useVisibilityPolling } from '@/composables/useVisibilityPolling'
 
-onMounted(() => {
-  fetchPositions()
-  refreshTimer = setInterval(fetchPositions, 3000) as unknown as number
-})
-
-onUnmounted(() => {
-  if (refreshTimer) {
-    clearInterval(refreshTimer)
-  }
-})
+// 智能轮询: 5秒间隔，标签页后台自动暂停
+useVisibilityPolling(fetchPositions, 5000)
 
 // 辅助函数: 安全格式化数字
 function formatNumber(val: string | number | null | undefined, decimals: number = 2): string {
