@@ -192,7 +192,7 @@ const showTradePanel = ref(false)
   left: 0;
   right: 0;
   height: 2px;
-  background: #8a2be2;
+  background: #3b82f6;
   box-shadow: 0 -2px 5px rgba(138, 43, 226, 0.5);
 }
 
@@ -227,7 +227,7 @@ const showTradePanel = ref(false)
 }
 
 .resize-handle:hover .handle-bar {
-  background: #8a2be2;
+  background: #3b82f6;
 }
 
 /* Custom Scrollbar for content */

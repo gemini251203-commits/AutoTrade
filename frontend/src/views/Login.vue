@@ -110,13 +110,13 @@ function handleKeydown(e: KeyboardEvent) {
 <template>
   <div 
     class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
-    style="background: black;"
+    style="background: #0f1117;"
   >
     <!-- Background Effects -->
     <div class="absolute inset-0 overflow-hidden pointer-events-none">
       <div 
         class="absolute top-0 left-1/4 w-[500px] h-[500px] rounded-full opacity-20 blur-[100px] animate-pulse"
-        style="background: #8a2be2; animation-duration: 8s;"
+        style="background: #3b82f6; animation-duration: 8s;"
       ></div>
       <div 
         class="absolute bottom-0 right-1/4 w-[600px] h-[600px] rounded-full opacity-10 blur-[120px] animate-pulse"
@@ -149,7 +149,7 @@ function handleKeydown(e: KeyboardEvent) {
         <div class="flex items-center justify-center gap-3 mb-3">
           <div 
             class="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transform rotate-3"
-            style="background: linear-gradient(135deg, #8a2be2 0%, #6d28d9 100%); box-shadow: 0 0 20px rgba(138, 43, 226, 0.4);"
+            style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);"
           >
             <NIcon size="24" color="white">
               <LogInOutline />
@@ -158,7 +158,7 @@ function handleKeydown(e: KeyboardEvent) {
           <span class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 tracking-tight">AutoTrade</span>
           <span 
             class="text-[10px] px-1.5 py-0.5 rounded border font-mono tracking-widest uppercase" 
-            style="background: rgba(138, 43, 226, 0.1); border-color: rgba(138, 43, 226, 0.3); color: #d8b4fe;"
+            style="background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); color: #93c5fd;"
           >
             Pro
           </span>
@@ -185,7 +185,7 @@ function handleKeydown(e: KeyboardEvent) {
             class="flex items-center gap-3 rounded-xl px-4 py-3.5 transition-all duration-300 group-focus-within:bg-white/5"
             style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);"
           >
-            <NIcon size="20" style="color: #71717a; transition: color 0.3s;" class="group-focus-within:text-purple-400">
+            <NIcon size="20" style="color: #71717a; transition: color 0.3s;" class="group-focus-within:text-blue-400">
               <PersonOutline />
             </NIcon>
             <input
@@ -205,7 +205,7 @@ function handleKeydown(e: KeyboardEvent) {
             class="flex items-center gap-3 rounded-xl px-4 py-3.5 transition-all duration-300 group-focus-within:bg-white/5"
             style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);"
           >
-            <NIcon size="20" style="color: #71717a; transition: color 0.3s;" class="group-focus-within:text-purple-400">
+            <NIcon size="20" style="color: #71717a; transition: color 0.3s;" class="group-focus-within:text-blue-400">
               <MailOutline />
             </NIcon>
             <input
@@ -225,7 +225,7 @@ function handleKeydown(e: KeyboardEvent) {
             class="flex items-center gap-3 rounded-xl px-4 py-3.5 transition-all duration-300 group-focus-within:bg-white/5"
             style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);"
           >
-            <NIcon size="20" style="color: #71717a; transition: color 0.3s;" class="group-focus-within:text-purple-400">
+            <NIcon size="20" style="color: #71717a; transition: color 0.3s;" class="group-focus-within:text-blue-400">
               <LockClosedOutline />
             </NIcon>
             <input
@@ -245,7 +245,7 @@ function handleKeydown(e: KeyboardEvent) {
             class="flex items-center gap-3 rounded-xl px-4 py-3.5 transition-all duration-300 group-focus-within:bg-white/5"
             style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);"
           >
-            <NIcon size="20" style="color: #71717a; transition: color 0.3s;" class="group-focus-within:text-purple-400">
+            <NIcon size="20" style="color: #71717a; transition: color 0.3s;" class="group-focus-within:text-blue-400">
               <LockClosedOutline />
             </NIcon>
             <input
@@ -264,8 +264,8 @@ function handleKeydown(e: KeyboardEvent) {
           :disabled="authStore.loading || loading"
           class="w-full py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all mt-8 relative overflow-hidden group"
           :style="{
-            background: (authStore.loading || loading) ? '#3f3f46' : 'linear-gradient(135deg, #8a2be2 0%, #7c3aed 100%)',
-            boxShadow: (authStore.loading || loading) ? 'none' : '0 10px 30px -10px rgba(138, 43, 226, 0.6)',
+            background: (authStore.loading || loading) ? '#3f3f46' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+            boxShadow: (authStore.loading || loading) ? 'none' : '0 10px 30px -10px rgba(59, 130, 246, 0.6)',
             cursor: (authStore.loading || loading) ? 'not-allowed' : 'pointer',
             opacity: (authStore.loading || loading) ? '0.7' : '1',
           }"
@@ -290,7 +290,7 @@ function handleKeydown(e: KeyboardEvent) {
           class="text-sm text-gray-500 hover:text-white transition-colors duration-300 flex items-center justify-center gap-2 mx-auto"
         >
           {{ isLogin ? 'New to AutoTrade?' : 'Already have an account?' }}
-          <span class="text-purple-400 font-medium">{{ isLogin ? 'Register Now' : 'Sign In' }}</span>
+          <span class="text-blue-400 font-medium">{{ isLogin ? 'Register Now' : 'Sign In' }}</span>
         </button>
       </div>
       
@@ -312,9 +312,9 @@ function handleKeydown(e: KeyboardEvent) {
 <style scoped>
 /* Scoped Focus styles */
 div:has(> input:focus) {
-  border-color: #8a2be2 !important;
-  background: rgba(138, 43, 226, 0.05) !important;
-  box-shadow: 0 0 0 1px rgba(138, 43, 226, 0.2);
+  border-color: #3b82f6 !important;
+  background: rgba(59, 130, 246, 0.05) !important;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
 }
 
 .animate-shake {

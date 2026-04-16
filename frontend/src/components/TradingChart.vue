@@ -176,13 +176,13 @@ async function initChart() {
           color: 'rgba(138, 43, 226, 0.5)',
           width: 1,
           style: 2,
-          labelBackgroundColor: '#8a2be2',
+          labelBackgroundColor: '#3b82f6',
         },
         horzLine: {
           color: 'rgba(138, 43, 226, 0.5)',
           width: 1,
           style: 2,
-          labelBackgroundColor: '#8a2be2',
+          labelBackgroundColor: '#3b82f6',
         },
       },
       rightPriceScale: {

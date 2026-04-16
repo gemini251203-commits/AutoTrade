@@ -291,9 +291,11 @@ const columns = [
 
 // ============ Lifecycle ============
 onMounted(async () => {
-  await walletStore.fetchBalance()
-  await fetchStats()
-  await fetchTransactions()
+  await Promise.all([
+    walletStore.fetchBalance(),
+    fetchStats(),
+    fetchTransactions(),
+  ])
 })
 </script>
 

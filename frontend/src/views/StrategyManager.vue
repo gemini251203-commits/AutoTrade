@@ -523,7 +523,7 @@ onMounted(() => {
       </div>
 
       <!-- Loading -->
-      <div v-if="loading" class="flex justify-center py-12">
+      <div v-if="loading && strategies.length === 0" class="flex justify-center py-12">
         <NSpin size="medium" />
       </div>
 
@@ -828,7 +828,7 @@ onMounted(() => {
             <div
               class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-medium transition-all"
               :style="{
-                background: wizardStep >= step ? 'linear-gradient(135deg, #8a2be2, #5a189a)' : 'rgba(255,255,255,0.05)',
+                background: wizardStep >= step ? 'linear-gradient(135deg, #3b82f6, #1d4ed8)' : 'rgba(255,255,255,0.05)',
                 color: wizardStep >= step ? 'white' : '#6b7280',
               }"
             >{{ step }}</div>
@@ -894,7 +894,7 @@ onMounted(() => {
                 @click="handleSave"
                 :disabled="formSaving"
                 class="px-4 py-2 rounded-lg text-sm text-white font-medium transition-all flex items-center gap-2"
-                style="background: linear-gradient(135deg, #8a2be2, #5a189a);"
+                style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);"
               >
                 <NSpin v-if="formSaving" size="small" />
                 创建策略
@@ -1192,7 +1192,7 @@ onMounted(() => {
               v-if="wizardStep < 5 && !editingStrategy"
               @click="wizardStep++"
               class="px-4 py-2 rounded-lg text-sm text-white font-medium transition-all"
-              style="background: linear-gradient(135deg, #8a2be2, #5a189a);"
+              style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);"
             >
               下一步
             </button>
@@ -1201,7 +1201,7 @@ onMounted(() => {
               @click="handleSave"
               :disabled="formSaving"
               class="px-4 py-2 rounded-lg text-sm text-white font-medium transition-all flex items-center gap-2"
-              style="background: linear-gradient(135deg, #8a2be2, #5a189a);"
+              style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);"
             >
               <NSpin v-if="formSaving" size="small" />
               {{ editingStrategy ? '保存修改' : '创建策略' }}

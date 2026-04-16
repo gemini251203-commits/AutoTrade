@@ -174,7 +174,7 @@ onMounted(() => {
       <h1 class="page-title">设置</h1>
     </div>
 
-    <NSpin :show="loading">
+    <NSpin :show="loading && !formData.api_model">
       <div class="settings-content">
         <!-- AI 配置卡片 -->
         <NCard class="settings-card" :bordered="false">
@@ -208,7 +208,7 @@ onMounted(() => {
                     <div class="provider-desc">Ollama / 本地运行 (免费)</div>
                   </div>
                   <div class="provider-check" v-if="formData.provider === 'ollama'">
-                    <NIcon :component="CheckmarkCircle" color="#8a2be2" />
+                    <NIcon :component="CheckmarkCircle" color="#3b82f6" />
                   </div>
                 </div>
 
@@ -226,7 +226,7 @@ onMounted(() => {
                     <div class="provider-desc">DeepSeek / OpenAI (推荐)</div>
                   </div>
                   <div class="provider-check" v-if="formData.provider === 'deepseek'">
-                    <NIcon :component="CheckmarkCircle" color="#8a2be2" />
+                    <NIcon :component="CheckmarkCircle" color="#3b82f6" />
                   </div>
                 </div>
               </div>
@@ -342,7 +342,7 @@ onMounted(() => {
                 :loading="saving"
                 @click="saveConfig"
                 block
-                color="#8a2be2"
+                color="#3b82f6"
               >
                 保存配置
               </NButton>
@@ -424,12 +424,12 @@ onMounted(() => {
 
 .provider-card:hover {
   background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(138, 43, 226, 0.3);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 .provider-card.active {
-  background: rgba(138, 43, 226, 0.1);
-  border-color: #8a2be2;
+  background: rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
 }
 
 .provider-icon {
@@ -444,7 +444,7 @@ onMounted(() => {
 }
 
 .provider-card.active .provider-icon {
-  background: #8a2be2;
+  background: #3b82f6;
 }
 
 .provider-info {

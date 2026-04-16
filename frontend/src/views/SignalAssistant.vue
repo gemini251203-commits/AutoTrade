@@ -496,7 +496,7 @@ onMounted(() => {
                     :disabled="!inputText.trim()"
                     @click="handleParse"
                     class="analyze-btn"
-                    color="#8a2be2"
+                    color="#3b82f6"
                   >
                     <template #icon>
                       <NIcon :component="AnalyticsOutline" />
@@ -790,7 +790,7 @@ onMounted(() => {
       >
          <template #header>
             <div class="modal-header">
-               <NIcon :component="WalletOutline" color="#8a2be2" />
+               <NIcon :component="WalletOutline" color="#3b82f6" />
                参数修正
             </div>
          </template>
@@ -1074,7 +1074,7 @@ onMounted(() => {
 
             <div class="modal-actions">
                <NButton @click="showEditModal = false" ghost>取消</NButton>
-               <NButton type="primary" @click="handleEditSave" color="#8a2be2">保存并更新</NButton>
+               <NButton type="primary" @click="handleEditSave" color="#3b82f6">保存并更新</NButton>
             </div>
          </template>
       </NCard>
@@ -1292,7 +1292,7 @@ onMounted(() => {
 }
 
 .terminal-input-wrapper:focus-within {
-  border-color: #8a2be2;
+  border-color: #3b82f6;
 }
 
 .terminal-input {
@@ -1349,7 +1349,7 @@ onMounted(() => {
   left: 0;
   width: 100%;
   height: 4px;
-  background: linear-gradient(90deg, #8a2be2, #d946ef);
+  background: linear-gradient(90deg, #3b82f6, #6366f1);
 }
 
 .result-header {
@@ -1517,7 +1517,7 @@ onMounted(() => {
 
 .mode-tab.active {
   background: linear-gradient(135deg, rgba(138, 43, 226, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%);
-  border-color: #8a2be2;
+  border-color: #3b82f6;
   color: #e4e4e7;
 }
 
@@ -1556,7 +1556,7 @@ onMounted(() => {
 
 .modal-mode-tab.active {
   background: linear-gradient(135deg, rgba(138, 43, 226, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%);
-  border-color: #8a2be2;
+  border-color: #3b82f6;
   color: #e4e4e7;
 }
 
@@ -1578,7 +1578,7 @@ onMounted(() => {
 
 .ai-reasoning {
   background: rgba(138, 43, 226, 0.05); /* Purple tint */
-  border-left: 3px solid #8a2be2;
+  border-left: 3px solid #3b82f6;
   padding: 16px;
   border-radius: 0 8px 8px 0;
   margin-bottom: 24px;

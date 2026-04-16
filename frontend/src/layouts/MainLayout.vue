@@ -100,19 +100,19 @@ function handleLogout() {
 </script>
 
 <template>
-  <div class="flex h-screen overflow-hidden bg-black text-white selection:bg-purple-500/30">
+  <div class="flex h-screen overflow-hidden bg-[#0f1117] text-white selection:bg-blue-500/30">
     <!-- Background Gradient Mesh -->
     <div class="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-      <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-purple-900/20 blur-[120px]"></div>
-      <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-blue-900/10 blur-[120px]"></div>
+      <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-blue-900/20 blur-[120px]"></div>
+      <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-900/10 blur-[120px]"></div>
     </div>
     
     <!-- Sidebar (Desktop Only) -->
     <aside 
-      class="hidden md:flex group relative z-20 flex-col w-20 py-6 items-center border-r border-white/5 bg-black/40 backdrop-blur-xl transition-all duration-300 overflow-hidden"
+      class="hidden md:flex group relative z-20 flex-col w-20 py-6 items-center border-r border-white/5 bg-[#0f1117]/60 backdrop-blur-xl transition-all duration-300 overflow-hidden"
     >
       <!-- Logo -->
-      <div class="mb-10 w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#8a2be2] to-[#6d28d9] shadow-[0_0_15px_rgba(138,43,226,0.5)]">
+      <div class="mb-10 w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#3b82f6] to-[#1d4ed8] shadow-[0_0_15px_rgba(59,130,246,0.5)]">
         <span class="font-bold text-white text-sm">AT</span>
       </div>
       
@@ -130,12 +130,12 @@ function handleLogout() {
             <button
               @click="handleNav(item)"
               class="group/btn relative w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 mx-auto"
-              :class="activeNavKey === item.key ? 'bg-white/10 text-purple-400' : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'"
+              :class="activeNavKey === item.key ? 'bg-white/10 text-blue-400' : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'"
             >
               <!-- Active Indicator Line -->
               <div 
                 v-if="activeNavKey === item.key"
-                class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-purple-500 rounded-r-full shadow-[0_0_10px_#a855f7]"
+                class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-500 rounded-r-full shadow-[0_0_10px_#3b82f6]"
               ></div>
               
               <!-- Icon -->
@@ -173,7 +173,7 @@ function handleLogout() {
     <div class="relative z-10 flex-1 flex flex-col h-full min-w-0 overflow-x-hidden bg-transparent">
       <!-- Header -->
       <header 
-        class="relative z-50 h-16 px-3 md:px-8 flex items-center justify-between border-b border-white/5 bg-black/20 backdrop-blur-md"
+        class="relative z-50 h-16 px-3 md:px-8 flex items-center justify-between border-b border-white/5 bg-[#0f1117]/40 backdrop-blur-md"
       >
         <!-- Left: Branding & Equity -->
         <div class="flex items-center gap-6">
@@ -225,7 +225,7 @@ function handleLogout() {
           <!-- Mobile: Simplified Equity Only -->
           <div class="flex md:hidden flex-col">
              <div class="flex items-center gap-2">
-                <div class="w-6 h-6 rounded-md bg-gradient-to-br from-[#8a2be2] to-[#6d28d9] flex items-center justify-center shadow-sm">
+                <div class="w-6 h-6 rounded-md bg-gradient-to-br from-[#3b82f6] to-[#1d4ed8] flex items-center justify-center shadow-sm">
                   <span class="font-bold text-white text-[10px]">AT</span>
                 </div>
                 <span class="font-bold font-mono text-white">{{ walletStore.formattedEquity }}</span>
@@ -264,18 +264,18 @@ function handleLogout() {
     </div>
 
     <!-- Mobile Bottom Navigation (5 items: 4 core + "更多") -->
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-[90] bg-[#0a0a0f]/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-[90] bg-[#0f1117]/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
       <!-- Core 4 items -->
       <button 
         v-for="item in mobileCoreItems" 
         :key="item.key"
         @click="handleNav(item)"
         class="flex flex-col items-center justify-center flex-1 py-2.5 transition-all active:scale-95"
-        :class="activeNavKey === item.key ? 'text-purple-400' : 'text-gray-500'"
+        :class="activeNavKey === item.key ? 'text-blue-400' : 'text-gray-500'"
       >
         <div 
           class="p-1.5 rounded-xl transition-colors"
-          :class="activeNavKey === item.key ? 'bg-purple-500/10' : ''"
+          :class="activeNavKey === item.key ? 'bg-blue-500/10' : ''"
         >
           <NIcon size="22"><component :is="item.icon" /></NIcon>
         </div>
@@ -286,11 +286,11 @@ function handleLogout() {
       <button 
         @click="showMorePanel = !showMorePanel"
         class="flex flex-col items-center justify-center flex-1 py-2.5 transition-all active:scale-95"
-        :class="isMoreActive || showMorePanel ? 'text-purple-400' : 'text-gray-500'"
+        :class="isMoreActive || showMorePanel ? 'text-blue-400' : 'text-gray-500'"
       >
         <div 
           class="p-1.5 rounded-xl transition-colors"
-          :class="isMoreActive || showMorePanel ? 'bg-purple-500/10' : ''"
+          :class="isMoreActive || showMorePanel ? 'bg-blue-500/10' : ''"
         >
           <NIcon size="22"><EllipsisHorizontalOutline /></NIcon>
         </div>
@@ -311,14 +311,14 @@ function handleLogout() {
         v-if="showMorePanel" 
         class="md:hidden fixed bottom-[60px] left-0 right-0 z-[88] pb-[env(safe-area-inset-bottom)]"
       >
-        <div class="mx-3 mb-2 rounded-2xl bg-[#18181b]/95 backdrop-blur-xl border border-white/10 shadow-[0_-8px_40px_rgba(0,0,0,0.5)] overflow-hidden">
+        <div class="mx-3 mb-2 rounded-2xl bg-[#1a1d29]/95 backdrop-blur-xl border border-white/10 shadow-[0_-8px_40px_rgba(0,0,0,0.5)] overflow-hidden">
           <div class="grid grid-cols-3 gap-1 p-3">
             <button
               v-for="item in mobileMoreItems"
               :key="item.key"
               @click="handleMoreNav(item)"
               class="flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl transition-all active:scale-95"
-              :class="activeNavKey === item.key ? 'bg-purple-500/10 text-purple-400' : 'text-gray-400 hover:bg-white/5'"
+              :class="activeNavKey === item.key ? 'bg-blue-500/10 text-blue-400' : 'text-gray-400 hover:bg-white/5'"
             >
               <NIcon size="22"><component :is="item.icon" /></NIcon>
               <span class="text-[11px] font-medium">{{ item.label }}</span>

@@ -122,7 +122,7 @@ if (typeof window !== 'undefined') {
         :size="28" 
         round
         :style="{ 
-          background: 'linear-gradient(135deg, #a855f7, #8a2be2)',
+          background: 'linear-gradient(135deg, #60a5fa, #3b82f6)',
           fontSize: '11px',
         }"
       >
@@ -152,7 +152,7 @@ if (typeof window !== 'undefined') {
               :size="44" 
               round
               :style="{ 
-                background: 'linear-gradient(135deg, #a855f7, #8a2be2)',
+                background: 'linear-gradient(135deg, #60a5fa, #3b82f6)',
                 fontSize: '14px',
               }"
             >
@@ -185,7 +185,7 @@ if (typeof window !== 'undefined') {
               round
               :style="{ 
                 background: index === activeIndex 
-                  ? 'linear-gradient(135deg, #a855f7, #8a2be2)' 
+                  ? 'linear-gradient(135deg, #60a5fa, #3b82f6)' 
                   : '#333',
                 fontSize: '11px',
               }"

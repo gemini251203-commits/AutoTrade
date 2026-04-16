@@ -176,7 +176,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <NSpin :show="loading">
+      <NSpin :show="loading && !config">
         <div v-if="config" class="config-grid">
 
           <!-- Section 1: 账户防爆 -->
